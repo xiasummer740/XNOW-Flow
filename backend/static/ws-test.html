@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XNOW WebSocket 设备测试</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; min-height: 100vh; display: flex; justify-content: center; }
+.container { max-width: 800px; width: 100%; }
+h1 { font-size: 20px; margin-bottom: 20px; color: #a855f7; display: flex; align-items: center; gap: 10px; }
+h1 small { font-size: 13px; color: #64748b; font-weight: normal; }
+.card { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1px solid #334155; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+label { font-size: 13px; color: #94a3b8; min-width: 60px; }
+input, select { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 8px 12px; border-radius: 6px; font-size: 14px; flex: 1; min-width: 100px; }
+input:focus, select:focus { outline: none; border-color: #a855f7; }
+button { background: #a855f7; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: all .2s; }
+button:hover { background: #9333ea; }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button.secondary { background: #334155; }
+button.secondary:hover { background: #475569; }
+button.danger { background: #ef4444; }
+button.danger:hover { background: #dc2626; }
+button.success { background: #22c55e; }
+button.success:hover { background: #16a34a; }
+.status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 12px; }
+.status-badge.online { background: #22c55e22; color: #22c55e; border: 1px solid #22c55e44; }
+.status-badge.offline { background: #ef444422; color: #ef4444; border: 1px solid #ef444444; }
+.log-area { background: #0f172a; border-radius: 8px; padding: 12px; height: 300px; overflow-y: auto; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; }
+.log-entry { padding: 2px 0; border-bottom: 1px solid #1e293b; display: flex; gap: 8px; }
+.log-time { color: #64748b; white-space: nowrap; }
+.log-type { font-weight: 600; }
+.log-type.sent { color: #22c55e; }
+.log-type.recv { color: #3b82f6; }
+.log-type.sys { color: #a855f7; }
+.log-type.err { color: #ef4444; }
+.log-msg { color: #94a3b8; word-break: break-all; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.stat-card { background: #0f172a; border-radius: 8px; padding: 12px; text-align: center; }
+.stat-card .num { font-size: 24px; font-weight: 700; color: #a855f7; }
+.stat-card .label { font-size: 11px; color: #64748b; margin-top: 4px; }
+.action-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; margin-top: 8px; }
+.action-grid button { font-size: 12px; padding: 6px 10px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📡 XNOW WebSocket 设备模拟器 <small>测试 iOS 插件连接</small></h1>
+
+  <!-- 连接控制 -->
+  <div class="card">
+    <div class="row" style="margin-bottom: 10px;">
+      <label>设备ID</label>
+      <input type="text" id="deviceId" value="iPhone-8-01" placeholder="设备名称">
+      <button id="connectBtn" onclick="connect()">🔗 连接</button>
+      <button id="disconnectBtn" onclick="disconnect()" disabled class="danger">断开</button>
+      <span id="statusBadge" class="status-badge offline">🔴 未连接</span>
+    </div>
+  </div>
+
+  <!-- 统计 -->
+  <div class="stats" id="stats">
+    <div class="stat-card"><div class="num" id="sentCount">0</div><div class="label">已发送</div></div>
+    <div class="stat-card"><div class="num" id="recvCount">0</div><div class="label">已接收</div></div>
+    <div class="stat-card"><div class="num" id="connTime">-</div><div class="label">连接时长</div></div>
+  </div>
+
+  <!-- 发送面板 -->
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <span style="font-size:13px; font-weight:600; color:#22c55e;">📤 模拟设备发消息</span>
+    </div>
+    <div class="action-grid">
+      <button onclick="sendStatus()" disabled id="btnStatus" class="secondary">📊 上报状态</button>
+      <button onclick="sendResult(true)" disabled id="btnResult" class="success">✅ 执行成功</button>
+      <button onclick="sendResult(false)" disabled id="btnResultFail" class="danger">❌ 执行失败</button>
+      <button onclick="sendPing()" disabled id="btnPing" class="secondary">💓 心跳</button>
+    </div>
+  </div>
+
+  <!-- 指令/日志 -->
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <span style="font-size:13px; font-weight:600; color:#3b82f6;">📋 通信日志</span>
+      <button onclick="clearLog()" class="secondary" style="padding:4px 10px;font-size:11px;">清空</button>
+    </div>
+    <div class="log-area" id="logArea"></div>
+  </div>
+</div>
+
+<script>
+let ws = null;
+let deviceId = '';
+let connected = false;
+let sentCount = 0, recvCount = 0;
+let connStartTime = null;
+let connTimer = null;
+
+function log(type, msg) {
+  const area = document.getElementById('logArea');
+  const now = new Date();
+  const time = now.toLocaleTimeString();
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="log-time">${time}</span><span class="log-type ${type}">${type.toUpperCase()}</span><span class="log-msg">${msg}</span>`;
+  area.appendChild(entry);
+  area.scrollTop = area.scrollHeight;
+}
+
+function updateStats() {
+  document.getElementById('sentCount').textContent = sentCount;
+  document.getElementById('recvCount').textContent = recvCount;
+  if (connected && connStartTime) {
+    const elapsed = Math.floor((Date.now() - connStartTime) / 1000);
+    const m = Math.floor(elapsed / 60);
+    const s = elapsed % 60;
+    document.getElementById('connTime').textContent = m > 0 ? `${m}m${s}s` : `${s}s`;
+  }
+}
+
+function setConnected(online) {
+  connected = online;
+  const badge = document.getElementById('statusBadge');
+  badge.textContent = online ? '🟢 已连接' : '🔴 未连接';
+  badge.className = `status-badge ${online ? 'online' : 'offline'}`;
+  document.getElementById('connectBtn').disabled = online;
+  document.getElementById('disconnectBtn').disabled = !online;
+  document.getElementById('deviceId').disabled = online;
+  ['btnStatus','btnResult','btnResultFail','btnPing'].forEach(id => {
+    document.getElementById(id).disabled = !online;
+  });
+  if (online) {
+    connStartTime = Date.now();
+    connTimer = setInterval(updateStats, 1000);
+  } else {
+    if (connTimer) clearInterval(connTimer);
+    connTimer = null;
+    document.getElementById('connTime').textContent = '-';
+  }
+}
+
+function connect() {
+  deviceId = document.getElementById('deviceId').value.trim();
+  if (!deviceId) { alert('请输入设备ID'); return; }
+
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${protocol}//${location.host}/ws/${deviceId}`;
+
+  try {
+    ws = new WebSocket(url);
+  } catch(e) {
+    log('err', `连接失败: ${e.message}`);
+    return;
+  }
+
+  ws.onopen = () => {
+    log('sys', `已连接到服务器 (设备: ${deviceId})`);
+    setConnected(true);
+  };
+
+  ws.onmessage = (event) => {
+    recvCount++;
+    updateStats();
+    try {
+      const data = JSON.parse(event.data);
+      log('recv', JSON.stringify(data, null, 1));
+
+      // 如果是指令，自动回复 ACK
+      if (data.type === 'command') {
+        setTimeout(() => {
+          ws.send(JSON.stringify({
+            type: 'result',
+            data: { action: data.action, status: 'received', message: '指令已接收' }
+          }));
+          sentCount++;
+          updateStats();
+          log('sent', `{"type":"result","data":{"action":"${data.action}","status":"received"}}`);
+        }, 500);
+      }
+    } catch(e) {
+      log('recv', event.data);
+    }
+  };
+
+  ws.onclose = () => {
+    log('sys', '连接已断开');
+    setConnected(false);
+    ws = null;
+  };
+
+  ws.onerror = (err) => {
+    log('err', `WebSocket 错误`);
+  };
+}
+
+function disconnect() {
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+}
+
+function sendMsg(type, data) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    log('err', '未连接');
+    return;
+  }
+  const msg = JSON.stringify({ type, data });
+  ws.send(msg);
+  sentCount++;
+  updateStats();
+  log('sent', msg);
+}
+
+function sendStatus() {
+  sendMsg('status', {
+    battery: Math.floor(Math.random() * 30 + 70),
+    signal: Math.floor(Math.random() * 3 + 2),
+    memory: Math.floor(Math.random() * 40 + 40),
+    current_app: 'TikTok',
+    tiktok_version: '32.5.0',
+  });
+}
+
+function sendResult(success) {
+  sendMsg('result', {
+    action: '执行任务',
+    status: success ? 'success' : 'failed',
+    message: success ? '任务执行完毕，处理 15/15 条' : '网络超时，已重试 3 次',
+    duration: Math.floor(Math.random() * 30 + 10),
+  });
+}
+
+function sendPing() {
+  sendMsg('ping', {});
+}
+
+function clearLog() {
+  document.getElementById('logArea').innerHTML = '';
+  sentCount = 0;
+  recvCount = 0;
+  updateStats();
+}
+</script>
+</body>
+</html>

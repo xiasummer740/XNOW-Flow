@@ -36,6 +36,11 @@ app.add_middleware(
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
+# 提供静态文件（测试页面等）
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+os.makedirs(static_dir, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 # 注册路由 (these will be created in later tasks, but we import them now)
 from routers import auth, dashboard, devices, accounts, tasks, task_executions
 from routers import timed_tasks, feedback, announcements, reply_templates
