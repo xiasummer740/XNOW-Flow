@@ -9,6 +9,7 @@ from database import engine, Base
 # 导入所有模型确保注册 (these will be created in Task 2, but we import them now)
 from models.user import User
 from models.device import DeviceBinding
+from models.group import DeviceGroup
 from models.account import Account
 from models.task import Task
 from models.task_execution import TaskExecution
