@@ -7,11 +7,15 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://wsyufu.net',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
       '/auth': {
-        target: 'https://wsyufu.net',
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/uploads': {
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
     },
