@@ -108,7 +108,7 @@
         return 50;
     }
 
-    natural_t used = vm_stat.active_count + vm_stat.wired_count + vm_stat.inactive_count;
+    natural_t used = vm_stat.active_count + vm_stat.wire_count + vm_stat.inactive_count;
     natural_t total = used + vm_stat.free_count;
     return total > 0 ? (int)(used * 100 / total) : 50;
 }

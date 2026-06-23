@@ -7,6 +7,7 @@
 #import "CommandEngine.h"
 #import "DeviceStatus.h"
 #import "TikTokHooks.h"
+#import <objc/runtime.h>
 
 // ======== 默认配置 ========
 NSString *const kXnowDefaultServerURL = @"ws://192.129.210.52:8000";
