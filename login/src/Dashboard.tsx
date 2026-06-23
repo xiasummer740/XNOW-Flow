@@ -36,16 +36,21 @@ const menuData = [
 
 interface DashboardData {
   device_stats: { total: number; online: number; offline: number; idle: number; executing: number; locked: number }
-  task_stats: { exec_today: number; exec_success: number; exec_failed: number }
-  account_stats: { total: number; active: number; risk_control: number; banned: number; pool_total: number; pool_in_use: number }
-  collect_stats: { fans: number; videos: number; comments: number }
+  task_stats: { total: number; active: number; exec_total: number; exec_pending: number; exec_running: number; exec_success: number; exec_failed: number; exec_today: number }
+  account_stats: { total: number; active: number; executing: number; risk_control: number; banned: number; offline: number; pending: number; logging_in: number; pool_total: number; pool_in_use: number; pool_idle: number; pool_recycled: number; pool_invalid: number }
+  collect_stats: { fans: number; videos: number; comments: number; live_users: number; friends: number }
   device_preview: { name: string; online: boolean; accounts: number; device_state: string }[]
   health_distribution: { excellent: number; good: number; warning: number; risk: number }
   today_success_rate: number
   device_online_rate_7d: { date: string; rate: number }[]
+  risk_accounts_7d: { date: string; count: number }[]
   device_task_rank: any[]
   hourly_data: number[]
   today_fans_gain: number
+  task_type_dist: { type: string; count: number; percentage: number }[]
+  fail_reason_top5: { reason: string; count: number }[]
+  recent_activities: { id: number; type: string; message: string; created_at: string }[]
+  generated_at: string
 }
 
 export default function Dashboard({ user, token, onLogout }: { user: any; token: string; onLogout: () => void }) {
@@ -422,6 +427,22 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
                   </div>
                 </div>
               </div>
+
+              {/* 最近活动 */}
+              {data?.recent_activities && data.recent_activities.length > 0 && (
+                <div className="xx-card rounded-xl p-5 mt-4">
+                  <h3 className="text-sm font-medium mb-3" style={{ color: 'rgba(0,0,0,0.65)' }}>最近活动</h3>
+                  <div className="space-y-2">
+                    {data.recent_activities.map((act: any) => (
+                      <div key={act.id} className="flex items-center gap-3 text-xs py-1.5 border-b last:border-0" style={{ borderColor: 'rgba(0,0,0,0.04)' }}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                        <span style={{ color: 'rgba(0,0,0,0.55)' }}>{act.message}</span>
+                        <span className="ml-auto shrink-0" style={{ color: 'rgba(0,0,0,0.30)' }}>{act.created_at}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </main>

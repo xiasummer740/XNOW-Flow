@@ -24,3 +24,18 @@ def list_accounts(
         count=total,
         results=[AccountResponse.model_validate(a) for a in accounts],
     )
+
+
+@router.get("/accounts/stats/")
+def account_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    accounts = db.query(Account).all()
+    return {
+        "total": len(accounts),
+        "active": sum(1 for a in accounts if a.status == "active"),
+        "risk_control": sum(1 for a in accounts if a.status == "risk_control"),
+        "offline": sum(1 for a in accounts if a.status not in ("active", "executing", "risk_control")),
+        "today_fans_gain": 0,
+    }
