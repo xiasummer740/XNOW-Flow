@@ -61,7 +61,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
         _deviceStatus = [[DeviceStatus alloc] init];
         _cmdEngine = [[CommandEngine alloc] init];
         _isConnected = NO;
-        _debugOverlayVisible = NO;
+        _floatingPanelVisible = NO;
 
         // 读取配置
         NSString *savedURL = [[NSUserDefaults standardUserDefaults]
