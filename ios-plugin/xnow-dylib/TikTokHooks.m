@@ -8,15 +8,8 @@
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 
-#ifdef DEBUG
 #define XNOW_LOG(fmt, ...) NSLog(@"[XNOWER] " fmt, ##__VA_ARGS__)
-#else
-#define XNOW_LOG(fmt, ...)
-#endif
-
-// 日志写入文件
-#define XNOW_FILE_LOG(fmt, ...) \
-    [TikTokHooks writeLog:[NSString stringWithFormat:fmt, ##__VA_ARGS__]]
+#define XNOW_FILE_LOG(fmt, ...) XNOW_LOG(fmt, ##__VA_ARGS__)
 
 #pragma mark - Swizzle 工具
 
@@ -250,8 +243,6 @@ static __weak id<XNOWDataCollector> sDataCollector = nil;
 #pragma mark - 数据采集器实现
 
 @interface TikTokHooks () <XNOWDataCollector>
-@property (nonatomic, strong) dispatch_queue_t logQueue;
-@property (nonatomic, strong) NSString *logFilePath;
 @end
 
 @implementation TikTokHooks
@@ -316,40 +307,8 @@ static TikTokHooks *gHooksInstance = nil;
 - (instancetype)init {
     self = [super init];
     if (self) {
-        _logQueue = dispatch_queue_create("com.xnow.log", DISPATCH_QUEUE_SERIAL);
-
-        // 日志文件路径: Documents/xnower.log
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
-                                                              NSUserDomainMask, YES);
-        NSString *docs = paths.firstObject ?: NSTemporaryDirectory();
-        _logFilePath = [docs stringByAppendingPathComponent:@"xnower.log"];
-
-        // 清空旧日志
-        [[NSFileManager defaultManager] removeItemAtPath:_logFilePath error:nil];
     }
     return self;
-}
-
-+ (void)writeLog:(NSString *)message {
-    [gHooksInstance _writeLog:message];
-}
-
-- (void)_writeLog:(NSString *)message {
-    dispatch_async(_logQueue, ^{
-        NSDateFormatter *fmt = [[NSDateFormatter alloc] init];
-        fmt.dateFormat = @"HH:mm:ss.SSS";
-        NSString *timestamp = [fmt stringFromDate:[NSDate date]];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@\n", timestamp, message];
-
-        NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:self.logFilePath];
-        if (!handle) {
-            [line writeToFile:self.logFilePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        } else {
-            [handle seekToEndOfFile];
-            [handle writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
-            [handle closeFile];
-        }
-    });
 }
 
 #pragma mark - XNOWDataCollector
@@ -417,14 +376,13 @@ static TikTokHooks *gHooksInstance = nil;
 
 - (void)_cacheVideoInfo:(NSDictionary *)info {
     NSMutableArray *videos = [TikTokHooks _cachedVideos];
-    dispatch_async(_logQueue, ^{
+    @synchronized(videos) {
         NSString *vid = info[@"id"];
-        // 去重
         for (NSDictionary *v in videos) {
             if ([v[@"id"] isEqualToString:vid]) return;
         }
         [videos addObject:info];
-    });
+    }
 }
 
 /// 获取缓存的视频列表
