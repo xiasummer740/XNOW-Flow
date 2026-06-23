@@ -22,6 +22,8 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   pending: { label: '等待中', class: 'bg-yellow-50 text-yellow-600' },
 }
 
+const PAGE_SIZE = 50
+
 export default function TaskLog({ token }: { token: string }) {
   const [data, setData] = useState<Log[]>([])
   const [loading, setLoading] = useState(true)
@@ -30,28 +32,27 @@ export default function TaskLog({ token }: { token: string }) {
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState<number | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [offset, setOffset] = useState(0)
+  const [total, setTotal] = useState(0)
 
-  const fetchData = () => {
+  const fetchData = (newOffset?: number) => {
+    const off = newOffset !== undefined ? newOffset : offset
     setRefreshing(true)
-    fetch('/api/biz/v2/task-executions/?limit=50', {
+    fetch(`/api/biz/v2/task-executions/?limit=${PAGE_SIZE}&offset=${off}`, {
       headers: { Authorization: `Token ${token}` }
     })
       .then(r => r.json())
-      .then(d => { setData(d.results || d); setLoading(false); setRefreshing(false) })
+      .then(d => {
+        setData(d.results || [])
+        setTotal(d.count || 0)
+        setLoading(false)
+        setRefreshing(false)
+        setOffset(off)
+      })
       .catch(() => { setError('加载失败'); setLoading(false); setRefreshing(false) })
   }
 
-  useEffect(() => { fetchData() }, [token])
-
-  const mockDetails = (log: Log) => ({
-    device: log.device || 'device-01',
-    account: log.account || 'auto_account_3',
-    target: log.target || 'https://www.example.com/user/12345',
-    result: log.result || (log.status === 'success' ? '成功执行关注操作，处理 15/15 条' : log.status === 'failed' ? '网络超时，已重试 3 次后放弃' : '—'),
-    duration: log.duration || (log.started_at && log.finished_at
-      ? Math.floor((new Date(log.finished_at).getTime() - new Date(log.started_at).getTime()) / 1000)
-      : undefined),
-  })
+  useEffect(() => { fetchData(0) }, [token])
 
   const filtered = data.filter(l => {
     if (filterStatus !== 'all' && l.status !== filterStatus) return false
@@ -68,6 +69,9 @@ export default function TaskLog({ token }: { token: string }) {
 
   const successRate = stats.total > 0 ? ((stats.success / (stats.success + stats.failed)) * 100).toFixed(0) : '—'
 
+  const pageCurrent = Math.floor(offset / PAGE_SIZE) + 1
+  const pageTotal = Math.ceil(total / PAGE_SIZE) || 1
+
   if (loading) return <div className="flex items-center justify-center h-64" style={{color:'rgba(0,0,0,0.35)'}}>加载中...</div>
   if (error) return <div className="flex items-center justify-center h-64 text-red-400">{error}</div>
 
@@ -76,7 +80,7 @@ export default function TaskLog({ token }: { token: string }) {
       {/* 头部 */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium" style={{color:'rgba(0,0,0,0.65)'}}>任务日志</h3>
-        <button onClick={fetchData}
+        <button onClick={() => fetchData()}
           className="px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer flex items-center gap-1"
           style={{background:'rgba(255,255,255,0.25)',color:'rgba(0,0,0,0.50)'}}>
           <span className={refreshing ? 'inline-block animate-spin' : ''}>🔄</span>
@@ -146,7 +150,6 @@ export default function TaskLog({ token }: { token: string }) {
           <div className="divide-y" style={{borderColor:'rgba(0,0,0,0.04)'}}>
             {filtered.map(log => {
               const isOpen = expanded === log.id
-              const detail = mockDetails(log)
               return (
                 <div key={log.id || Math.random()}>
                   {/* 主行 */}
@@ -160,13 +163,13 @@ export default function TaskLog({ token }: { token: string }) {
                         {log.type || '批量操作'}
                       </div>
                       <div className="col-span-2 text-xs truncate" style={{color:'rgba(0,0,0,0.40)'}}>
-                        {detail.device}
+                        {log.device || '—'}
                       </div>
                       <div className="col-span-2 text-xs" style={{color:'rgba(0,0,0,0.35)'}}>
                         {log.started_at ? new Date(log.started_at).toLocaleString('zh-CN') : '—'}
                       </div>
                       <div className="col-span-1 text-xs" style={{color:'rgba(0,0,0,0.35)'}}>
-                        {detail.duration ? `${detail.duration}s` : '—'}
+                        {log.duration ? `${log.duration}s` : '—'}
                       </div>
                       <div className="col-span-1 flex items-center gap-1">
                         {(() => {
@@ -187,19 +190,19 @@ export default function TaskLog({ token }: { token: string }) {
                       <div className="grid grid-cols-2 gap-4 mt-3">
                         <div>
                           <div className="text-[10px] mb-1" style={{color:'rgba(0,0,0,0.30)'}}>设备</div>
-                          <div className="text-xs" style={{color:'rgba(0,0,0,0.55)'}}>{detail.device}</div>
+                          <div className="text-xs" style={{color:'rgba(0,0,0,0.55)'}}>{log.device || '—'}</div>
                         </div>
                         <div>
                           <div className="text-[10px] mb-1" style={{color:'rgba(0,0,0,0.30)'}}>账号</div>
-                          <div className="text-xs" style={{color:'rgba(0,0,0,0.55)'}}>{detail.account}</div>
+                          <div className="text-xs" style={{color:'rgba(0,0,0,0.55)'}}>{log.account || '—'}</div>
                         </div>
                         <div className="col-span-2">
                           <div className="text-[10px] mb-1" style={{color:'rgba(0,0,0,0.30)'}}>目标</div>
-                          <div className="text-xs truncate" style={{color:'rgba(0,0,0,0.55)'}}>{detail.target}</div>
+                          <div className="text-xs truncate" style={{color:'rgba(0,0,0,0.55)'}}>{log.target || '—'}</div>
                         </div>
                         <div className="col-span-2">
                           <div className="text-[10px] mb-1" style={{color:'rgba(0,0,0,0.30)'}}>执行结果</div>
-                          <div className="text-xs leading-relaxed" style={{color:'rgba(0,0,0,0.55)'}}>{detail.result}</div>
+                          <div className="text-xs leading-relaxed" style={{color:'rgba(0,0,0,0.55)'}}>{log.result || '—'}</div>
                         </div>
                         <div>
                           <div className="text-[10px] mb-1" style={{color:'rgba(0,0,0,0.30)'}}>开始时间</div>
@@ -221,6 +224,25 @@ export default function TaskLog({ token }: { token: string }) {
             })}
           </div>
         )}
+        {/* 分页 */}
+        <div className="px-5 py-3 border-t flex items-center justify-between" style={{borderColor:'rgba(0,0,0,0.06)'}}>
+          <span className="text-xs" style={{color:'rgba(0,0,0,0.35)'}}>共 {total} 条记录</span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => fetchData(offset - PAGE_SIZE)}
+              disabled={offset <= 0}
+              className="px-3 py-1 text-xs rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{background:'rgba(0,0,0,0.04)',color:'rgba(0,0,0,0.50)'}}>
+              上一页
+            </button>
+            <span className="text-xs" style={{color:'rgba(0,0,0,0.50)'}}>{pageCurrent}/{pageTotal}</span>
+            <button onClick={() => fetchData(offset + PAGE_SIZE)}
+              disabled={offset + PAGE_SIZE >= total}
+              className="px-3 py-1 text-xs rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{background:'rgba(0,0,0,0.04)',color:'rgba(0,0,0,0.50)'}}>
+              下一页
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

@@ -38,34 +38,60 @@ export default function TaskList({ token }: { token: string }) {
   const [search, setSearch] = useState('')
   const [form, setForm] = useState({ type: 'follow', target: '', device: '', account: '', count: '10' })
   const [msg, setMsg] = useState('')
+  const [creating, setCreating] = useState(false)
 
-  useEffect(() => {
+  const fetchTasks = () => {
     fetch('/api/biz/v2/tasks/?limit=50', {
       headers: { Authorization: `Token ${token}` }
     })
       .then(r => r.json())
       .then(d => { setData(d.results || d); setLoading(false) })
       .catch(() => { setError('加载失败'); setLoading(false) })
+  }
+
+  useEffect(() => {
+    fetchTasks()
   }, [token])
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.target) { setMsg('请填写目标信息'); return }
-    const newTask: Task = {
-      id: Date.now(),
-      name: taskTypes.find(t => t.value === form.type)?.label || form.type,
-      type: form.type,
-      status: 'pending',
-      target: form.target,
-      device: form.device || '自动分配',
-      account: form.account || '自动选择',
-      progress: 0,
-      created_at: new Date().toISOString(),
+    setCreating(true)
+    try {
+      const res = await fetch('/api/biz/v2/tasks/', {
+        method: 'POST',
+        headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: form.type,
+          target: form.target,
+          device: form.device || undefined,
+          account: form.account || undefined,
+          count: parseInt(form.count) || 10,
+        }),
+      })
+      if (!res.ok) throw new Error('创建失败')
+      setForm({ type: 'follow', target: '', device: '', account: '', count: '10' })
+      setShowCreate(false)
+      setMsg('')
+      fetchTasks()
+    } catch {
+      setMsg('创建失败，请重试')
+    } finally {
+      setCreating(false)
     }
-    setData(prev => [newTask, ...prev])
-    setForm({ type: 'follow', target: '', device: '', account: '', count: '10' })
-    setShowCreate(false)
-    setMsg('')
+  }
+
+  const handleDelete = async (id: number) => {
+    try {
+      const res = await fetch(`/api/biz/v2/tasks/${id}/`, {
+        method: 'DELETE',
+        headers: { Authorization: `Token ${token}` },
+      })
+      if (!res.ok) throw new Error('取消失败')
+      fetchTasks()
+    } catch {
+      setMsg('取消失败，请重试')
+    }
   }
 
   const filtered = data.filter(t => {
@@ -94,10 +120,17 @@ export default function TaskList({ token }: { token: string }) {
       {/* 头部 */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium" style={{color:'rgba(0,0,0,0.65)'}}>批量任务</h3>
-        <button onClick={() => setShowCreate(!showCreate)}
-          className="xx-btn-primary px-4 py-2 rounded-lg text-sm font-medium cursor-pointer">
-          {showCreate ? '取消' : '+ 新建任务'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={fetchTasks}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
+            style={{background:'rgba(255,255,255,0.25)',color:'rgba(0,0,0,0.50)'}}>
+            🔄 刷新
+          </button>
+          <button onClick={() => setShowCreate(!showCreate)}
+            className="xx-btn-primary px-4 py-2 rounded-lg text-sm font-medium cursor-pointer">
+            {showCreate ? '取消' : '+ 新建任务'}
+          </button>
+        </div>
       </div>
 
       {/* 统计概览 */}
@@ -167,9 +200,9 @@ export default function TaskList({ token }: { token: string }) {
               </div>
             </div>
             {msg && <div className="text-red-500 text-xs">{msg}</div>}
-            <button type="submit"
-              className="xx-btn-primary px-6 py-2 rounded-lg text-sm font-medium cursor-pointer">
-              创建任务
+            <button type="submit" disabled={creating}
+              className="xx-btn-primary px-6 py-2 rounded-lg text-sm font-medium cursor-pointer disabled:opacity-50">
+              {creating ? '创建中...' : '创建任务'}
             </button>
           </form>
         </div>
@@ -261,7 +294,8 @@ export default function TaskList({ token }: { token: string }) {
                     <td className="py-3 px-5">
                       <div className="flex items-center gap-1">
                         {t.status === 'pending' && (
-                          <button className="text-xs px-2 py-0.5 rounded cursor-pointer"
+                          <button onClick={() => handleDelete(t.id)}
+                            className="text-xs px-2 py-0.5 rounded cursor-pointer"
                             style={{color:'#ef4444',background:'rgba(239,68,68,0.08)'}}>取消</button>
                         )}
                         {(t.status === 'failed' || t.status === 'cancelled') && (

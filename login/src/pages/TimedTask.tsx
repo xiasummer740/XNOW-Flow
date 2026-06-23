@@ -58,6 +58,20 @@ export default function TimedTask({ token }: { token: string }) {
     }
   }
 
+  const handleDelete = async (id: number) => {
+    try {
+      const res = await fetch(`/api/biz/v2/timed-tasks/${id}/`, {
+        method: 'DELETE',
+        headers,
+      })
+      if (!res.ok) throw new Error('Failed to delete')
+      setMsg('')
+      await fetchTasks()
+    } catch {
+      setMsg('删除失败，请重试')
+    }
+  }
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name || !form.cron) { setMsg('请填写完整信息'); return }
@@ -176,6 +190,7 @@ export default function TimedTask({ token }: { token: string }) {
                   <th className="pb-2 pt-3 px-5 font-medium">上次执行</th>
                   <th className="pb-2 pt-3 px-5 font-medium">下次执行</th>
                   <th className="pb-2 pt-3 px-5 font-medium">状态</th>
+                  <th className="pb-2 pt-3 px-5 font-medium">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -200,6 +215,13 @@ export default function TimedTask({ token }: { token: string }) {
                         }`} />
                       </button>
                     </td>
+                    <td className="py-3 px-5">
+                      <button onClick={() => handleDelete(s.id)}
+                        className="text-xs px-2 py-0.5 rounded cursor-pointer"
+                        style={{color:'#ef4444',background:'rgba(239,68,68,0.08)'}}>
+                        删除
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -207,6 +229,7 @@ export default function TimedTask({ token }: { token: string }) {
           </div>
         )}
       </div>
+      {msg && <div className="text-red-500 text-xs text-center">{msg}</div>}
     </div>
   )
 }
