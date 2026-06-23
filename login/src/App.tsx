@@ -2,7 +2,7 @@ import { useState } from 'react'
 import Dashboard from './Dashboard'
 
 function App() {
-  const [username, setUsername] = useState('yk0417')
+  const [username, setUsername] = useState('admin')
   const [password, setPassword] = useState('123456')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -119,7 +119,7 @@ function App() {
           </button>
 
           <p className="text-xs text-center" style={{ color: 'rgba(0,0,0,0.35)' }}>
-            测试账号: yk0417 / 123456
+            测试账号: admin / admin
           </p>
         </form>
       </div>

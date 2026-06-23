@@ -26,14 +26,23 @@ Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 
 try:
-    # 1. 管理员用户 (yk0417 / 123456)
-    if not db.query(User).filter(User.username == "yk0417").first():
+    # 1. 管理员用户 (admin / admin)
+    if not db.query(User).filter(User.username == "admin").first():
         admin = User(
-            username="yk0417",
-            password_hash=hashlib.sha256("123456".encode()).hexdigest(),
+            username="admin",
+            password_hash=hashlib.sha256("admin".encode()).hexdigest(),
             is_active=True,
         )
         db.add(admin)
+    else:
+        # 已有 admin 用户，更新密码
+        user = db.query(User).filter(User.username == "admin").first()
+        user.password_hash = hashlib.sha256("admin".encode()).hexdigest()
+
+    # 兼容旧版 yk0417 用户
+    if db.query(User).filter(User.username == "yk0417").first():
+        old = db.query(User).filter(User.username == "yk0417").first()
+        db.delete(old)
 
     # 2. 设备
     if db.query(DeviceBinding).count() == 0:
