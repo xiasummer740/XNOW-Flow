@@ -11,7 +11,6 @@ class DeviceBinding(Base):
     status = Column(String(20), default="idle")
     online = Column(Boolean, default=False)
     account_count = Column(Integer, default=0)
-    accounts = Column(Integer, default=0)
     last_online = Column(DateTime(timezone=True))
     app_version = Column(String(50))
     created_at = Column(DateTime(timezone=True), server_default=func.now())

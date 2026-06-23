@@ -9,7 +9,6 @@ class DeviceResponse(BaseModel):
     status: Optional[str] = ""
     online: Optional[bool] = False
     account_count: Optional[int] = 0
-    accounts: Optional[int] = 0
     last_online: Optional[datetime] = None
     app_version: Optional[str] = ""
 

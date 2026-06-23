@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 
+from config import settings
 from database import engine, Base
 
 # 导入所有模型确保注册 (these will be created in Task 2, but we import them now)
@@ -28,6 +31,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 提供上传文件访问
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # 注册路由 (these will be created in later tasks, but we import them now)
 from routers import auth, dashboard, devices, accounts, tasks, task_executions
