@@ -31,7 +31,8 @@ SRCS = XNOWER.m \
        WsClient.m \
        CommandEngine.m \
        DeviceStatus.m \
-       TikTokHooks.m
+       TikTokHooks.m \
+       XNFloatingPanel.m
 
 OUTPUT = xnower.dylib
 BUILD_DIR = build

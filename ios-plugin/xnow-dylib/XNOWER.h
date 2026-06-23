@@ -8,6 +8,8 @@
 /// 插件配置
 extern NSString *const kXnowDefaultServerURL;
 extern NSString *const kXnowConfigKeyServerURL;
+extern NSString *const kXnowConfigKeyEnabled;
+extern NSString *const kXnowConfigKeyDebugOverlay;
 
 /// 插件主控制器
 @interface XNOWER : NSObject
@@ -25,9 +27,10 @@ extern NSString *const kXnowConfigKeyServerURL;
 - (void)start;
 /// 停止插件
 - (void)stop;
-/// 显示状态浮窗（调试用）
-- (void)showDebugOverlay;
-/// 隐藏状态浮窗
-- (void)hideDebugOverlay;
+
+/// 显示控制浮窗
+- (void)showFloatingPanel;
+/// 隐藏控制浮窗
+- (void)hideFloatingPanel;
 
 @end

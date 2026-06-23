@@ -7,6 +7,7 @@
 #import "CommandEngine.h"
 #import "DeviceStatus.h"
 #import "TikTokHooks.h"
+#import "XNFloatingPanel.h"
 #import <objc/runtime.h>
 
 // ======== 默认配置 ========
@@ -34,14 +35,13 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 // ======== 实现 ========
-@interface XNOWER () <WsClientDelegate>
+@interface XNOWER () <WsClientDelegate, XNFloatingPanelDelegate>
 @property (nonatomic, strong) WsClient *wsClient;
 @property (nonatomic, strong) CommandEngine *cmdEngine;
 @property (nonatomic, strong) DeviceStatus *deviceStatus;
+@property (nonatomic, strong) XNFloatingPanel *floatingPanel;
 @property (nonatomic, strong) dispatch_queue_t workerQueue;
-@property (nonatomic, assign) BOOL debugOverlayVisible;
-@property (nonatomic, strong) UIWindow *debugWindow;
-@property (nonatomic, strong) UILabel *debugLabel;
+@property (nonatomic, assign) BOOL floatingPanelVisible;
 @end
 
 @implementation XNOWER
@@ -98,6 +98,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
         // 启动设备状态监控
         [self.deviceStatus startMonitoring];
 
+        // 显示控制浮窗
+        [self showFloatingPanel];
+
         // 连接 WebSocket
         [self connectWebSocket];
     });
@@ -138,7 +141,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     [self startHeartbeat];
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self updateDebugLabelText:@"🟢 已连接"];
+        [self.floatingPanel setConnected:YES];
     });
 }
 
@@ -146,7 +149,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     _isConnected = NO;
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self updateDebugLabelText:@"🔴 已断开"];
+        [self.floatingPanel setConnected:NO];
     });
 
     // 自动重连（指数退避由 WsClient 内部处理）
@@ -197,49 +200,67 @@ __attribute__((destructor)) static void XNOWERUnload() {
     });
 }
 
-// ======== Debug Overlay ========
+// ======== 浮动控制面板 ========
 
-- (void)showDebugOverlay {
+- (void)showFloatingPanel {
+    if (self.floatingPanelVisible) return;
+
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.debugWindow) return;
+        UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
+        if (!keyWindow) return;
 
-        UIWindow *window = [[UIWindow alloc] initWithFrame:CGRectMake(0, 0, 200, 60)];
-        window.windowLevel = UIWindowLevelAlert + 100;
-        window.backgroundColor = [UIColor colorWithWhite:0 alpha:0.7];
-        window.layer.cornerRadius = 10;
-        window.clipsToBounds = YES;
-        window.userInteractionEnabled = NO;
-
-        UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(8, 0, 184, 60)];
-        label.textColor = [UIColor whiteColor];
-        label.font = [UIFont systemFontOfSize:12];
-        label.numberOfLines = 3;
-        label.text = [NSString stringWithFormat:@"XNOWER\nID: %@\n🔴 未连接", self.deviceId];
-        [window addSubview:label];
-
-        window.rootViewController = [[UIViewController alloc] init];
-        window.hidden = NO;
-
-        self.debugWindow = window;
-        self.debugLabel = label;
-        self.debugOverlayVisible = YES;
+        self.floatingPanel = [[XNFloatingPanel alloc] init];
+        self.floatingPanel.delegate = self;
+        [self.floatingPanel setDeviceId:self.deviceId];
+        [self.floatingPanel setServerURL:self.serverURL];
+        [self.floatingPanel setConnected:self.isConnected];
+        [self.floatingPanel showInWindow:keyWindow];
+        self.floatingPanelVisible = YES;
     });
 }
 
-- (void)hideDebugOverlay {
+- (void)hideFloatingPanel {
     dispatch_async(dispatch_get_main_queue(), ^{
-        self.debugWindow.hidden = YES;
-        self.debugWindow = nil;
-        self.debugLabel = nil;
-        self.debugOverlayVisible = NO;
+        [self.floatingPanel dismiss];
+        self.floatingPanel = nil;
+        self.floatingPanelVisible = NO;
     });
 }
 
-- (void)updateDebugLabelText:(NSString *)status {
-    if (self.debugLabel) {
-        self.debugLabel.text = [NSString stringWithFormat:@"XNOWER\nID: %@\n%@",
-                                 self.deviceId, status];
-    }
+#pragma mark - XNFloatingPanelDelegate
+
+- (void)floatingPanelDidTapLike:(XNFloatingPanel *)panel {
+    [self.cmdEngine executeCommand:@{@"action": @"like"} completion:^(NSDictionary *result) {
+        NSLog(@"[XNOWER] Like: %@", result[@"status"]);
+    }];
+}
+
+- (void)floatingPanelDidTapFollow:(XNFloatingPanel *)panel {
+    [self.cmdEngine executeCommand:@{@"action": @"follow"} completion:^(NSDictionary *result) {
+        NSLog(@"[XNOWER] Follow: %@", result[@"status"]);
+    }];
+}
+
+- (void)floatingPanelDidTapScrollDown:(XNFloatingPanel *)panel {
+    [self.cmdEngine executeCommand:@{@"action": @"scroll_down"} completion:^(NSDictionary *result) {
+        NSLog(@"[XNOWER] Scroll: %@", result[@"status"]);
+    }];
+}
+
+- (void)floatingPanelDidTapScreenshot:(XNFloatingPanel *)panel {
+    [self.cmdEngine executeCommand:@{@"action": @"screenshot"} completion:^(NSDictionary *result) {
+        NSLog(@"[XNOWER] Screenshot: %@", result[@"status"]);
+    }];
+}
+
+- (void)floatingPanelDidTapCollectFans:(XNFloatingPanel *)panel {
+    [self.cmdEngine executeCommand:@{@"action": @"collect_fans", @"params": @{@"count": @20}}
+                        completion:nil];
+}
+
+- (void)floatingPanelDidTapCollectVideos:(XNFloatingPanel *)panel {
+    [self.cmdEngine executeCommand:@{@"action": @"collect_videos", @"params": @{@"count": @10}}
+                        completion:nil];
 }
 
 @end
