@@ -24,6 +24,7 @@ CFLAGS = -arch $(ARCH) \
 
 FRAMEWORKS = -framework Foundation \
              -framework UIKit \
+             -framework CoreGraphics \
              -framework CFNetwork \
              -framework WebKit
 
