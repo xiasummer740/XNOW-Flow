@@ -125,6 +125,13 @@ html::before {
   border-right: 2px solid #7c3aed;
 }
 
+/* 移动端侧栏阴影 */
+@media (max-width: 767px) {
+  .dashboard-sidebar {
+    box-shadow: 4px 0 20px rgba(0,0,0,0.10) !important;
+  }
+}
+
 /* Header 磨砂玻璃 */
 .dashboard-header {
   background: rgba(255, 255, 255, 0.25) !important;

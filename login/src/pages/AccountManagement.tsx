@@ -42,6 +42,7 @@ export default function AccountManagement({ token }: { token: string }) {
           <p className="text-sm text-gray-400">暂无账号数据</p>
         </div>
       ) : (
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-gray-400 text-xs border-b border-gray-50">
@@ -73,6 +74,7 @@ export default function AccountManagement({ token }: { token: string }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   )

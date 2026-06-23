@@ -50,6 +50,7 @@ interface DashboardData {
 
 export default function Dashboard({ user, token, onLogout }: { user: any; token: string; onLogout: () => void }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [activeMenu, setActiveMenu] = useState('数据概览')
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -73,8 +74,20 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
     <div className="min-h-screen flex dashboard-layout">
       <div className="xx-glow-overlay" />
 
-      {/* 侧栏 — 磨砂玻璃 */}
-      <aside className={`dashboard-sidebar ${sidebarCollapsed ? 'w-16' : 'w-56'} flex flex-col transition-all duration-200 shrink-0`}>
+      {/* 移动端遮罩 */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMobileMenuOpen(false)}
+          style={{ background: 'rgba(0,0,0,0.30)' }} />
+      )}
+
+      {/* 侧栏 — 磨砂玻璃 ｜ 移动端：抽屉覆盖 */}
+      <aside className={`dashboard-sidebar flex flex-col shrink-0 transition-all duration-200 ${
+        sidebarCollapsed ? 'w-16' : 'w-56'
+      } ${
+        /* 移动端：absolutely positioned overlay */
+        'fixed md:relative z-50 h-full ' +
+        (mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0')
+      }`}>
         <div className="h-14 flex items-center gap-2 px-4 border-b shrink-0" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
           <svg viewBox="0 0 48 48" fill="none" className="w-7 h-7 shrink-0"
             style={{ filter: 'drop-shadow(0 0 6px rgba(168,85,247,0.4))' }}>
@@ -88,6 +101,8 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
             <path d="M34 6H28.5C25.18 6 22 8.46 22 12.5V22H16v6h6v14h6V28h5l1-6h-6v-8.5c0-1.38 0.88-2.5 2.5-2.5H34V6z" fill="url(#sidebarLogo)" />
           </svg>
           {!sidebarCollapsed && <span className="sidebar-brand-text">XNOW</span>}
+          {/* 移动端关闭按钮 */}
+          <button onClick={() => setMobileMenuOpen(false)} className="ml-auto md:hidden cursor-pointer text-sm" style={{color:'rgba(0,0,0,0.35)'}}>✕</button>
         </div>
         <nav className="flex-1 overflow-y-auto py-2">
           {menuData.map((group) => (
@@ -98,7 +113,7 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
               {group.items.map((item) => (
                 <button
                   key={item.label}
-                  onClick={() => setActiveMenu(item.label)}
+                  onClick={() => { setActiveMenu(item.label); setMobileMenuOpen(false) }}
                   className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-all cursor-pointer ${
                     activeMenu === item.label
                       ? 'nav-item active'
@@ -113,7 +128,7 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
           ))}
         </nav>
         <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="border-t p-3 transition-colors cursor-pointer text-sm nav-item"
+          className="hidden md:flex border-t p-3 transition-colors cursor-pointer text-sm nav-item"
           style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
           {sidebarCollapsed ? '→' : '← 收起'}
         </button>
@@ -122,26 +137,32 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
       {/* 主区域 */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header — 磨砂玻璃 */}
-        <header className="dashboard-header h-14 flex items-center justify-between px-6 shrink-0">
-          <span className="text-sm font-medium" style={{ color: 'rgba(0,0,0,0.55)' }}>
-            首页 / {activeMenu === '数据概览' ? '数据看板' : activeMenu}
-          </span>
-          <div className="flex items-center gap-4 text-sm" style={{ color: 'rgba(0,0,0,0.45)' }}>
+        <header className="dashboard-header h-14 flex items-center justify-between px-3 md:px-6 shrink-0">
+          <div className="flex items-center gap-2">
+            {/* 移动端汉堡菜单 */}
+            <button onClick={() => setMobileMenuOpen(true)} className="md:hidden cursor-pointer text-lg" style={{color:'rgba(0,0,0,0.40)'}}>
+              ☰
+            </button>
+            <span className="text-xs md:text-sm font-medium truncate" style={{ color: 'rgba(0,0,0,0.55)' }}>
+              {activeMenu === '数据概览' ? '数据看板' : activeMenu}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 md:gap-4 text-xs md:text-sm" style={{ color: 'rgba(0,0,0,0.45)' }}>
             <span className="flex items-center gap-1">
               <span className={`w-2 h-2 rounded-full ${d && d.online > 0 ? 'bg-green-400' : 'bg-gray-300'}`} />
-              在线 {d?.online || 0} 台
+              <span className="hidden md:inline">在线</span> {d?.online || 0}
             </span>
-            <span style={{ color: 'rgba(0,0,0,0.15)' }}>|</span>
-            <span>API ID: {user?.id || '—'}</span>
-            <span style={{ color: 'rgba(0,0,0,0.15)' }}>|</span>
-            <span className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>设备: {d?.online || 0} / {d?.total || 0}</span>
-            <div className="flex items-center gap-2 ml-2 pl-4 border-l" style={{ borderColor: 'rgba(0,0,0,0.10)' }}>
-              <div className="w-7 h-7 rounded-full text-white text-xs flex items-center justify-center font-medium"
+            <span className="hidden md:inline" style={{ color: 'rgba(0,0,0,0.15)' }}>|</span>
+            <span className="hidden md:inline">API ID: {user?.id || '—'}</span>
+            <span className="hidden md:inline" style={{ color: 'rgba(0,0,0,0.15)' }}>|</span>
+            <span className="hidden md:inline text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>设备: {d?.online || 0} / {d?.total || 0}</span>
+            <div className="flex items-center gap-1 md:gap-2 ml-1 md:ml-2 pl-2 md:pl-4 border-l" style={{ borderColor: 'rgba(0,0,0,0.10)' }}>
+              <div className="w-6 h-6 md:w-7 md:h-7 rounded-full text-white text-[10px] md:text-xs flex items-center justify-center font-medium"
                 style={{ background: 'linear-gradient(135deg, #a855f7, #3b82f6)' }}>
                 {(user?.username || 'U')[0].toUpperCase()}
               </div>
-              <span style={{ color: 'rgba(0,0,0,0.65)' }}>{user?.username || '用户'}</span>
-              <button onClick={onLogout} className="ml-2 text-xs cursor-pointer" style={{ color: 'rgba(0,0,0,0.35)' }}
+              <span className="hidden md:inline" style={{ color: 'rgba(0,0,0,0.65)' }}>{user?.username || '用户'}</span>
+              <button onClick={onLogout} className="text-[10px] md:text-xs cursor-pointer" style={{ color: 'rgba(0,0,0,0.35)' }}
                 onMouseOver={e => (e.currentTarget.style.color = '#ef4444')}
                 onMouseOut={e => (e.currentTarget.style.color = 'rgba(0,0,0,0.35)')}>
                 退出
@@ -151,7 +172,7 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
         </header>
 
         {/* 内容区 */}
-        <main className="flex-1 overflow-y-auto p-6" style={{ background: 'transparent' }}>
+        <main className="flex-1 overflow-y-auto p-3 md:p-6" style={{ background: 'transparent' }}>
           {activeMenu !== '数据概览' ? (
             (() => {
               switch (activeMenu) {
@@ -338,6 +359,7 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <div className="xx-card rounded-xl p-5">
                   <h3 className="text-sm font-medium mb-4" style={{ color: 'rgba(0,0,0,0.65)' }}>设备任务量 Top10</h3>
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs border-b" style={{ color: 'rgba(0,0,0,0.35)', borderColor: 'rgba(0,0,0,0.06)' }}>
@@ -360,12 +382,14 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
                       )}
                     </tbody>
                   </table>
+                  </div>
                 </div>
 
                 <div className="xx-card rounded-xl p-5">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-medium" style={{ color: 'rgba(0,0,0,0.65)' }}>设备在线状态</h3>
                   </div>
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs border-b" style={{ color: 'rgba(0,0,0,0.35)', borderColor: 'rgba(0,0,0,0.06)' }}>
@@ -395,6 +419,7 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
                       )}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </div>
             </>
