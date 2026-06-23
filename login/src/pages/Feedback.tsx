@@ -1,21 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface FeedbackItem {
   id: number
-  type: string
   title: string
   content: string
+  contact: string
   status: 'pending' | 'processing' | 'resolved' | 'rejected'
   reply?: string
-  createdAt: string
-  resolvedAt?: string
+  created_at: string
 }
-
-const mockFeedback: FeedbackItem[] = [
-  { id: 1, type: '功能建议', title: '建议增加批量导入账号功能', content: '现在一个个加账号太慢了，希望能支持 Excel 批量导入。', status: 'resolved', reply: '感谢您的建议！批量导入功能已在开发中，预计下个版本上线。', createdAt: '2026-06-15', resolvedAt: '2026-06-17' },
-  { id: 2, type: 'Bug 反馈', title: '设备管理页面加载缓慢', content: '设备数量超过 50 台时，页面滚动会卡顿。', status: 'processing', createdAt: '2026-06-20' },
-  { id: 3, type: '功能建议', title: '希望支持更多数据导出格式', content: '目前只支持 CSV，希望能增加 Excel 和 PDF 格式。', status: 'pending', createdAt: '2026-06-22' },
-]
 
 const statusLabels: Record<string, string> = { pending: '待处理', processing: '处理中', resolved: '已解决', rejected: '已驳回' }
 const statusColors: Record<string, string> = {
@@ -24,34 +17,47 @@ const statusColors: Record<string, string> = {
   resolved: 'bg-green-50 text-green-600',
   rejected: 'bg-gray-50 text-gray-500',
 }
-const typeColors: Record<string, string> = {
-  '功能建议': 'bg-purple-50 text-purple-500',
-  'Bug 反馈': 'bg-red-50 text-red-500',
-  '使用咨询': 'bg-blue-50 text-blue-500',
-  '其他': 'bg-gray-50 text-gray-500',
-}
-
-export default function Feedback({ token: _token }: { token: string }) {
-  const [list, setList] = useState<FeedbackItem[]>(mockFeedback)
+export default function Feedback({ token }: { token: string }) {
+  const [list, setList] = useState<FeedbackItem[]>([])
+  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ type: '功能建议', title: '', content: '' })
+  const [form, setForm] = useState({ type: '功能建议', title: '', content: '', contact: '' })
   const [msg, setMsg] = useState('')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const headers = { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
+
+  const fetchList = async () => {
+    try {
+      const res = await fetch('/api/biz/v2/feedback/', { headers })
+      if (!res.ok) throw new Error('Failed to fetch')
+      const json = await res.json()
+      setList(json.results ?? json)
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchList() }, [])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.title || !form.content) { setMsg('请填写完整信息'); return }
-    const newItem: FeedbackItem = {
-      id: Math.max(...list.map(f => f.id), 0) + 1,
-      type: form.type,
-      title: form.title,
-      content: form.content,
-      status: 'pending',
-      createdAt: new Date().toISOString().slice(0, 10),
+    try {
+      const res = await fetch('/api/biz/v2/feedback/', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ title: form.title, content: form.content, contact: form.contact }),
+      })
+      if (!res.ok) throw new Error('Failed to submit')
+      setForm({ type: '功能建议', title: '', content: '', contact: '' })
+      setShowForm(false)
+      setMsg('')
+      await fetchList()
+    } catch {
+      setMsg('提交失败，请重试')
     }
-    setList(prev => [newItem, ...prev])
-    setForm({ type: '功能建议', title: '', content: '' })
-    setShowForm(false)
-    setMsg('')
   }
 
   return (
@@ -92,6 +98,12 @@ export default function Feedback({ token: _token }: { token: string }) {
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-400 resize-none"
                 placeholder="请详细描述..." />
             </div>
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">联系方式</label>
+              <input type="text" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-400"
+                placeholder="微信 / 手机号 / 邮箱" />
+            </div>
             {msg && <div className="text-red-500 text-xs">{msg}</div>}
             <button type="submit"
               className="px-6 py-2 bg-[#1677FF] hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer">
@@ -107,7 +119,11 @@ export default function Feedback({ token: _token }: { token: string }) {
           <span className="text-sm font-medium text-gray-700">历史反馈</span>
           <span className="text-xs text-gray-400">共 {list.length} 条</span>
         </div>
-        {list.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : list.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mb-3 text-2xl">💬</div>
             <p className="text-sm text-gray-400">暂无反馈记录</p>
@@ -118,14 +134,11 @@ export default function Feedback({ token: _token }: { token: string }) {
               <div key={item.id} className="px-5 py-4">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-0.5 rounded ${typeColors[item.type] || 'bg-gray-50 text-gray-500'}`}>
-                      {item.type}
-                    </span>
                     <span className={`text-xs px-2 py-0.5 rounded ${statusColors[item.status]}`}>
                       {statusLabels[item.status]}
                     </span>
                   </div>
-                  <span className="text-xs text-gray-400">{item.createdAt}</span>
+                  <span className="text-xs text-gray-400">{item.created_at}</span>
                 </div>
                 <h4 className="text-sm font-medium text-gray-700 mb-1">{item.title}</h4>
                 <p className="text-xs text-gray-500">{item.content}</p>
@@ -133,7 +146,6 @@ export default function Feedback({ token: _token }: { token: string }) {
                   <div className="mt-3 pl-3 border-l-2 border-blue-200">
                     <p className="text-xs text-blue-600 font-medium mb-0.5">官方回复：</p>
                     <p className="text-xs text-gray-500">{item.reply}</p>
-                    {item.resolvedAt && <p className="text-[10px] text-gray-400 mt-1">回复于 {item.resolvedAt}</p>}
                   </div>
                 )}
               </div>

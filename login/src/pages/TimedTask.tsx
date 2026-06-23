@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface Schedule {
   id: number
@@ -10,40 +10,71 @@ interface Schedule {
   nextRun: string
 }
 
-const mockSchedules: Schedule[] = [
-  { id: 1, name: '每日采集-用户数据', cron: '0 2 * * *', taskType: '数据采集', enabled: true, lastRun: '2026-06-22 02:00', nextRun: '2026-06-23 02:00' },
-  { id: 2, name: '批量关注任务', cron: '0 9 * * 1-5', taskType: '批量操作', enabled: true, lastRun: '2026-06-22 09:00', nextRun: '2026-06-23 09:00' },
-  { id: 3, name: '评论采集-每小时', cron: '0 * * * *', taskType: '数据采集', enabled: false, lastRun: '2026-06-22 10:00', nextRun: '—' },
-  { id: 4, name: '素材同步', cron: '0 3 */2 * *', taskType: '系统维护', enabled: true, lastRun: '2026-06-22 03:00', nextRun: '2026-06-24 03:00' },
-  { id: 5, name: '数据报表生成', cron: '30 8 * * 1', taskType: '报表', enabled: false, lastRun: '2026-06-16 08:30', nextRun: '—' },
-]
-
-export default function TimedTask({ token: _token }: { token: string }) {
-  const [schedules, setSchedules] = useState<Schedule[]>(mockSchedules)
+export default function TimedTask({ token }: { token: string }) {
+  const [schedules, setSchedules] = useState<Schedule[]>([])
+  const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ name: '', cron: '', taskType: '数据采集' })
   const [msg, setMsg] = useState('')
 
-  const toggleEnabled = (id: number) => {
-    setSchedules(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s))
+  const headers = { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
+
+  const fetchTasks = async () => {
+    try {
+      const res = await fetch('/api/biz/v2/timed-tasks/', { headers })
+      if (!res.ok) throw new Error('Failed to fetch')
+      const data = await res.json()
+      setSchedules(data.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        cron: item.cron,
+        taskType: item.task_type,
+        enabled: item.enabled,
+        lastRun: item.last_run || '—',
+        nextRun: item.next_run || '—',
+      })))
+    } catch {
+      // silently fail — empty list is fine
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleAdd = (e: React.FormEvent) => {
+  useEffect(() => { fetchTasks() }, [])
+
+  const toggleEnabled = async (id: number) => {
+    const current = schedules.find(s => s.id === id)
+    if (!current) return
+    try {
+      const res = await fetch(`/api/biz/v2/timed-tasks/${id}/`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ enabled: !current.enabled }),
+      })
+      if (!res.ok) throw new Error('Failed to toggle')
+      await fetchTasks()
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name || !form.cron) { setMsg('请填写完整信息'); return }
-    const newSched: Schedule = {
-      id: Math.max(...schedules.map(s => s.id)) + 1,
-      name: form.name,
-      cron: form.cron,
-      taskType: form.taskType,
-      enabled: true,
-      lastRun: '—',
-      nextRun: '待计算',
+    try {
+      const res = await fetch('/api/biz/v2/timed-tasks/', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: form.name, cron: form.cron, task_type: form.taskType }),
+      })
+      if (!res.ok) throw new Error('Failed to create')
+      setForm({ name: '', cron: '', taskType: '数据采集' })
+      setShowAdd(false)
+      setMsg('')
+      await fetchTasks()
+    } catch {
+      setMsg('创建失败，请重试')
     }
-    setSchedules(prev => [...prev, newSched])
-    setForm({ name: '', cron: '', taskType: '数据采集' })
-    setShowAdd(false)
-    setMsg('')
   }
 
   const cronHelp = [
@@ -125,7 +156,11 @@ export default function TimedTask({ token: _token }: { token: string }) {
           <span className="text-sm font-medium text-gray-700">定时任务列表</span>
           <span className="text-xs text-gray-400">共 {schedules.length} 个任务</span>
         </div>
-        {schedules.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : schedules.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mb-3 text-2xl">⏰</div>
             <p className="text-sm text-gray-400">暂无定时任务</p>

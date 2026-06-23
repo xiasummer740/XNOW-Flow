@@ -1,27 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface CollectionRecord {
   id: number
   source: string
-  type: string
+  source_type: string
   content: string
   author: string
-  collectedAt: string
-  status: string
+  collected_at: string
 }
-
-const mockData: CollectionRecord[] = [
-  { id: 1, source: '抖音', type: '用户', content: '张三 (zsshipping)', author: 'device-01', collectedAt: '2026-06-23 10:30', status: '已完成' },
-  { id: 2, source: '抖音', type: '视频', content: '今天天气真好...', author: 'device-01', collectedAt: '2026-06-23 10:28', status: '已完成' },
-  { id: 3, source: '抖音', type: '评论', content: '这个产品不错', author: 'device-02', collectedAt: '2026-06-23 10:25', status: '已完成' },
-  { id: 4, source: 'TikTok', type: '用户', content: 'John Doe (@johndoe)', author: 'device-03', collectedAt: '2026-06-23 10:20', status: '已完成' },
-  { id: 5, source: 'TikTok', type: '视频', content: 'Check out this new...', author: 'device-03', collectedAt: '2026-06-23 10:18', status: '已完成' },
-  { id: 6, source: '抖音', type: '评论', content: '666666', author: 'device-01', collectedAt: '2026-06-23 10:15', status: '已完成' },
-  { id: 7, source: '抖音', type: '用户', content: '李四 (lsiii)', author: 'device-02', collectedAt: '2026-06-23 10:10', status: '异常' },
-  { id: 8, source: 'TikTok', type: '评论', content: 'Nice video!', author: 'device-03', collectedAt: '2026-06-23 10:05', status: '已完成' },
-  { id: 9, source: '抖音', type: '视频', content: '美食探店...', author: 'device-01', collectedAt: '2026-06-23 09:55', status: '已完成' },
-  { id: 10, source: 'TikTok', type: '用户', content: 'Jane Smith (@janesmith)', author: 'device-03', collectedAt: '2026-06-23 09:50', status: '已完成' },
-]
 
 const sourceColors: Record<string, string> = {
   '抖音': 'bg-red-50 text-red-500',
@@ -34,10 +20,29 @@ const typeIcons: Record<string, string> = {
   '评论': '💬',
 }
 
-export default function CollectedData({ token: _token }: { token: string }) {
-  const [data] = useState<CollectionRecord[]>(mockData)
+export default function CollectedData({ token }: { token: string }) {
+  const [data, setData] = useState<CollectionRecord[]>([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [sourceFilter, setSourceFilter] = useState('all')
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch('/api/biz/v2/collected-data/?limit=50', {
+          headers: { 'Authorization': `Token ${token}` },
+        })
+        if (!res.ok) throw new Error('Failed to fetch')
+        const json = await res.json()
+        setData(json.results ?? json)
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
 
   const sources = ['all', ...new Set(data.map(d => d.source))]
   const filtered = data.filter(d => {
@@ -47,9 +52,9 @@ export default function CollectedData({ token: _token }: { token: string }) {
   })
 
   const stats = {
-    users: data.filter(d => d.type === '用户').length,
-    videos: data.filter(d => d.type === '视频').length,
-    comments: data.filter(d => d.type === '评论').length,
+    users: data.filter(d => d.source_type === '用户').length,
+    videos: data.filter(d => d.source_type === '视频').length,
+    comments: data.filter(d => d.source_type === '评论').length,
   }
 
   return (
@@ -102,7 +107,11 @@ export default function CollectedData({ token: _token }: { token: string }) {
           <span className="text-sm font-medium text-gray-700">采集记录</span>
           <span className="text-xs text-gray-400">共 {filtered.length} 条</span>
         </div>
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mb-3 text-2xl">📡</div>
             <p className="text-sm text-gray-400">暂无采集数据</p>
@@ -117,7 +126,6 @@ export default function CollectedData({ token: _token }: { token: string }) {
                   <th className="pb-2 pt-3 px-5 font-medium">内容</th>
                   <th className="pb-2 pt-3 px-5 font-medium">采集设备</th>
                   <th className="pb-2 pt-3 px-5 font-medium">采集时间</th>
-                  <th className="pb-2 pt-3 px-5 font-medium">状态</th>
                 </tr>
               </thead>
               <tbody>
@@ -130,20 +138,13 @@ export default function CollectedData({ token: _token }: { token: string }) {
                     </td>
                     <td className="py-3 px-5">
                       <span className="flex items-center gap-1">
-                        <span>{typeIcons[r.type]}</span>
-                        <span>{r.type}</span>
+                        <span>{typeIcons[r.source_type]}</span>
+                        <span>{r.source_type}</span>
                       </span>
                     </td>
                     <td className="py-3 px-5 max-w-[200px] truncate">{r.content}</td>
                     <td className="py-3 px-5 text-gray-400 text-xs">{r.author}</td>
-                    <td className="py-3 px-5 text-gray-400 text-xs">{r.collectedAt}</td>
-                    <td className="py-3 px-5">
-                      <span className={`text-xs px-2 py-0.5 rounded ${
-                        r.status === '已完成' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'
-                      }`}>
-                        {r.status}
-                      </span>
-                    </td>
+                    <td className="py-3 px-5 text-gray-400 text-xs">{r.collected_at}</td>
                   </tr>
                 ))}
               </tbody>
