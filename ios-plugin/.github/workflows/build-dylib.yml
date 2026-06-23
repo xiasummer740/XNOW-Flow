@@ -1,0 +1,111 @@
+# build-dylib.yml
+# 在 macOS runner 上编译 xnower.dylib
+# 触发条件: push 到 ios-plugin/ 目录 或 手动触发
+
+name: Build XNOW Dylib
+
+on:
+  push:
+    paths:
+      - "ios-plugin/**"
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: "WebSocket server URL (e.g. ws://192.129.210.52:8000)"
+        required: false
+        default: "ws://192.129.210.52:8000"
+      inject_ipa_url:
+        description: "URL to decrypted TikTok IPA (optional)"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    name: Build xnower.dylib
+    runs-on: macos-14  # Apple Silicon, Xcode 15+
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Xcode
+        run: |
+          xcode-select -p
+          xcrun --sdk iphoneos --show-sdk-path
+          clang --version | head -1
+
+      - name: Build dylib
+        run: |
+          cd ios-plugin/xnow-dylib
+          make release 2>&1
+        env:
+          MIN_IOS: "14.0"
+
+      - name: Verify dylib
+        run: |
+          cd ios-plugin/xnow-dylib
+          file build/xnower.dylib
+          echo "=== Symbols ==="
+          nm -gU build/xnower.dylib | head -30
+          echo "=== Size ==="
+          ls -lh build/xnower.dylib
+
+      - name: Prepare artifacts
+        run: |
+          # Copy config plist alongside dylib
+          cp ios-plugin/xnow-dylib/Config.plist ios-plugin/xnow-dylib/build/
+
+      - name: Upload dylib artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xnower-dylib
+          path: |
+            ios-plugin/xnow-dylib/build/xnower.dylib
+            ios-plugin/xnow-dylib/build/Config.plist
+          retention-days: 30
+
+  # 可选：注入 IPA（提供 IPA URL 时执行）
+  inject-ipa:
+    name: Inject IPA (optional)
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.inject_ipa_url != ''
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download dylib
+        uses: actions/download-artifact@v4
+        with:
+          name: xnower-dylib
+          path: ./build
+
+      - name: Install tools
+        run: |
+          brew install ldid 2>/dev/null || true
+
+      - name: Download IPA
+        run: |
+          IPA_URL="${{ github.event.inputs.inject_ipa_url }}"
+          echo "Downloading IPA from: $IPA_URL"
+          curl -L -o TikTok.ipa "$IPA_URL"
+          ls -lh TikTok.ipa
+
+      - name: Inject dylib into IPA
+        run: |
+          chmod +x ios-plugin/scripts/inject-ipa.sh
+          bash ios-plugin/scripts/inject-ipa.sh \
+            ./TikTok.ipa \
+            ./build/xnower.dylib \
+            ./TikTok_XNOW.ipa
+
+      - name: Upload injected IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: TikTok_XNOW.ipa
+          path: ./TikTok_XNOW.ipa
+          retention-days: 7

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- WebSocket 服务器地址 -->
+    <key>XNOWER_ServerURL</key>
+    <string>ws://192.129.210.52:8000</string>
+
+    <!-- 插件是否启用（默认开） -->
+    <key>XNOWER_Enabled</key>
+    <true/>
+
+    <!-- 调试浮窗（默认关，开启后在屏幕左上角显示连接状态） -->
+    <key>XNOWER_DebugOverlay</key>
+    <false/>
+
+    <!-- 心跳间隔（秒） -->
+    <key>XNOWER_HeartbeatInterval</key>
+    <integer>30</integer>
+
+    <!-- 自动重连最大次数 -->
+    <key>XNOWER_MaxReconnectAttempts</key>
+    <integer>20</integer>
+
+    <!-- 日志级别: debug / info / warn / error -->
+    <key>XNOWER_LogLevel</key>
+    <string>info</string>
+
+    <!-- 操作间隔（秒，批量操作时两次操作之间的延迟） -->
+    <key>XNOWER_OperationInterval</key>
+    <integer>2</integer>
+</dict>
+</plist>
