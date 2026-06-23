@@ -69,7 +69,7 @@ class ConnectionManager:
         return len(self._connections)
 
     def _update_device_status(self, device_id: str, online: bool, status: str):
-        """更新数据库中设备的在线状态"""
+        """更新数据库中设备的在线状态，设备不存在时自动注册"""
         try:
             db = SessionLocal()
             device = db.query(DeviceBinding).filter(
@@ -80,7 +80,20 @@ class ConnectionManager:
                 device.status = status
                 if online:
                     device.last_online = datetime.utcnow()
-                db.commit()
+            elif online:
+                # 设备首次连接 → 自动注册到数据库
+                device = DeviceBinding(
+                    name=device_id,
+                    device_name=device_id,
+                    status=status,
+                    online=True,
+                    account_count=0,
+                    last_online=datetime.utcnow(),
+                    app_version="—",
+                )
+                db.add(device)
+                logger.info(f"Device {device_id} auto-registered to database")
+            db.commit()
             db.close()
         except Exception as e:
             logger.error(f"Update device status failed: {e}")
