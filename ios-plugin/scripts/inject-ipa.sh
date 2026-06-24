@@ -55,8 +55,10 @@ echo "  Copied to Frameworks/xnower.dylib"
 
 echo ""
 echo "=== Step 3: 修改加载路径 ==="
-install_name_tool -id @rpath/xnower.dylib "$APP_DIR/Frameworks/xnower.dylib"
-echo "  install_name set to @rpath/xnower.dylib"
+# 使用 @executable_path/Frameworks/ 确保 dyld 能找到 dylib
+# @rpath 需要主二进制有正确的 runpath，而 @executable_path 是绝对的
+install_name_tool -id @executable_path/Frameworks/xnower.dylib "$APP_DIR/Frameworks/xnower.dylib"
+echo "  install_name set to @executable_path/Frameworks/xnower.dylib"
 
 echo ""
 echo "=== Step 4: 注入 dylib 到主二进制 ==="
@@ -64,56 +66,108 @@ echo "=== Step 4: 注入 dylib 到主二进制 ==="
 INSERT_TOOL=$(which insert_dylib 2>/dev/null || echo "")
 
 if [ -n "$INSERT_TOOL" ]; then
-    # 使用 insert_dylib
-    "$INSERT_TOOL" \
-        "@rpath/xnower.dylib" \
+    echo "  使用 insert_dylib 注入..."
+    # 先备份原始二进制
+    cp "$APP_BINARY" "$APP_BINARY.bak"
+    if "$INSERT_TOOL" \
+        "@executable_path/Frameworks/xnower.dylib" \
         "$APP_BINARY" \
         "$APP_BINARY"_patched \
         --inplace \
-        2>/dev/null || true
+        --overwrite; then
+        chmod 755 "$APP_BINARY"
+        echo "  insert_dylib 注入完成"
+    else
+        echo "  insert_dylib 失败，切换到 Python 注入"
+        cp "$APP_BINARY.bak" "$APP_BINARY"
+        USE_PYTHON=1
+    fi
+    rm -f "$APP_BINARY.bak"
+fi
 
-    # 恢复原始权限
-    chmod 755 "$APP_BINARY"
-    echo "  insert_dylib 注入完成"
-else
+if [ -z "$INSERT_TOOL" ] || [ "${USE_PYTHON:-0}" = "1" ]; then
     # 手动注入: 使用 Python 脚本修改 Mach-O
+    # 注意: 对于 FAT 二进制（多架构），需要分别处理每个 slice
     python3 -c "
-import struct, sys
+import struct, sys, os
 
-dylib_path = b'@rpath/xnower.dylib\x00'
+dylib_path = b'@executable_path/Frameworks/xnower.dylib\x00'
 align = 8
 dylib_cmd_size = (len(dylib_path) + 7) & ~7  # 对齐到 8 字节
-dylib_cmd_size += 24  # LC_LOAD_DYLIB 头部大小
+dylib_cmd_size += 24  # LC_LOAD_DYLIB 头部大小 (cmd+cmdsize+4个uint32)
 
-binary = open('$APP_BINARY', 'rb').read()
-
-# 构造 LC_LOAD_DYLIB 命令
-cmd = bytearray()
-cmd += struct.pack('<II', 0x8000001D, dylib_cmd_size)  # LC_LOAD_DYLIB
-cmd += struct.pack('<III', 0, 24, 24)  # offset, timestamp, version
-cmd += struct.pack('<II', 24, dylib_cmd_size - 24)  # current_vers, compat_vers
-cmd += dylib_path
-cmd += b'\x00' * (dylib_cmd_size - len(cmd) - 24)
-cmd += b'\x00' * (dylib_cmd_size - len(cmd))
+binary_path = '$APP_BINARY'
+binary = open(binary_path, 'rb').read()
 
 # 检查是否已有我们的 dylib
 if b'xnower.dylib' in binary:
     print('  dylib 已存在，跳过注入')
     sys.exit(0)
 
-# 在 __LINKEDIT 段前插入 (简化方案: 追加到文件末尾)
-with open('$APP_BINARY', 'ab') as f:
+# 判断 Mach-O 类型
+magic = struct.unpack('<I', binary[:4])[0]
+MH_MAGIC_64 = 0xFEEDFACF
+MH_MAGIC = 0xFEEDFACE
+FAT_MAGIC = 0xBEBAFECA
+FAT_MAGIC_64 = 0xBEBAFECB
+
+if magic == FAT_MAGIC or magic == FAT_MAGIC_64:
+    print('  FAT binary detected, patching first slice (arm64)')
+    # FAT header: magic(4) + nfat_arch(4)
+    arch_offset = 8
+    # arm64 slice 偏移
+    arch_count = struct.unpack('<I', binary[4:8])[0]
+    if arch_count < 1:
+        print('  ERROR: no arch in FAT binary')
+        sys.exit(1)
+    # 读第一个 arch 的偏移
+    if magic == FAT_MAGIC_64:
+        slice_off = struct.unpack('<Q', binary[arch_offset + 8:arch_offset + 16])[0]
+    else:
+        slice_off = struct.unpack('<I', binary[arch_offset + 8:arch_offset + 12])[0]
+    # 读取该 slice 的 mach_header_64
+    slice_header = binary[slice_off:slice_off + 32]
+else:
+    slice_off = 0
+    slice_header = binary[:32]
+
+if magic != FAT_MAGIC and magic != FAT_MAGIC_64 and magic != MH_MAGIC_64:
+    print('  WARNING: expected arm64 Mach-O, trying as MH_MAGIC_64 anyway')
+
+# 解析 mach_header_64
+# offset: 0=magic, 4=cputype, 8=cpusubtype, 12=filetype,
+#         16=ncmds, 20=sizeofcmds, 24=flags, 28=reserved
+ncmds = struct.unpack('<I', slice_header[16:20])[0]
+sizeofcmds = struct.unpack('<I', slice_header[20:24])[0]
+
+print('  ncmds: {}, sizeofcmds: {}, cmd_size: {}'.format(ncmds, sizeofcmds, dylib_cmd_size))
+
+# 构造 LC_LOAD_DYLIB 命令
+cmd = bytearray()
+cmd += struct.pack('<II', 0x8000001D, dylib_cmd_size)  # LC_LOAD_DYLIB
+cmd += struct.pack('<III', 0, 24, 24)  # offset(拉伸后进行), timestamp, version
+cmd += struct.pack('<II', 24, dylib_cmd_size - 24)  # current_vers, compat_vers
+cmd += dylib_path
+cmd += b'\x00' * (dylib_cmd_size - len(cmd))
+
+# 追加到文件末尾
+with open(binary_path, 'ab') as f:
     f.write(cmd)
 
-# 更新 ncmds
-header = bytearray(binary[:8])
-ncmds = struct.unpack('<I', header[4:8])[0]
-header[4:8] = struct.pack('<I', ncmds + 1)
+# 更新 mach_header_64 在同一切片的偏移
+new_ncmds = ncmds + 1
+new_sizeofcmds = sizeofcmds + dylib_cmd_size
 
-with open('$APP_BINARY', 'r+b') as f:
-    f.write(header)
+with open(binary_path, 'r+b') as f:
+    if slice_off == 0:
+        # 非 FAT: 直接更新文件开头
+        f.seek(0)
+    else:
+        f.seek(slice_off)
+    f.write(struct.pack('<II', new_ncmds, new_sizeofcmds))
 
-print('  LC_LOAD_DYLIB 注入完成')
+print('  LC_LOAD_DYLIB 注入完成 (ncmds: {} -> {}, sizeofcmds: {} -> {})'.format(
+    ncmds, new_ncmds, sizeofcmds, new_sizeofcmds))
 "
 fi
 
@@ -132,16 +186,28 @@ else
 fi
 
 echo ""
-echo "=== Step 6: 伪签名（TrollStore 兼容） ==="
-if command -v ldid &>/dev/null; then
-    ldid -S "$APP_BINARY" 2>/dev/null && echo "  ldid 签名完成" || echo "  ldid 签名失败（不影响 TrollStore）"
-else
-    echo "  ldid 未安装，跳过签名（TrollStore 不需要正式签名）"
-fi
+echo "=== Step 6: 代码签名 ==="
+# 优先用 codesign（macOS 原生，适用于企业证书/开发证书）
+if command -v codesign &>/dev/null; then
+    # 为 dylib 生成简单的 entitlements
+    echo '<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>get-task-allow</key><true/></dict></plist>' > "$TMPDIR/entitlements.plist"
 
-# 也对 dylib 做签名
-if command -v ldid &>/dev/null; then
-    ldid -S "$APP_DIR/Frameworks/xnower.dylib" 2>/dev/null || true
+    echo "  Signing main binary with codesign..."
+    codesign -f -s - --entitlements "$TMPDIR/entitlements.plist" "$APP_BINARY" 2>/dev/null && \
+        echo "  ✅ 主二进制签名完成" || echo "  ⚠️ 主二进制签名失败"
+
+    echo "  Signing dylib with codesign..."
+    codesign -f -s - --entitlements "$TMPDIR/entitlements.plist" "$APP_DIR/Frameworks/xnower.dylib" 2>/dev/null && \
+        echo "  ✅ dylib 签名完成" || echo "  ⚠️ dylib 签名失败"
+elif command -v ldid &>/dev/null; then
+    echo "  使用 ldid 伪签名（TrollStore 兼容）..."
+    ldid -S "$APP_BINARY" 2>/dev/null && echo "  ✅ ldid 主二进制签名完成" || echo "  ⚠️ ldid 主二进制签名失败"
+    ldid -S "$APP_DIR/Frameworks/xnower.dylib" 2>/dev/null && echo "  ✅ ldid dylib 签名完成" || echo "  ⚠️ ldid dylib 签名失败"
+else
+    echo "  ⚠️ 未找到签名工具 — 仅适用于 TrollStore 安装（无需正式签名）"
+    echo "  对于企业证书签名，请使用 爱思助手/i4Tools 打包时自动签名"
 fi
 
 echo ""

@@ -2,6 +2,7 @@
 // 设备状态采集器实现
 
 #import "DeviceStatus.h"
+#import "XNWindowHelper.h"
 #import <UIKit/UIKit.h>
 #import <sys/utsname.h>
 #import <mach/mach.h>
@@ -130,7 +131,7 @@
 }
 
 - (UIViewController *)_topViewController {
-    UIViewController *root = [UIApplication sharedApplication].keyWindow.rootViewController;
+    UIViewController *root = XN_ActiveWindow().rootViewController;
     return [self _topFrom:root];
 }
 

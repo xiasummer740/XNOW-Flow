@@ -3,6 +3,7 @@
 // 通过 UITouch/UIEvent 真实模拟用户操作 + 视图层级遍历 + 网络数据采集
 
 #import "CommandEngine.h"
+#import "XNWindowHelper.h"
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
@@ -212,7 +213,7 @@ static const CGFloat kAvatarRatioY = 0.82;
 
 /// 通过 UITouch + UIEvent 构造真实滑动事件
 - (void)_simulateSwipeFrom:(CGPoint)from to:(CGPoint)to {
-    UIWindow *window = [UIApplication sharedApplication].keyWindow;
+    UIWindow *window = XN_ActiveWindow();
     if (!window) return;
 
     // 找到接收事件的 view
@@ -260,7 +261,7 @@ static const CGFloat kAvatarRatioY = 0.82;
 
 /// 模拟单次点击
 - (void)_simulateTapAtPoint:(CGPoint)point {
-    UIWindow *window = [UIApplication sharedApplication].keyWindow;
+    UIWindow *window = XN_ActiveWindow();
     if (!window) return;
 
     UIView *targetView = [window hitTest:point withEvent:nil];
@@ -327,7 +328,7 @@ static const CGFloat kAvatarRatioY = 0.82;
     dispatch_sync(dispatch_get_main_queue(), ^{
         // 1. 通过 accessibility identifier 找点赞按钮
         UIView *likeView = [self _findViewWithAccessibilityIdentifier:kAccLike
-                                                               inView:[UIApplication sharedApplication].keyWindow];
+                                                               inView:XN_ActiveWindow()];
         if (likeView) {
             CGPoint center = [likeView.superview convertPoint:likeView.center toView:nil];
             [self _simulateTapAtPoint:center];
@@ -336,7 +337,7 @@ static const CGFloat kAvatarRatioY = 0.82;
 
         // 2. 通过 accessibility label
         UIButton *likeBtn = [self _findButtonWithAnyLabel:@[@"like", @"Like", @"heart", @"Heart"]
-                                                   inView:[UIApplication sharedApplication].keyWindow];
+                                                   inView:XN_ActiveWindow()];
         if (likeBtn) {
             CGPoint center = [likeBtn.superview convertPoint:likeBtn.center toView:nil];
             [self _simulateTapAtPoint:center];
@@ -357,7 +358,7 @@ static const CGFloat kAvatarRatioY = 0.82;
     dispatch_sync(dispatch_get_main_queue(), ^{
         // 1. 通过 accessibility
         UIButton *btn = [self _findButtonWithAnyLabel:@[@"follow", @"Follow", @"+"]
-                                               inView:[UIApplication sharedApplication].keyWindow];
+                                               inView:XN_ActiveWindow()];
         if (btn) {
             [self _simulateTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
             return;
@@ -378,7 +379,7 @@ static const CGFloat kAvatarRatioY = 0.82;
     dispatch_sync(dispatch_get_main_queue(), ^{
         // 找评论按钮
         UIView *commentView = [self _findViewWithAccessibilityIdentifier:kAccComment
-                                                                  inView:[UIApplication sharedApplication].keyWindow];
+                                                                  inView:XN_ActiveWindow()];
         if (commentView) {
             [self _simulateTapAtPoint:[commentView.superview convertPoint:commentView.center toView:nil]];
         } else {
@@ -391,7 +392,7 @@ static const CGFloat kAvatarRatioY = 0.82;
     [NSThread sleepForTimeInterval:1.5];
 
     dispatch_sync(dispatch_get_main_queue(), ^{
-        UIWindow *window = [UIApplication sharedApplication].keyWindow;
+        UIWindow *window = XN_ActiveWindow();
 
         // 找到输入框
         UITextField *textField = [self _findTextFieldInView:window];
@@ -413,10 +414,10 @@ static const CGFloat kAvatarRatioY = 0.82;
     [NSThread sleepForTimeInterval:0.8];
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIView *sendBtn = [self _findViewWithAccessibilityIdentifier:kAccSend
-                                                              inView:[UIApplication sharedApplication].keyWindow];
+                                                              inView:XN_ActiveWindow()];
         if (!sendBtn) {
             sendBtn = [self _findViewWithAccessibilityIdentifier:kAccPost
-                                                          inView:[UIApplication sharedApplication].keyWindow];
+                                                          inView:XN_ActiveWindow()];
         }
         if (sendBtn) {
             [self _simulateTapAtPoint:[sendBtn.superview convertPoint:sendBtn.center toView:nil]];
@@ -424,7 +425,7 @@ static const CGFloat kAvatarRatioY = 0.82;
             // 尝试找到底部工具栏的发发送按钮
             UIButton *btn = [self _findButtonWithAnyLabel:@[@"send", @"Send", @"Post",
                                                              @"发送", @"发布"]
-                                                   inView:[UIApplication sharedApplication].keyWindow];
+                                                   inView:XN_ActiveWindow()];
             if (btn) {
                 [self _simulateTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
             }
@@ -438,7 +439,7 @@ static const CGFloat kAvatarRatioY = 0.82;
     dispatch_sync(dispatch_get_main_queue(), ^{
         // TikTok 收藏按钮通常在分享面板里，模拟点击收藏
         UIView *collectView = [self _findViewWithAccessibilityIdentifier:kAccShare
-                                                                  inView:[UIApplication sharedApplication].keyWindow];
+                                                                  inView:XN_ActiveWindow()];
         if (collectView) {
             // 先点分享
             [self _simulateTapAtPoint:[collectView.superview convertPoint:collectView.center toView:nil]];
@@ -446,7 +447,7 @@ static const CGFloat kAvatarRatioY = 0.82;
             // 直接搜索 "save" 或 "bookmark"
             UIButton *btn = [self _findButtonWithAnyLabel:@[@"save", @"Save", @"bookmark",
                                                              @"收藏", @"Add to Favorites"]
-                                                   inView:[UIApplication sharedApplication].keyWindow];
+                                                   inView:XN_ActiveWindow()];
             if (btn) {
                 [self _simulateTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
             }
@@ -458,7 +459,7 @@ static const CGFloat kAvatarRatioY = 0.82;
 
 - (void)_performScreenshot {
     dispatch_sync(dispatch_get_main_queue(), ^{
-        UIWindow *window = [UIApplication sharedApplication].keyWindow;
+        UIWindow *window = XN_ActiveWindow();
         if (!window) return;
 
         // 截图前先隐藏 overlay（如果有）
@@ -489,7 +490,7 @@ static const CGFloat kAvatarRatioY = 0.82;
 
         // 回退：点击当前视频创作者头像
         UIView *avatarView = [self _findViewWithAccessibilityIdentifier:kAccProfileAvatar
-                                                                 inView:[UIApplication sharedApplication].keyWindow];
+                                                                 inView:XN_ActiveWindow()];
         if (avatarView) {
             [self _simulateTapAtPoint:[avatarView.superview convertPoint:avatarView.center toView:nil]];
         } else {
@@ -518,7 +519,7 @@ static const CGFloat kAvatarRatioY = 0.82;
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIButton *fansBtn = [self _findButtonWithAnyLabel:@[@"fans", @"Fans", @"followers",
                                                              @"粉丝", @"Followers"]
-                                                   inView:[UIApplication sharedApplication].keyWindow];
+                                                   inView:XN_ActiveWindow()];
         if (fansBtn) {
             [self _simulateTapAtPoint:[fansBtn.superview convertPoint:fansBtn.center toView:nil]];
         }
@@ -569,7 +570,7 @@ static const CGFloat kAvatarRatioY = 0.82;
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIButton *videoBtn = [self _findButtonWithAnyLabel:@[@"video", @"Video", @"作品",
                                                               @"post", @"Post"]
-                                                    inView:[UIApplication sharedApplication].keyWindow];
+                                                    inView:XN_ActiveWindow()];
         if (videoBtn) {
             [self _simulateTapAtPoint:[videoBtn.superview convertPoint:videoBtn.center toView:nil]];
         }
@@ -604,7 +605,7 @@ static const CGFloat kAvatarRatioY = 0.82;
 /// 从当前可见视图采集粉丝数据
 - (void)_collectVisibleFans:(NSMutableArray *)fans limit:(int)limit {
     dispatch_sync(dispatch_get_main_queue(), ^{
-        UIWindow *window = [UIApplication sharedApplication].keyWindow;
+        UIWindow *window = XN_ActiveWindow();
         [self _enumerateLabelsInView:window block:^(NSString *text, UIView *view) {
             if (fans.count >= limit) return;
             // 检测用户名的启发式规则：2-30字符，不含特殊符号
@@ -620,7 +621,7 @@ static const CGFloat kAvatarRatioY = 0.82;
 /// 从当前可见视图采集视频描述数据
 - (void)_collectVisibleVideos:(NSMutableArray *)videos limit:(int)limit {
     dispatch_sync(dispatch_get_main_queue(), ^{
-        UIWindow *window = [UIApplication sharedApplication].keyWindow;
+        UIWindow *window = XN_ActiveWindow();
         [self _enumerateLabelsInView:window block:^(NSString *text, UIView *view) {
             if (videos.count >= limit) return;
             if (text.length >= 5 && text.length <= 100) {

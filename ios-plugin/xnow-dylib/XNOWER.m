@@ -8,6 +8,7 @@
 #import "DeviceStatus.h"
 #import "TikTokHooks.h"
 #import "XNFloatingPanel.h"
+#import "XNWindowHelper.h"
 #import <objc/runtime.h>
 
 // ======== 默认配置 ========
@@ -206,7 +207,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     if (self.floatingPanelVisible) return;
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
+        UIWindow *keyWindow = XN_ActiveWindow();
         if (!keyWindow) return;
 
         self.floatingPanel = [[XNFloatingPanel alloc] init];
