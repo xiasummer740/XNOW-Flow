@@ -15,7 +15,7 @@ fi
 
 INPUT_IPA="$1"
 DYLIB_PATH="$2"
-OUTPUT_IPA="$3"
+OUTPUT_IPA=$(cd "$(dirname "$3")" && pwd)/$(basename "$3")
 
 TMPDIR=$(mktemp -d)
 trap "rm -rf $TMPDIR" EXIT

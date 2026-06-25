@@ -21,6 +21,15 @@ typedef NS_ENUM(NSInteger, CommandAction) {
     CommandActionBatchLike,
     CommandActionBatchFollow,
     CommandActionBatchComment,
+
+    // 账号管理 (Phase 1)
+    CommandActionGetAccountInfo,
+    CommandActionSwitchAccount,
+    CommandActionReportAccount,
+
+    // 智能任务 (Phase 2)
+    CommandActionSmartBrowse,
+    CommandActionCheckHealth,
 };
 
 @interface CommandEngine : NSObject
