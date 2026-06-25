@@ -22,10 +22,9 @@ CFLAGS = -arch $(ARCH) \
          -dynamiclib \
          -DNDEBUG
 
-# ⚠️ 关键: 禁止链式 fixup，用传统 lazy bind 格式
-# 不加这个 iOS 16 的 dyld 会崩溃 (bad lazy bind opcode)
-# Xcode 15 ld 不支持 -fixup_chains=NO，用 -no_chained_fixups
-LDFLAGS = -Xlinker -no_chained_fixups
+# iOS 16 兼容: 需用 Xcode 14 编译（不启用链式 fixup）
+# Xcode 15+ 默认启用链式 fixup，iOS 16 重签后 dyld 不兼容
+# 工作流已设置 DEVELOPER_DIR 指向 Xcode 14.3.1
 
 FRAMEWORKS = -framework Foundation \
              -framework UIKit \

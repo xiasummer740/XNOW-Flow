@@ -37,8 +37,23 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-path
           clang --version | head -1
 
+      - name: Select Xcode 14 (no chained fixups)
+        run: |
+          # Xcode 15+ enables chained fixups by default, which break on iOS 16 after re-sign
+          # Xcode 14 uses classic lazy bind format
+          echo "Available Xcodes:"
+          ls /Applications/. 2>/dev/null | grep Xcode || ls /Applications/ | grep Xcode
+          XCODE_14=$(ls -d /Applications/Xcode_14*.app 2>/dev/null | head -1)
+          if [ -n "$XCODE_14" ]; then
+            echo "Using $XCODE_14"
+            echo "DEVELOPER_DIR=$XCODE_14/Contents/Developer" >> $GITHUB_ENV
+          else
+            echo "Warning: Xcode 14 not found, using default"
+          fi
+
       - name: Build dylib
         run: |
+          xcodebuild -version
           cd ios-plugin/xnow-dylib
           make release 2>&1
         env:
