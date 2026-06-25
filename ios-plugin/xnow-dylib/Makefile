@@ -22,6 +22,10 @@ CFLAGS = -arch $(ARCH) \
          -dynamiclib \
          -DNDEBUG
 
+# ⚠️ 关键: 禁止链式 fixup，用传统 lazy bind 格式
+# 不加这个 iOS 16 的 dyld 会崩溃 (bad lazy bind opcode)
+LDFLAGS = -Wl,-fixup_chains=NO
+
 FRAMEWORKS = -framework Foundation \
              -framework UIKit \
              -framework CoreGraphics \
@@ -33,7 +37,8 @@ SRCS = XNOWER.m \
        CommandEngine.m \
        DeviceStatus.m \
        TikTokHooks.m \
-       XNFloatingPanel.m
+       XNFloatingPanel.m \
+       AccountManager.m
 
 OUTPUT = xnower.dylib
 BUILD_DIR = build
@@ -48,7 +53,7 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
 $(BUILD_DIR)/$(OUTPUT): $(BUILD_DIR) $(SRCS) Config.plist
-	$(CC) $(CFLAGS) $(FRAMEWORKS) $(SRCS) \
+	$(CC) $(CFLAGS) $(LDFLAGS) $(FRAMEWORKS) $(SRCS) \
 		-o $(BUILD_DIR)/$(OUTPUT) \
 		-install_name @rpath/$(OUTPUT)
 	@echo ""

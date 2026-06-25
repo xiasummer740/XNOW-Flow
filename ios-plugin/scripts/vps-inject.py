@@ -11,7 +11,8 @@ import struct, os, sys, shutil, tempfile, zipfile, plistlib, json
 MAGIC_FAT = 0xcafebabe
 MAGIC_FAT_LE = 0xbebafeca
 MAGIC_MH_MAGIC_64 = 0xfeedfacf
-LC_LOAD_DYLIB = 0x8000001D
+LC_LOAD_DYLIB = 0x0C
+LC_SEGMENT_64 = 0x19
 
 def align(x, a):
     return (x + a - 1) & ~(a - 1)
@@ -91,8 +92,8 @@ def inject_single_arch(data, dylib_path_bytes):
 
     cmd = bytearray(cmd_size)
     struct.pack_into("<II", cmd, 0, LC_LOAD_DYLIB, cmd_size)
-    struct.pack_into("<III", cmd, 8, 0, name_offset, name_offset)  # offset, timestamp, version
-    struct.pack_into("<II", cmd, 20, name_offset, name_offset)  # current_vers, compat_vers
+    # struct dylib: name_offset, timestamp=0, current_version=0, compat_version=0
+    struct.pack_into("<IIII", cmd, 8, name_offset, 0, 0, 0)
     cmd[24:24+len(name_padded)] = name_padded
 
     # Insert the command
@@ -105,9 +106,11 @@ def inject_single_arch(data, dylib_path_bytes):
         if cmd_offset2 + 8 > len(data):
             break
         cmd_type2, _ = struct.unpack_from("<II", data, cmd_offset2)
-        if cmd_type2 == 0x2E:  # LC_SEGMENT_64 with segname __LINKEDIT
-            linkedit_offset = cmd_offset2
-            break
+        if cmd_type2 == LC_SEGMENT_64:
+            segname = data[cmd_offset2+8:cmd_offset2+24].rstrip(b'\x00')
+            if segname == b'__LINKEDIT':
+                linkedit_offset = cmd_offset2
+                break
         cmd_offset2 += struct.unpack_from("<I", data, cmd_offset2 + 4)[0]
 
     if linkedit_offset > 0:
@@ -193,7 +196,7 @@ def inject_ipa(ipa_path, dylib_path, output_path):
         with open(binary_path, "rb") as f:
             binary_data = f.read()
 
-        dylib_ref = b"@rpath/xnower.dylib\x00"
+        dylib_ref = b"@executable_path/Frameworks/xnower.dylib\x00"
 
         if b"xnower.dylib" in binary_data:
             print(f"  已存在，跳过注入")
@@ -208,7 +211,7 @@ def inject_ipa(ipa_path, dylib_path, output_path):
                 shutil.copy2(binary_path, bak_path)
                 with open(binary_path, "wb") as f:
                     f.write(new_data)
-                print(f"  ✅ LC_LOAD_DYLIB 注入成功")
+                print(f"  [OK] LC_LOAD_DYLIB 注入成功")
             else:
                 print(f"  Skipped (already injected or no change)")
 
@@ -242,9 +245,9 @@ def inject_ipa(ipa_path, dylib_path, output_path):
             if dylib_in_ipa:
                 for n in dylib_in_ipa:
                     info = z.getinfo(n)
-                    print(f"    ✅ {n} ({info.file_size/1024:.0f} KB)")
+                    print(f"    [OK] {n} ({info.file_size/1024:.0f} KB)")
             else:
-                print(f"    ❌ xnower.dylib 未在 IPA 中找到!")
+                print(f"    [ERR] xnower.dylib 未在 IPA 中找到!")
 
         return True
 
