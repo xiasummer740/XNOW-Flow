@@ -24,7 +24,8 @@ CFLAGS = -arch $(ARCH) \
 
 # ⚠️ 关键: 禁止链式 fixup，用传统 lazy bind 格式
 # 不加这个 iOS 16 的 dyld 会崩溃 (bad lazy bind opcode)
-LDFLAGS = -Wl,-fixup_chains=NO
+# Xcode 15 ld 不支持 -fixup_chains=NO，用 -no_chained_fixups
+LDFLAGS = -Xlinker -no_chained_fixups
 
 FRAMEWORKS = -framework Foundation \
              -framework UIKit \
