@@ -150,7 +150,7 @@ static AccountManager *gShared = nil;
         });
 
         if (result[@"nickname"] && [result[@"nickname"] length] > 0) {
-            self.__currentAccount = [result copy];
+            __currentAccount = [result copy];
             ACC_LOG(@"UI检测到账号: %@", result[@"nickname"]);
         }
 
