@@ -1,22 +1,14 @@
 #!/usr/bin/env python3
 """
 strip-chained-fixups.py — 从 Mach-O dylib 剥离链式 fixup 命令和数据
-使 dylib 使用纯 SYMTAB/DYSYMTAB 绑定（iOS 16 兼容）
+精确移除 fixup 数据区间，不移除 LINKEDIT 的其他内容
 """
 import struct, sys, os
 
-LC_DYLD_CHAINED_FIXUPS = 0x36
-LC_DYLD_EXPORTS_TRIE = 0x35
-LC_PRIVATE_CHAINED = 0x80000034  # Private chained fixup (Xcode 15 variant)
-LC_PRIVATE_EXPORTS = 0x80000033  # Private export trie (Xcode 15 variant)
+FIXUP_CMDS = {0x36, 0x35, 0x80000034, 0x80000033}
+CMD_NAMES = {0x36: 'LC_DYLD_CHAINED_FIXUPS', 0x35: 'LC_DYLD_EXPORTS_TRIE',
+             0x80000034: 'PRIVATE_CHAINED', 0x80000033: 'PRIVATE_EXPORTS'}
 LC_SEGMENT_64 = 0x19
-
-FIXUP_CMDS = {LC_DYLD_CHAINED_FIXUPS, LC_DYLD_EXPORTS_TRIE,
-              LC_PRIVATE_CHAINED, LC_PRIVATE_EXPORTS}
-CMD_NAMES = {LC_DYLD_CHAINED_FIXUPS: 'LC_DYLD_CHAINED_FIXUPS',
-             LC_DYLD_EXPORTS_TRIE: 'LC_DYLD_EXPORTS_TRIE',
-             LC_PRIVATE_CHAINED: 'PRIVATE_CHAINED(0x80000034)',
-             LC_PRIVATE_EXPORTS: 'PRIVATE_EXPORTS(0x80000033)'}
 
 def strip_fixups(path):
     with open(path, 'rb') as f:
@@ -26,110 +18,110 @@ def strip_fixups(path):
     sizeofcmds = struct.unpack_from('<I', data, 20)[0]
 
     off = 32
-    cmds_to_keep = []
-    fixup_cmds = []  # (offset, size, dataoff, datasize)
+    keep_cmds = []
+    fixup_cmds = []
     linkedit_off = -1
     linkedit_foff = linkedit_fsize = -1
 
     for i in range(ncmds):
-        if off + 8 > len(data):
-            break
+        if off + 8 > len(data): break
         cmd, csize = struct.unpack_from('<II', data, off)
-        cmd_name = CMD_NAMES.get(cmd, f'0x{cmd:08x}')
-
         if cmd in FIXUP_CMDS:
-            dataoff = struct.unpack_from('<I', data, off + 8)[0]
-            datasize = struct.unpack_from('<I', data, off + 12)[0]
-            fixup_cmds.append((off, csize, dataoff, datasize))
-            print(f'  Found: {cmd_name}: dataoff={dataoff}, datasize={datasize}')
+            d_off = struct.unpack_from('<I', data, off + 8)[0]
+            d_sz = struct.unpack_from('<I', data, off + 12)[0]
+            fixup_cmds.append({'off': off, 'size': csize, 'data_off': d_off, 'data_sz': d_sz})
+            print(f'  Found: {CMD_NAMES.get(cmd, f"0x{cmd:x}")} dataoff={d_off} datasize={d_sz}')
         else:
-            cmds_to_keep.append((off, csize))
-            # Print first few non-fixup commands for debugging
-            if i < 8:
-                print(f'  Keep [{i:2}] {cmd_name} sz={csize}')
-
+            keep_cmds.append({'off': off, 'size': csize})
         if cmd == LC_SEGMENT_64:
-            segname = data[off+8:off+24].rstrip(b'\x00')
-            if segname == b'__LINKEDIT':
+            seg = data[off+8:off+24].rstrip(b'\x00')
+            if seg == b'__LINKEDIT':
                 linkedit_off = off
                 linkedit_foff = struct.unpack_from('<Q', data, off + 40)[0]
                 linkedit_fsize = struct.unpack_from('<Q', data, off + 48)[0]
-
         off += csize
 
     if not fixup_cmds:
-        print('  No chained fixup commands found - dylib is already clean')
+        print('  No chained fixup commands found - dylib is clean')
         return True
 
-    # Find the range of fixup data
-    fixup_data_start = min(c[2] for c in fixup_cmds)
-    fixup_data_end = max(c[2] + c[3] for c in fixup_cmds)
-    fixup_data_size = fixup_data_end - fixup_data_start
+    # Calculate fixup data range
+    fixup_start = min(c['data_off'] for c in fixup_cmds)
+    fixup_end = max(c['data_off'] + c['data_sz'] for c in fixup_cmds)
+    fixup_size = fixup_end - fixup_start
+    print(f'  Fixup data range: [{fixup_start}, {fixup_end}) size={fixup_size}')
 
-    # Calculate new header values
-    removed_cmd_size = sum(c[1] for c in fixup_cmds)
-    new_ncmds = ncmds - len(fixup_cmds)
-    new_sizeofcmds = sizeofcmds - removed_cmd_size
+    # Calculate size of removed load commands
+    removed_cmd_sz = sum(c['size'] for c in fixup_cmds)
 
-    # Build new load commands
+    # Build new load command block
     new_cmds = bytearray()
-    for cmd_off, cmd_size in cmds_to_keep:
-        new_cmds.extend(data[cmd_off:cmd_off+cmd_size])
+    for c in keep_cmds:
+        new_cmds.extend(data[c['off']:c['off']+c['size']])
 
-    # Build new binary: header + new_cmds + segment data up to fixup_data_start
-    result = bytearray()
-    result.extend(data[:32])  # full header
-    struct.pack_into('<I', result, 16, new_ncmds)
-    struct.pack_into('<I', result, 20, new_sizeofcmds)
-    result.extend(new_cmds)
-
-    # Copy segment data (everything except the fixup data range at the end)
+    # Build new binary: header + new_cmds + data-before-fixups + data-after-fixups
     cmd_end = 32 + sizeofcmds
-    result.extend(data[cmd_end:fixup_data_start])
+    before_fixups = data[cmd_end:fixup_start]
+    after_fixups = data[fixup_end:]
 
-    # Update __LINKEDIT filesize
-    new_linkedit_fsize = fixup_data_start - linkedit_foff
-    # Find __LINKEDIT in the new load commands and update
+    result = bytearray()
+    result.extend(data[:32])  # header
+    struct.pack_into('<I', result, 16, ncmds - len(fixup_cmds))
+    struct.pack_into('<I', result, 20, sizeofcmds - removed_cmd_sz)
+    result.extend(new_cmds)
+    result.extend(before_fixups)
+    result.extend(after_fixups)
+
+    # Update __LINKEDIT.filesize
+    new_linkedit_sz = (fixup_end - linkedit_foff) - fixup_size
+    # Find LINKEDIT in new binary and update
     off2 = 32
-    for i in range(new_ncmds):
-        if off2 + 8 > len(result):
-            break
-        c, csize = struct.unpack_from('<II', result, off2)
+    for i in range(ncmds - len(fixup_cmds)):
+        if off2 + 8 > len(result): break
+        c, cs = struct.unpack_from('<II', result, off2)
         if c == LC_SEGMENT_64:
-            segname = result[off2+8:off2+24].rstrip(b'\x00')
-            if segname == b'__LINKEDIT':
-                struct.pack_into('<Q', result, off2 + 48, new_linkedit_fsize)
-                vm_align = lambda x: (x + 4095) & ~4095
-                struct.pack_into('<Q', result, off2 + 32, vm_align(new_linkedit_fsize))
-                print(f'  __LINKEDIT: filesize {linkedit_fsize} -> {new_linkedit_fsize}')
+            seg = result[off2+8:off2+24].rstrip(b'\x00')
+            if seg == b'__LINKEDIT':
+                struct.pack_into('<Q', result, off2+48, new_linkedit_sz)
+                va = lambda x: (x+4095)&~4095
+                struct.pack_into('<Q', result, off2+32, va(new_linkedit_sz))
+                print(f'  __LINKEDIT: filesize {linkedit_fsize} -> {new_linkedit_sz}')
                 break
-        off2 += csize
+        off2 += cs
 
-    new_size = len(result)
-    old_size = len(data)
-    print(f'  Removed {len(fixup_cmds)} commands, {fixup_data_size} bytes of fixup data')
-    print(f'  Size: {old_size} -> {new_size} bytes')
+    # Also update any SEGMENT_64 that covers the end (e.g., __TEXT)
+    off3 = 32
+    for i in range(ncmds - len(fixup_cmds)):
+        if off3 + 8 > len(result): break
+        c, cs = struct.unpack_from('<II', result, off3)
+        if c == LC_SEGMENT_64:
+            seg = result[off3+8:off3+24].rstrip(b'\x00')
+            fo = struct.unpack_from('<Q', result, off3+40)[0]
+            fs = struct.unpack_from('<Q', result, off3+48)[0]
+            if fo + fs > fixup_start and fo <= fixup_start and seg != b'__LINKEDIT':
+                new_fs = fs - fixup_size
+                struct.pack_into('<Q', result, off3+48, new_fs)
+                print(f'  {seg}: filesize {fs} -> {new_fs}')
+        off3 += cs
+
+    print(f'  Size: {len(data)} -> {len(result)} bytes')
+    print(f'  Removed {len(fixup_cmds)} load cmds, {fixup_size} bytes fixup data')
 
     # Verify no fixup commands remain
-    verify_ncmds = struct.unpack_from('<I', result, 16)[0]
+    verify_nc = struct.unpack_from('<I', result, 16)[0]
     verify_off = 32
-    still_present = False
-    for i in range(verify_ncmds):
-        if verify_off + 8 > len(result):
-            break
+    for i in range(verify_nc):
+        if verify_off + 8 > len(result): break
         c, _ = struct.unpack_from('<II', result, verify_off)
         if c in FIXUP_CMDS:
-            print(f'  ERROR: {CMD_NAMES.get(c, f"0x{c:08x}")} still present!')
-            still_present = True
+            print(f'  ERROR: {CMD_NAMES.get(c, f"0x{c:x}")} still present!')
+            return False
         verify_off += struct.unpack_from('<I', result, verify_off + 4)[0]
-    if still_present:
-        return False
 
     # Write result
     with open(path, 'wb') as f:
         f.write(result)
-
-    print(f'  ✅ Successfully stripped chained fixups')
+    print(f'  SUCCESS: chained fixups stripped')
     return True
 
 
@@ -137,15 +129,9 @@ if __name__ == '__main__':
     if len(sys.argv) < 2:
         print(f'Usage: {sys.argv[0]} <dylib_path>')
         sys.exit(1)
-
     path = sys.argv[1]
     if not os.path.exists(path):
         print(f'Error: file not found: {path}')
         sys.exit(1)
-
     print(f'Processing: {path}')
-    if strip_fixups(path):
-        print('Done!')
-    else:
-        print('FAILED!')
-        sys.exit(1)
+    sys.exit(0 if strip_fixups(path) else 1)
