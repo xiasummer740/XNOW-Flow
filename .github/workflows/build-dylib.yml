@@ -37,11 +37,16 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-path
           clang --version | head -1
 
-      - name: Select Xcode 15.0
+      - name: Probe available linkers
         run: |
-          ls /Applications/ | grep Xcode
-          sudo xcode-select -s /Applications/Xcode_15.0.app 2>/dev/null || echo "Xcode 15.0 not found, using default"
-          xcodebuild -version
+          echo "=== ld version ==="
+          ld -v 2>&1 || true
+          echo "=== ld64 check ==="
+          xcrun -sdk iphoneos -f ld64 2>&1 || echo "ld64 not found"
+          echo "=== ld path ==="
+          xcrun -sdk iphoneos -f ld
+          echo "=== ld --help ==="
+          ld --help 2>&1 | head -40 || true
 
       - name: Build dylib
         run: |
