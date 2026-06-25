@@ -22,8 +22,7 @@ CFLAGS = -arch $(ARCH) \
          -dynamiclib \
          -DNDEBUG
 
-# Xcode 14 编译 - 不生成链式 fixup，iOS 16 兼容
-# 工作流使用 macos-13 runner (Xcode 14.3.1)
+# 编译后通过 strip-fixups 剥离链式 fixup，iOS 16 兼容
 
 FRAMEWORKS = -framework Foundation \
              -framework UIKit \
@@ -76,6 +75,8 @@ sign: $(BUILD_DIR)/$(OUTPUT)
 	fi
 
 release: dylib strip sign
+	@echo "=== Post-processing: strip chained fixups ==="
+	python3 ../scripts/strip-chained-fixups.py $(BUILD_DIR)/$(OUTPUT)
 	@echo "=== Release ready: $(BUILD_DIR)/$(OUTPUT) ==="
 
 clean:

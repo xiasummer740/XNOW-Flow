@@ -24,23 +24,14 @@ on:
 jobs:
   build:
     name: Build xnower.dylib
-    # NECESSARY: macOS 13 has Xcode 14.3.1, which does NOT generate
-    # chained fixups. Xcode 15+ always generates them and iOS 16.7
-    # crashes with 'bad lazy bind opcode 0x50' after re-signing.
-    runs-on: macos-13
-    timeout-minutes: 30
+    runs-on: macos-14
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify Xcode
-        run: |
-          xcode-select -p
-          xcrun --sdk iphoneos --show-sdk-path
-          clang --version | head -1
-
-      - name: Build dylib (ld_classic - no chained fixups)
+      - name: Build dylib (strip chained fixups in post-process)
         run: |
           cd ios-plugin/xnow-dylib
           make release 2>&1
