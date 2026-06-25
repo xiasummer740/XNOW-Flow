@@ -7,7 +7,16 @@ import struct, sys, os
 
 LC_DYLD_CHAINED_FIXUPS = 0x36
 LC_DYLD_EXPORTS_TRIE = 0x35
+LC_PRIVATE_CHAINED = 0x80000034  # Private chained fixup (Xcode 15 variant)
+LC_PRIVATE_EXPORTS = 0x80000033  # Private export trie (Xcode 15 variant)
 LC_SEGMENT_64 = 0x19
+
+FIXUP_CMDS = {LC_DYLD_CHAINED_FIXUPS, LC_DYLD_EXPORTS_TRIE,
+              LC_PRIVATE_CHAINED, LC_PRIVATE_EXPORTS}
+CMD_NAMES = {LC_DYLD_CHAINED_FIXUPS: 'LC_DYLD_CHAINED_FIXUPS',
+             LC_DYLD_EXPORTS_TRIE: 'LC_DYLD_EXPORTS_TRIE',
+             LC_PRIVATE_CHAINED: 'PRIVATE_CHAINED(0x80000034)',
+             LC_PRIVATE_EXPORTS: 'PRIVATE_EXPORTS(0x80000033)'}
 
 def strip_fixups(path):
     with open(path, 'rb') as f:
@@ -26,15 +35,18 @@ def strip_fixups(path):
         if off + 8 > len(data):
             break
         cmd, csize = struct.unpack_from('<II', data, off)
+        cmd_name = CMD_NAMES.get(cmd, f'0x{cmd:08x}')
 
-        if cmd in (LC_DYLD_CHAINED_FIXUPS, LC_DYLD_EXPORTS_TRIE):
+        if cmd in FIXUP_CMDS:
             dataoff = struct.unpack_from('<I', data, off + 8)[0]
             datasize = struct.unpack_from('<I', data, off + 12)[0]
             fixup_cmds.append((off, csize, dataoff, datasize))
-            name = 'LC_DYLD_CHAINED_FIXUPS' if cmd == LC_DYLD_CHAINED_FIXUPS else 'LC_DYLD_EXPORTS_TRIE'
-            print(f'  Removing {name}: dataoff={dataoff}, datasize={datasize}')
+            print(f'  Found: {cmd_name}: dataoff={dataoff}, datasize={datasize}')
         else:
             cmds_to_keep.append((off, csize))
+            # Print first few non-fixup commands for debugging
+            if i < 8:
+                print(f'  Keep [{i:2}] {cmd_name} sz={csize}')
 
         if cmd == LC_SEGMENT_64:
             segname = data[off+8:off+24].rstrip(b'\x00')
@@ -101,14 +113,17 @@ def strip_fixups(path):
     # Verify no fixup commands remain
     verify_ncmds = struct.unpack_from('<I', result, 16)[0]
     verify_off = 32
+    still_present = False
     for i in range(verify_ncmds):
         if verify_off + 8 > len(result):
             break
         c, _ = struct.unpack_from('<II', result, verify_off)
-        if c in (LC_DYLD_CHAINED_FIXUPS, LC_DYLD_EXPORTS_TRIE):
-            print(f'  ERROR: Command 0x{c:08x} still present!')
-            return False
+        if c in FIXUP_CMDS:
+            print(f'  ERROR: {CMD_NAMES.get(c, f"0x{c:08x}")} still present!')
+            still_present = True
         verify_off += struct.unpack_from('<I', result, verify_off + 4)[0]
+    if still_present:
+        return False
 
     # Write result
     with open(path, 'wb') as f:
