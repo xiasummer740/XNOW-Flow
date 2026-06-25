@@ -24,8 +24,11 @@ on:
 jobs:
   build:
     name: Build xnower.dylib
-    runs-on: macos-14
-    timeout-minutes: 15
+    # NECESSARY: macOS 13 has Xcode 14.3.1, which does NOT generate
+    # chained fixups. Xcode 15+ always generates them and iOS 16.7
+    # crashes with 'bad lazy bind opcode 0x50' after re-signing.
+    runs-on: macos-13
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
