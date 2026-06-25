@@ -22,9 +22,8 @@ CFLAGS = -arch $(ARCH) \
          -dynamiclib \
          -DNDEBUG
 
-# iOS 16 兼容: 需用 Xcode 14 编译（不启用链式 fixup）
-# Xcode 15+ 默认启用链式 fixup，iOS 16 重签后 dyld 不兼容
-# 工作流已设置 DEVELOPER_DIR 指向 Xcode 14.3.1
+# 注: Xcode 15+ 默认启用链式 fixup (iOS 16 重签后不兼容)
+# 使用 macos-13 runner (Xcode 14.3.1) 自动避免此问题
 
 FRAMEWORKS = -framework Foundation \
              -framework UIKit \

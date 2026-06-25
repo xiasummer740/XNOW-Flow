@@ -24,7 +24,9 @@ on:
 jobs:
   build:
     name: Build xnower.dylib
-    runs-on: macos-14  # Apple Silicon, Xcode 15+
+    # 使用 macOS 13 (Xcode 14.3.1) 避免链式 fixup
+    # Xcode 15+ 默认启用链式 fixup，重签后 iOS 16 dyld 不兼容
+    runs-on: macos-13
     timeout-minutes: 15
 
     steps:
@@ -36,20 +38,6 @@ jobs:
           xcode-select -p
           xcrun --sdk iphoneos --show-sdk-path
           clang --version | head -1
-
-      - name: Select Xcode 14 (no chained fixups)
-        run: |
-          # Xcode 15+ enables chained fixups by default, which break on iOS 16 after re-sign
-          # Xcode 14 uses classic lazy bind format
-          echo "Available Xcodes:"
-          ls /Applications/. 2>/dev/null | grep Xcode || ls /Applications/ | grep Xcode
-          XCODE_14=$(ls -d /Applications/Xcode_14*.app 2>/dev/null | head -1)
-          if [ -n "$XCODE_14" ]; then
-            echo "Using $XCODE_14"
-            echo "DEVELOPER_DIR=$XCODE_14/Contents/Developer" >> $GITHUB_ENV
-          else
-            echo "Warning: Xcode 14 not found, using default"
-          fi
 
       - name: Build dylib
         run: |
