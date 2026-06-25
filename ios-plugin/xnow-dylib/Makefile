@@ -22,8 +22,9 @@ CFLAGS = -arch $(ARCH) \
          -dynamiclib \
          -DNDEBUG
 
-# 注: Xcode 15+ 默认启用链式 fixup (iOS 16 重签后不兼容)
-# 工作流会切换到 Xcode 15.0 避免此问题
+# Xcode 15 ld64 默认用 lld 后端(arm64)，生成链式 fixup
+# -ld_classic 强制用经典后端，不生成链式 fixup，iOS 16 兼容
+LDFLAGS = -Wl,-ld_classic
 
 FRAMEWORKS = -framework Foundation \
              -framework UIKit \

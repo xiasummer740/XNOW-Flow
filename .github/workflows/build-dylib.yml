@@ -37,18 +37,7 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-path
           clang --version | head -1
 
-      - name: Probe available linkers
-        run: |
-          echo "=== ld version ==="
-          ld -v 2>&1 || true
-          echo "=== ld64 check ==="
-          xcrun -sdk iphoneos -f ld64 2>&1 || echo "ld64 not found"
-          echo "=== ld path ==="
-          xcrun -sdk iphoneos -f ld
-          echo "=== ld --help ==="
-          ld --help 2>&1 | head -40 || true
-
-      - name: Build dylib
+      - name: Build dylib (ld_classic - no chained fixups)
         run: |
           cd ios-plugin/xnow-dylib
           make release 2>&1
