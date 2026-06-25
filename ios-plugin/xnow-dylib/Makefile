@@ -23,7 +23,7 @@ CFLAGS = -arch $(ARCH) \
          -DNDEBUG
 
 # 注: Xcode 15+ 默认启用链式 fixup (iOS 16 重签后不兼容)
-# 使用 macos-13 runner (Xcode 14.3.1) 自动避免此问题
+# 工作流会切换到 Xcode 15.0 避免此问题
 
 FRAMEWORKS = -framework Foundation \
              -framework UIKit \
