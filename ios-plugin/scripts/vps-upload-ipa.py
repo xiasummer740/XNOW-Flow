@@ -19,16 +19,16 @@ PORT = 22
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
-LOCAL_IPA = os.path.join(PROJECT_DIR, "TikTok_42.2.0_BH.ipa")
-LOCAL_DYLIB = os.path.join(PROJECT_DIR, "build-artifacts", "xnower.dylib")
+LOCAL_IPA = os.path.join(PROJECT_DIR, "TikTok_43.7.0_BH.ipa")
+LOCAL_DYLIB = os.path.join(PROJECT_DIR, "build-artifacts-ci", "xnower-lld-converted.dylib")
 LOCAL_VPS_INJECT = os.path.join(SCRIPTS_DIR, "vps-inject.py")
 
 REMOTE_DIR = "/root/xnow-inject"
-REMOTE_IPA = f"{REMOTE_DIR}/TikTok_42.2.0_BH.ipa"
+REMOTE_IPA = f"{REMOTE_DIR}/TikTok_43.7.0_BH.ipa"
 REMOTE_DYLIB = f"{REMOTE_DIR}/xnower.dylib"
 REMOTE_INJECT = f"{REMOTE_DIR}/vps-inject.py"
 REMOTE_OUTPUT = f"{REMOTE_DIR}/TikTok_XNOW.ipa"
-LOCAL_OUTPUT = os.path.join(PROJECT_DIR, "TikTok_XNOW_v2.ipa")
+LOCAL_OUTPUT = os.path.join(PROJECT_DIR, "TikTok_XNOW_v16.ipa")
 
 
 def check_files():
