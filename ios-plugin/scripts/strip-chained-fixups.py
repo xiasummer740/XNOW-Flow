@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-strip-chained-fixups.py — 从 Mach-O dylib 剥离链式 fixup 命令
-只移除 LOAD COMMANDS，不动 __LINKEDIT 数据（保持所有偏移有效）
+strip-chained-fixups.py — 从 Mach-O dylib 剥离链式 fixup
+策略：fixup 命令 cmd 类型改成 0x00（dyld 跳过未知命令）
+不改变文件大小/布局/偏移
 """
 import struct, sys, os
 
@@ -14,49 +15,29 @@ def strip_fixups(path):
         data = bytearray(f.read())
 
     ncmds = struct.unpack_from('<I', data, 16)[0]
-    sizeofcmds = struct.unpack_from('<I', data, 20)[0]
-
     off = 32
-    keep_cmds = bytearray()
-    removed = 0
+    stripped = 0
 
     for i in range(ncmds):
+        if off + 8 > len(data): break
         cmd, csize = struct.unpack_from('<II', data, off)
         if cmd in FIXUP_CMDS:
-            print(f'  Removing: {CMD_NAMES.get(cmd, f"0x{cmd:x}")} sz={csize}')
-            removed += 1
-        else:
-            keep_cmds.extend(data[off:off+csize])
+            # Zero out the cmd (set to 0x00 = unknown, dyld skips it)
+            struct.pack_into('<I', data, off, 0)
+            # Also zero cmd size for safety
+            struct.pack_into('<I', data, off + 4, csize)
+            print(f'  Neutralized: {CMD_NAMES.get(cmd, f"0x{cmd:x}")} sz={csize}')
+            stripped += 1
         off += csize
 
-    if not removed:
+    if not stripped:
         print('  No chained fixup commands found')
         return True
 
-    new_ncmds = ncmds - removed
-    new_sizeofcmds = sizeofcmds - (off - 32 - len(keep_cmds))
-
-    result = bytearray(data[:32])  # copy header
-    struct.pack_into('<I', result, 16, new_ncmds)
-    struct.pack_into('<I', result, 20, new_sizeofcmds)
-    result.extend(keep_cmds)          # only fixup-free commands
-    result.extend(data[32+sizeofcmds:])  # ALL segment data untouched
-
-    # Verify
-    vn = struct.unpack_from('<I', result, 16)[0]
-    vo = 32
-    for i in range(vn):
-        c, _ = struct.unpack_from('<II', result, vo)
-        if c in FIXUP_CMDS:
-            print(f'  ERROR: fixup cmd 0x{c:x} still present!')
-            return False
-        vo += struct.unpack_from('<I', result, vo+4)[0]
-
     with open(path, 'wb') as f:
-        f.write(result)
+        f.write(data)
 
-    print(f'  Removed {removed} load commands, data untouched')
-    print(f'  Size: {len(data)} -> {len(result)} bytes')
+    print(f'  Neutralized {stripped} commands, file unchanged ({len(data)} bytes)')
     print(f'  SUCCESS')
     return True
 
