@@ -32,6 +32,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// 清除当前缓存（退出登录后调用）
 - (void)clearAccount;
 
+/// 设置账号上报回调（当检测到账号变化时自动通过此回调上报）
+- (void)setReportCallback:(void (^)(NSDictionary *))callback;
+
 /// 上报当前账号到 WebSocket
 - (void)reportCurrentAccount;
 

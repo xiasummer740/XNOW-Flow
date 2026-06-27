@@ -25,17 +25,18 @@ jobs:
   build:
     name: Build xnower.dylib
     runs-on: macos-14
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode 14 (avoid chained fixups on iOS 16)
+      - name: Select oldest Xcode available (to avoid chained fixups)
         run: |
-          ls /Applications/.Xcode* 2>/dev/null || ls -d /Applications/Xcode*.app 2>/dev/null || true
-          # Try multiple Xcode 14 paths
-          for xc in /Applications/Xcode_14.3.1.app /Applications/Xcode_14.2.app /Applications/Xcode_14.1.app; do
+          echo "=== Available Xcodes ==="
+          ls -d /Applications/Xcode*.app 2>/dev/null | sort
+          # Try Xcode 15.0 first (has ld_classic)
+          for xc in /Applications/Xcode_15.0.app /Applications/Xcode_15.0.1.app; do
             if [ -d "$xc" ]; then
               sudo xcode-select -s "$xc"
               echo "Selected: $xc"
@@ -48,24 +49,38 @@ jobs:
       - name: Build dylib
         run: |
           cd ios-plugin/xnow-dylib
-          make dylib 2>&1
+          # Always add -no_chained_fixups + -ld_classic as safety
+          make dylib LDFLAGS="-Xlinker -no_chained_fixups -Xlinker -ld_classic" 2>&1
         env:
           MIN_IOS: "14.0"
 
-      - name: Verify dylib
+      - name: Verify dylib (chained fixup check)
         run: |
           cd ios-plugin/xnow-dylib
           file build/xnower.dylib
-          echo "=== Symbols ==="
-          nm -gU build/xnower.dylib | head -30
           echo "=== Size ==="
           ls -lh build/xnower.dylib
           echo "=== Chained fixup check ==="
-          otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE" && echo "HAS CHAINED FIXUPS" || echo "NO chained fixups - good"
+          otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE" > /dev/null && \
+            (echo "❌ HAS CHAINED FIXUPS" && echo "NEEDS_FIX=1" >> $GITHUB_ENV) || \
+            (echo "✅ NO chained fixups - iOS 16 compatible" && echo "NEEDS_FIX=0" >> $GITHUB_ENV)
+          echo "=== Load commands summary ==="
+          otool -l build/xnower.dylib | grep -E "LC_(ID_DYLIB|LOAD_DYLIB|SEGMENT_64|DYLD)" | head -20
+
+      - name: Attempt to fix chained fixups (fallback)
+        if: env.NEEDS_FIX == '1'
+        run: |
+          cd ios-plugin/xnow-dylib
+          echo "=== Attempting to fix chained fixups ==="
+          python3 ../scripts/strip-chained-fixups.py build/xnower.dylib
+          otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO" > /dev/null && \
+            echo "⚠️ Still has fixup commands" || \
+            echo "✅ Fixup commands removed"
 
       - name: Prepare artifacts
         run: |
-          cp ios-plugin/xnow-dylib/Config.plist ios-plugin/xnow-dylib/build/
+          cp ios-plugin/xnow-dylib/Config.plist ios-plugin/xnow-dylib/build/ 2>/dev/null || true
+          ls -la ios-plugin/xnow-dylib/build/
 
       - name: Upload dylib artifact
         uses: actions/upload-artifact@v4

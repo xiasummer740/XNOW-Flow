@@ -881,7 +881,8 @@ static const CGFloat kAvatarRatioY = 0.82;
 - (NSDictionary *)_performSmartBrowse:(int)minScrolls max:(int)maxScrolls
                              minDelay:(int)minDelay maxDelay:(int)maxDelay {
     int scrollCount = minScrolls + arc4random_uniform(maxScrolls - minScrolls + 1);
-    int likes = 0, follows = 0;
+    __block int likes = 0;
+    __block int follows = 0;
 
     for (int i = 0; i < scrollCount; i++) {
         // 随机观看时间
