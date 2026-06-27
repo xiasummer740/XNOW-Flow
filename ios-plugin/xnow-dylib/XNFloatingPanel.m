@@ -8,9 +8,9 @@
 
 static const CGFloat kCollapsedSize = 56;
 static const CGFloat kExpandedWidth = 280;
-static const CGFloat kExpandedHeight = 420;
+static const CGFloat kExpandedHeight = 480;
 static const CGFloat kCornerRadius = 16;
-static const CGFloat kButtonSize = 60;
+static const CGFloat kButtonSize = 52;
 static const CGFloat kMargin = 12;
 
 // 品牌色
@@ -42,6 +42,11 @@ static const CGFloat kMargin = 12;
 // 按钮
 @property (nonatomic, strong) NSMutableArray *actionButtons;
 @property (nonatomic, strong) UILabel *connectionDot;
+
+// 账号信息
+@property (nonatomic, strong) UILabel *accountNameLabel;
+@property (nonatomic, strong) UILabel *followerLabel;
+@property (nonatomic, strong) UILabel *accountStatusDot;
 
 @property (nonatomic, assign) BOOL isConnected;
 @property (nonatomic, copy) NSString *panelDeviceId;
@@ -181,7 +186,45 @@ static const CGFloat kMargin = 12;
 
     y += 16;
 
-    // === 操作按钮 2x3 网格 ===
+    y += 8;
+
+    // === 账号信息栏 ===
+    UIView *accountBar = [[UIView alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth - 2*kMargin, 32)];
+    accountBar.backgroundColor = [UIColor colorWithWhite:1 alpha:0.08];
+    accountBar.layer.cornerRadius = 8;
+    [self.panelContainer addSubview:accountBar];
+
+    // 账号状态点
+    self.accountStatusDot = [[UILabel alloc] initWithFrame:CGRectMake(10, 8, 16, 16)];
+    self.accountStatusDot.text = @"○";
+    self.accountStatusDot.font = [UIFont systemFontOfSize:12];
+    self.accountStatusDot.textColor = [UIColor colorWithWhite:0.6 alpha:1];
+    [accountBar addSubview:self.accountStatusDot];
+
+    // 账号名称
+    self.accountNameLabel = [[UILabel alloc] initWithFrame:CGRectMake(32, 4, 140, 16)];
+    self.accountNameLabel.text = @"未登录";
+    self.accountNameLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    self.accountNameLabel.textColor = [UIColor whiteColor];
+    [accountBar addSubview:self.accountNameLabel];
+
+    // 粉丝数
+    self.followerLabel = [[UILabel alloc] initWithFrame:CGRectMake(32, 20, 140, 12)];
+    self.followerLabel.text = @"";
+    self.followerLabel.font = [UIFont systemFontOfSize:10];
+    self.followerLabel.textColor = [UIColor colorWithWhite:1 alpha:0.5];
+    [accountBar addSubview:self.followerLabel];
+
+    // 连接质量点
+    UIView *qualityDot = [[UIView alloc] initWithFrame:CGRectMake(kExpandedWidth - 2*kMargin - 20, 10, 12, 12)];
+    qualityDot.backgroundColor = [UIColor greenColor];
+    qualityDot.layer.cornerRadius = 6;
+    qualityDot.tag = 999;  // 标记方便后面更新
+    [accountBar addSubview:qualityDot];
+
+    y += 40;
+
+    // === 操作按钮 2x4 网格 ===
     NSArray *buttons = @[
         @{@"icon": @"❤️", @"label": @"点赞", @"action": @"like"},
         @{@"icon": @"👤", @"label": @"关注", @"action": @"follow"},
@@ -189,10 +232,12 @@ static const CGFloat kMargin = 12;
         @{@"icon": @"📸", @"label": @"截图", @"action": @"screenshot"},
         @{@"icon": @"👥", @"label": @"采粉", @"action": @"fans"},
         @{@"icon": @"🎬", @"label": @"采视频", @"action": @"videos"},
+        @{@"icon": @"👤", @"label": @"账号", @"action": @"account"},
+        @{@"icon": @"🤖", @"label": @"浏览", @"action": @"browse"},
     ];
 
-    CGFloat btnWidth = (kExpandedWidth - 4*kMargin) / 3;
-    CGFloat btnHeight = btnWidth + 20;
+    CGFloat btnWidth = (kExpandedWidth - 4*kMargin) / 4;
+    CGFloat btnHeight = btnWidth + 16;
     int col = 0, row = 0;
 
     for (NSDictionary *btnInfo in buttons) {
@@ -201,10 +246,10 @@ static const CGFloat kMargin = 12;
         UIView *btnView = [self _createActionButton:btnInfo frame:CGRectMake(bx, by, btnWidth, btnHeight)];
         [self.panelContainer addSubview:btnView];
         col++;
-        if (col >= 3) { col = 0; row++; }
+        if (col >= 4) { col = 0; row++; }
     }
 
-    y += 3 * (btnHeight + kMargin) - kMargin + 16;
+    y += 2 * (btnHeight + kMargin) - kMargin + 16;
 
     // === 底部信息 ===
     UIView *divider2 = [[UIView alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth - 2*kMargin, 1)];
@@ -268,7 +313,7 @@ static const CGFloat kMargin = 12;
 }
 
 - (void)_actionButtonTapped:(UIButton *)sender {
-    NSString *action = @[@"like", @"follow", @"scroll", @"screenshot", @"fans", @"videos"][sender.tag];
+    NSString *action = @[@"like", @"follow", @"scroll", @"screenshot", @"fans", @"videos", @"account", @"browse"][sender.tag];
 
     // 触觉反馈
     [self _hapticFeedback];
@@ -297,6 +342,14 @@ static const CGFloat kMargin = 12;
         [self.delegate floatingPanelDidTapCollectFans:self];
     } else if ([action isEqualToString:@"videos"]) {
         [self.delegate floatingPanelDidTapCollectVideos:self];
+    } else if ([action isEqualToString:@"account"]) {
+        if ([self.delegate respondsToSelector:@selector(floatingPanelDidTapAccountInfo:)]) {
+            [self.delegate floatingPanelDidTapAccountInfo:self];
+        }
+    } else if ([action isEqualToString:@"browse"]) {
+        if ([self.delegate respondsToSelector:@selector(floatingPanelDidTapSmartBrowse:)]) {
+            [self.delegate floatingPanelDidTapSmartBrowse:self];
+        }
     }
 
     // 操作后自动收起
@@ -451,6 +504,40 @@ static const CGFloat kMargin = 12;
 
 - (void)setServerURL:(NSString *)serverURL {
     _panelServerURL = serverURL;
+}
+
+/// 设置当前账号信息
+- (void)setAccountInfo:(NSDictionary *)account {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSString *nickname = account[@"nickname"] ?: account[@"unique_id"] ?: @"";
+        NSNumber *followers = account[@"followers"] ?: account[@"fans_count"] ?: @(0);
+
+        if (nickname.length > 0) {
+            self.accountNameLabel.text = nickname;
+            self.followerLabel.text = [NSString stringWithFormat:@"粉丝 %@", followers];
+            self.accountStatusDot.text = @"●";
+            self.accountStatusDot.textColor = XN_ACCENT_COLOR;
+        } else {
+            self.accountNameLabel.text = @"未登录";
+            self.followerLabel.text = @"";
+            self.accountStatusDot.text = @"○";
+            self.accountStatusDot.textColor = [UIColor colorWithWhite:0.6 alpha:1];
+        }
+    });
+}
+
+/// 设置连接质量
+- (void)setConnectionQuality:(NSString *)quality {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIView *dot = [self.panelContainer viewWithTag:999];
+        if ([quality isEqualToString:@"good"]) {
+            dot.backgroundColor = XN_ACCENT_COLOR;
+        } else if ([quality isEqualToString:@"weak"]) {
+            dot.backgroundColor = [UIColor orangeColor];
+        } else {
+            dot.backgroundColor = [UIColor redColor];
+        }
+    });
 }
 
 - (void)_updateStatusText {

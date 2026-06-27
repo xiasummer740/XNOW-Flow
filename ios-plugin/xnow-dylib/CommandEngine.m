@@ -3,6 +3,7 @@
 // 通过 UITouch/UIEvent 真实模拟用户操作 + 视图层级遍历 + 网络数据采集
 
 #import "CommandEngine.h"
+#import "AccountManager.h"
 #import "XNWindowHelper.h"
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
@@ -65,6 +66,13 @@ static const CGFloat kAvatarRatioY = 0.82;
             @"batch_like":       @(CommandActionBatchLike),
             @"batch_follow":     @(CommandActionBatchFollow),
             @"batch_comment":    @(CommandActionBatchComment),
+            // 账号管理
+            @"get_account_info":  @(CommandActionGetAccountInfo),
+            @"switch_account":    @(CommandActionSwitchAccount),
+            @"report_account":    @(CommandActionReportAccount),
+            // 智能任务
+            @"smart_browse":      @(CommandActionSmartBrowse),
+            @"check_health":      @(CommandActionCheckHealth),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -155,6 +163,39 @@ static const CGFloat kAvatarRatioY = 0.82;
             case CommandActionBatchComment:
                 [self _performBatchComment:params];
                 break;
+
+            // === 账号管理 ===
+            case CommandActionGetAccountInfo: {
+                result = [[AccountManager sharedManager] currentAccount] ?: @{};
+                hasResult = YES;
+                break;
+            }
+            case CommandActionSwitchAccount: {
+                NSString *targetId = params[@"aweme_id"] ?: @"";
+                // 切换账号: 打开设置 → 退出登录 → 登录其他账号
+                [self _performSwitchAccount:targetId];
+                break;
+            }
+            case CommandActionReportAccount: {
+                [[AccountManager sharedManager] reportCurrentAccount];
+                break;
+            }
+
+            // === 智能任务 ===
+            case CommandActionSmartBrowse: {
+                int minScrolls = [params[@"min_scrolls"] intValue] ?: 5;
+                int maxScrolls = [params[@"max_scrolls"] intValue] ?: 15;
+                int minDelay = [params[@"min_delay"] intValue] ?: 3;
+                int maxDelay = [params[@"max_delay"] intValue] ?: 8;
+                result = [self _performSmartBrowse:minScrolls max:maxScrolls minDelay:minDelay maxDelay:maxDelay];
+                hasResult = YES;
+                break;
+            }
+            case CommandActionCheckHealth: {
+                result = [self _performCheckHealth];
+                hasResult = YES;
+                break;
+            }
 
             default:
                 break;
@@ -753,6 +794,181 @@ static const CGFloat kAvatarRatioY = 0.82;
     for (UIView *subview in view.subviews) {
         [self _enumerateLabelsInView:subview block:block];
     }
+}
+
+#pragma mark - 账号管理
+
+/// 切换账号: 导航到设置 → 退出 → 登录页
+- (void)_performSwitchAccount:(NSString *)targetAwemeId {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+
+        // Step 1: 进入个人主页（点右下角 "我" 或 点头像）
+        [self _navigateToProfile];
+    });
+    [NSThread sleepForTimeInterval:2.0];
+
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        // Step 2: 打开设置（右上角三个点或设置图标）
+        [self _tapTopRightCorner];
+    });
+    [NSThread sleepForTimeInterval:1.5];
+
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        // Step 3: 找 "设置" 按钮
+        UIButton *settingsBtn = [self _findButtonWithAnyLabel:@[@"Settings", @"设置", @"settings"]
+                                                       inView:XN_ActiveWindow()];
+        if (settingsBtn) {
+            [self _simulateTapAtPoint:[settingsBtn.superview convertPoint:settingsBtn.center toView:nil]];
+        }
+    });
+    [NSThread sleepForTimeInterval:1.5];
+
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        // Step 4: 滑动到底部找 "退出登录"
+        // 需要滑到设置页底部
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        for (int i = 0; i < 5; i++) {
+            [self _simulateSwipeFrom:CGPointMake(screen.width/2, screen.height*0.7)
+                                  to:CGPointMake(screen.width/2, screen.height*0.3)];
+            [NSThread sleepForTimeInterval:0.3];
+        }
+    });
+    [NSThread sleepForTimeInterval:0.5];
+
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        // Step 5: 找 "退出登录" / "Log out" 按钮
+        UIButton *logoutBtn = [self _findButtonWithAnyLabel:@[@"Log out", @"退出登录", @"log out", @"Log Out"]
+                                                     inView:XN_ActiveWindow()];
+        if (logoutBtn) {
+            [self _simulateTapAtPoint:[logoutBtn.superview convertPoint:logoutBtn.center toView:nil]];
+        }
+    });
+    [NSThread sleepForTimeInterval:1.0];
+
+    // Step 6: 确认退出
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *confirmBtn = [self _findButtonWithAnyLabel:@[@"Log out", @"退出", @"Confirm", @"确认"]
+                                                     inView:XN_ActiveWindow()];
+        if (confirmBtn) {
+            [self _simulateTapAtPoint:[confirmBtn.superview convertPoint:confirmBtn.center toView:nil]];
+        }
+    });
+    [NSThread sleepForTimeInterval:2.0];
+
+    // 清除当前账号缓存
+    [[AccountManager sharedManager] clearAccount];
+}
+
+/// 导航到个人主页
+- (void)_navigateToProfile {
+    CGSize screen = [UIScreen mainScreen].bounds.size;
+    // 点底部 "我" tab（通常在右下角）
+    CGFloat tabY = screen.height - 50;
+    CGFloat profileTabX = screen.width * 0.88;
+    [self _simulateTapAtPoint:CGPointMake(profileTabX, tabY)];
+}
+
+/// 点右上角
+- (void)_tapTopRightCorner {
+    CGSize screen = [UIScreen mainScreen].bounds.size;
+    [self _simulateTapAtPoint:CGPointMake(screen.width - 30, 60)];
+}
+
+#pragma mark - 智能任务
+
+/// 模拟真人浏览: 随机滑动 + 随机停留 + 随机点赞/关注
+- (NSDictionary *)_performSmartBrowse:(int)minScrolls max:(int)maxScrolls
+                             minDelay:(int)minDelay maxDelay:(int)maxDelay {
+    int scrollCount = minScrolls + arc4random_uniform(maxScrolls - minScrolls + 1);
+    int likes = 0, follows = 0;
+
+    for (int i = 0; i < scrollCount; i++) {
+        // 随机观看时间
+        int watchTime = minDelay + arc4random_uniform(maxDelay - minDelay + 1);
+        [NSThread sleepForTimeInterval:watchTime];
+
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            // 20% 概率点赞
+            if (arc4random_uniform(100) < 20) {
+                [self _performLike];
+                likes++;
+                [NSThread sleepForTimeInterval:0.5];
+            }
+
+            // 8% 概率关注
+            if (arc4random_uniform(100) < 8) {
+                [self _performFollow];
+                follows++;
+                [NSThread sleepForTimeInterval:0.5];
+            }
+
+            // 上滑到下一个视频
+            [self _performSwipeUp];
+        });
+
+        // 滑动后短延迟
+        [NSThread sleepForTimeInterval:0.3];
+    }
+
+    int totalDuration = scrollCount * (minDelay + maxDelay) / 2;
+    return @{
+        @"status": @"success",
+        @"scrolls": @(scrollCount),
+        @"likes": @(likes),
+        @"follows": @(follows),
+        @"duration": @(totalDuration),
+    };
+}
+
+/// 检测账号健康状态
+- (NSDictionary *)_performCheckHealth {
+    NSMutableDictionary *result = [NSMutableDictionary dictionary];
+    result[@"status"] = @"active";
+    result[@"health_score"] = @(100);
+    result[@"issues"] = @[];
+
+    // 检查是否存在风控弹窗
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        if (!window) return;
+
+        // 找 "被封禁/限制/异常" 相关文本
+        __block BOOL hasRestriction = NO;
+        [self _enumerateLabelsInView:window block:^(NSString *text, UIView *view) {
+            if (hasRestriction) return;
+            NSArray *riskKeywords = @[@"restricted", @"suspended", @"blocked", @"违规",
+                                       @"封禁", @"限制", @"异常", @"暂时"];
+            for (NSString *kw in riskKeywords) {
+                if ([text.lowercaseString containsString:kw.lowercaseString]) {
+                    hasRestriction = YES;
+                    result[@"status"] = @"risk_control";
+                    result[@"health_score"] = @(50);
+                    result[@"issues"] = @[text];
+                    break;
+                }
+            }
+        }];
+
+        // 找 "登录" 按钮（未登录状态）
+        UIButton *loginBtn = [self _findButtonWithAnyLabel:@[@"Log in", @"登录", @"Sign up"]
+                                                    inView:window];
+        if (loginBtn && !hasRestriction) {
+            result[@"status"] = @"offline";
+            result[@"health_score"] = @(0);
+        }
+    });
+
+    // 从 AccountManager 获取缓存账号状态
+    NSDictionary *account = [AccountManager sharedManager].currentAccount;
+    if (account[@"health_score"]) {
+        result[@"health_score"] = account[@"health_score"];
+    }
+    if (account[@"status"]) {
+        result[@"status"] = account[@"status"];
+    }
+
+    return result;
 }
 
 @end

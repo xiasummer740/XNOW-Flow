@@ -8,6 +8,7 @@
 #import "DeviceStatus.h"
 #import "TikTokHooks.h"
 #import "XNFloatingPanel.h"
+#import "AccountManager.h"
 #import "XNWindowHelper.h"
 #import <objc/runtime.h>
 
@@ -81,6 +82,12 @@ __attribute__((destructor)) static void XNOWERUnload() {
             _deviceId = [NSString stringWithFormat:@"iphone_%@", shortID];
             [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
         }
+
+        // 设置账号上报回调
+        __weak typeof(self) weakSelf = self;
+        [[AccountManager sharedManager] setReportCallback:^(NSDictionary *msg) {
+            [weakSelf.wsClient sendMessage:msg];
+        }];
     }
     return self;
 }
@@ -131,8 +138,11 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)wsClientDidConnect:(WsClient *)client {
     _isConnected = YES;
 
-    // 立即上报设备状态
-    NSDictionary *status = [self.deviceStatus collectStatus];
+    // 立即上报设备状态（含账号信息）
+    NSMutableDictionary *status = [[self.deviceStatus collectStatus] mutableCopy];
+    if ([AccountManager sharedManager].currentAccount) {
+        status[@"current_account"] = [AccountManager sharedManager].currentAccount;
+    }
     [client sendMessage:@{
         @"type": @"status",
         @"data": status
@@ -144,6 +154,16 @@ __attribute__((destructor)) static void XNOWERUnload() {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.floatingPanel setConnected:YES];
     });
+
+    // 连接后立即检测并上报当前账号
+    [[AccountManager sharedManager] detectCurrentAccountWithCompletion:^(NSDictionary *account) {
+        if (account) {
+            [client sendMessage:@{
+                @"type": @"account_update",
+                @"data": account,
+            }];
+        }
+    }];
 }
 
 - (void)wsClientDidDisconnect:(WsClient *)client error:(NSError *)error {
@@ -186,8 +206,11 @@ __attribute__((destructor)) static void XNOWERUnload() {
         dispatch_source_set_event_handler(timer, ^{
             if (self.isConnected) {
                 [self.wsClient sendMessage:@{@"type": @"ping"}];
-                // 顺便上报状态
-                NSDictionary *status = [self.deviceStatus collectStatus];
+                // 顺便上报状态（含账号信息）
+                NSMutableDictionary *status = [[self.deviceStatus collectStatus] mutableCopy];
+                if ([AccountManager sharedManager].currentAccount) {
+                    status[@"current_account"] = [AccountManager sharedManager].currentAccount;
+                }
                 [self.wsClient sendMessage:@{
                     @"type": @"status",
                     @"data": status
@@ -262,6 +285,28 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)floatingPanelDidTapCollectVideos:(XNFloatingPanel *)panel {
     [self.cmdEngine executeCommand:@{@"action": @"collect_videos", @"params": @{@"count": @10}}
                         completion:nil];
+}
+
+- (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel {
+    // 检测并上报当前账号
+    [[AccountManager sharedManager] detectCurrentAccountWithCompletion:^(NSDictionary *account) {
+        if (account) {
+            [self.wsClient sendMessage:@{
+                @"type": @"account_update",
+                @"data": account
+            }];
+        }
+    }];
+}
+
+- (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
+    [self.cmdEngine executeCommand:@{
+        @"action": @"smart_browse",
+        @"params": @{@"min_scrolls": @5, @"max_scrolls": @12,
+                     @"min_delay": @3, @"max_delay": @8}
+    } completion:^(NSDictionary *result) {
+        NSLog(@"[XNOWER] Smart browse done: %@", result);
+    }];
 }
 
 @end

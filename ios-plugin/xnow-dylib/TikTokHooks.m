@@ -3,6 +3,7 @@
 // 包含: 生命周期监控 + 网络数据拦截 + ViewController 追踪 + 页面状态采集
 
 #import "TikTokHooks.h"
+#import "AccountManager.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <UIKit/UIKit.h>
@@ -358,6 +359,9 @@ static TikTokHooks *gHooksInstance = nil;
                 XNOW_FILE_LOG(@"USER: %@ (%@) | 粉丝:%@ 关注:%@ 获赞:%@",
                               nickname, uid, fans, followings, likes);
             }
+
+            // 路由到 AccountManager 做详细解析
+            [[AccountManager sharedManager] onTikTokAPIResponse:json url:url];
         }
     } @catch (NSException *e) {
         // 解析失败不阻塞

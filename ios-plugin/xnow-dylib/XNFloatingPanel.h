@@ -12,6 +12,10 @@
 - (void)floatingPanelDidTapScreenshot:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapCollectFans:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapCollectVideos:(XNFloatingPanel *)panel;
+@optional
+/// 账号管理
+- (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel;
+- (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel;
 @end
 
 @interface XNFloatingPanel : UIView
@@ -24,6 +28,11 @@
 - (void)setDeviceId:(NSString *)deviceId;
 /// 设置服务器地址
 - (void)setServerURL:(NSString *)serverURL;
+
+/// 设置当前账号信息（昵称、头像URL、粉丝数）
+- (void)setAccountInfo:(NSDictionary *)account;
+/// 设置连接质量
+- (void)setConnectionQuality:(NSString *)quality;
 
 /// 显示在指定窗口
 - (void)showInWindow:(UIWindow *)window;
