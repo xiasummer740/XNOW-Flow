@@ -55,50 +55,53 @@ jobs:
 
       - name: Try different linker strategies
         run: |
+          STRAT_DIR="/tmp/xnower-strategies"
+          mkdir -p "$STRAT_DIR"
           cd ios-plugin/xnow-dylib
-          # Strategy 1: default linker, no special flags
-          echo "=== Strategy 1: default Xcode 15.0 linker ==="
-          make dylib LDFLAGS="" 2>&1 || true
-          otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -5
-          echo "---"
 
-          # Strategy 2: -no_chained_fixups (no -ld_classic)
-          echo "=== Strategy 2: -no_chained_fixups only ==="
-          cp build/xnower.dylib build/xnower-strat2.dylib 2>/dev/null || true
-          make clean && make objs 2>&1
+          # Strategy 1: -no_chained_fixups (no chained fixups, old-style LC_DYLD_INFO)
+          echo "=== Strategy 1: -no_chained_fixups ==="
           make dylib LDFLAGS="-Xlinker -no_chained_fixups" 2>&1
-          cp build/xnower.dylib build/xnower-strat2.dylib
-          otool -l build/xnower-strat2.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -5
+          cp build/xnower.dylib "$STRAT_DIR/xnower-strat1.dylib"
+          otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO_ONLY|DYLD_INFO|PRIVATE" | head -10
           echo "---"
 
-          # Strategy 3: -ld_classic only (no -no_chained_fixups)
-          echo "=== Strategy 3: -ld_classic only ==="
+          # Strategy 2: -ld_classic (old Apple linker)
+          echo "=== Strategy 2: -ld_classic ==="
           make clean && make objs 2>&1
           make dylib LDFLAGS="-Xlinker -ld_classic" 2>&1
-          cp build/xnower.dylib build/xnower-strat3.dylib
-          otool -l build/xnower-strat3.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -5
+          cp build/xnower.dylib "$STRAT_DIR/xnower-strat2.dylib"
+          otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO_ONLY|DYLD_INFO|PRIVATE" | head -10
+          echo "---"
 
-          # Then rebuild with the best strategy
+          # Strategy 3: default linker (fallback)
+          echo "=== Strategy 3: default linker ==="
           make clean && make objs 2>&1
+          make dylib LDFLAGS="" 2>&1
+          cp build/xnower.dylib "$STRAT_DIR/xnower-strat3.dylib"
+          otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO_ONLY|DYLD_INFO|PRIVATE" | head -10
 
-      - name: Upload dylib artifacts
-        run: |
-          cd ios-plugin/xnow-dylib/build
-          # Upload all strategy files
-          ls -la *.dylib 2>/dev/null || echo "No dylibs"
-          # Build final version with default strategy
-          cd ..
-          make clean && make objs && make dylib LDFLAGS="" 2>&1
-          ls -la build/
+          # Check which strategies are compatible with iOS 16
+          echo ""
+          echo "=== Compatibility check ==="
+          for f in "$STRAT_DIR"/*.dylib; do
+            name=$(basename "$f")
+            priv=$(otool -l "$f" | grep -c "PRIVATE" || true)
+            chain=$(otool -l "$f" | grep -c "CHAINED" || true)
+            dyldinfo=$(otool -l "$f" | grep -c "LC_DYLD_INFO_ONLY\|LC_DYLD_INFO " || true)
+            echo "$name: private=$priv chained=$chain dyld_info=$dyldinfo"
+          done
+
+          # Copy strategies back to build dir for artifact upload
+          cp "$STRAT_DIR"/*.dylib build/ 2>/dev/null || true
+          ls -la build/*.dylib
 
       - name: Upload dylib artifact
         uses: actions/upload-artifact@v4
         with:
           name: xnower-dylib
           path: |
-            ios-plugin/xnow-dylib/build/xnower.dylib
-            ios-plugin/xnow-dylib/build/xnower-strat2.dylib
-            ios-plugin/xnow-dylib/build/xnower-strat3.dylib
+            ios-plugin/xnow-dylib/build/xnower-strat*.dylib
             ios-plugin/xnow-dylib/build/Config.plist
           retention-days: 30
 
