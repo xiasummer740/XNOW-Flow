@@ -24,19 +24,26 @@ on:
 jobs:
   build:
     name: Build xnower.dylib
-    runs-on: macos-13
+    runs-on: macos-14
     timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show Xcode version
+      - name: Select Xcode 14 (avoid chained fixups on iOS 16)
         run: |
-          xcodebuild -version
+          ls /Applications/.Xcode* 2>/dev/null || ls -d /Applications/Xcode*.app 2>/dev/null || true
+          # Try multiple Xcode 14 paths
+          for xc in /Applications/Xcode_14.3.1.app /Applications/Xcode_14.2.app /Applications/Xcode_14.1.app; do
+            if [ -d "$xc" ]; then
+              sudo xcode-select -s "$xc"
+              echo "Selected: $xc"
+              xcodebuild -version
+              break
+            fi
+          done
           xcrun --sdk iphoneos --show-sdk-path
-          echo "=== Checking for chained fixups ==="
-          clang -v 2>&1 | head -1
 
       - name: Build dylib
         run: |
