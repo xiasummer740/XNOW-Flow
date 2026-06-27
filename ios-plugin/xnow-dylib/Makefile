@@ -32,8 +32,7 @@ $(BUILD_DIR)/$(OUTPUT): $(BUILD_DIR) $(SRCS) Config.plist
 	@file $(BUILD_DIR)/$(OUTPUT)
 	@echo "Size: $$(wc -c < $(BUILD_DIR)/$(OUTPUT)) bytes"
 	-cp Config.plist $(BUILD_DIR)/xnower-config.plist
-	@echo "=== Post-process: strip fixups ==="
-	python3 ../scripts/strip-chained-fixups.py $(BUILD_DIR)/$(OUTPUT)
+	@echo "=== Post-process disabled for raw analysis ==="
 
 dylib: $(BUILD_DIR)/$(OUTPUT)
 

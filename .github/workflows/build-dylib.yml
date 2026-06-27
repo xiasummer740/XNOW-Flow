@@ -60,22 +60,11 @@ jobs:
           file build/xnower.dylib
           echo "=== Size ==="
           ls -lh build/xnower.dylib
-          echo "=== Chained fixup check ==="
-          otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE" > /dev/null && \
-            (echo "❌ HAS CHAINED FIXUPS" && echo "NEEDS_FIX=1" >> $GITHUB_ENV) || \
-            (echo "✅ NO chained fixups - iOS 16 compatible" && echo "NEEDS_FIX=0" >> $GITHUB_ENV)
-          echo "=== Load commands summary ==="
-          otool -l build/xnower.dylib | grep -E "LC_(ID_DYLIB|LOAD_DYLIB|SEGMENT_64|DYLD)" | head -20
-
-      - name: Attempt to fix chained fixups (fallback)
-        if: env.NEEDS_FIX == '1'
-        run: |
-          cd ios-plugin/xnow-dylib
-          echo "=== Attempting to fix chained fixups ==="
-          python3 ../scripts/strip-chained-fixups.py build/xnower.dylib
-          otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO" > /dev/null && \
-            echo "⚠️ Still has fixup commands" || \
-            echo "✅ Fixup commands removed"
+          echo "=== Private fixup data ==="
+          otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -10
+          echo "=== Export raw for analysis ==="
+          cp build/xnower.dylib build/xnower-raw.dylib
+          ls -la build/
 
       - name: Prepare artifacts
         run: |
