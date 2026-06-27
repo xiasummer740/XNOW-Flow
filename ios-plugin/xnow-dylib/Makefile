@@ -53,7 +53,7 @@ $(BUILD_DIR):
 $(BUILD_DIR)/$(OUTPUT): $(BUILD_DIR) $(SRCS) Config.plist
 	$(CC) $(CFLAGS) $(LDFLAGS) $(FRAMEWORKS) $(SRCS) \
 		-o $(BUILD_DIR)/$(OUTPUT) \
-		-install_name @rpath/$(OUTPUT)
+		-install_name @executable_path/Frameworks/$(OUTPUT)
 	@echo ""
 	@echo "=== Build Success ==="
 	@file $(BUILD_DIR)/$(OUTPUT)
