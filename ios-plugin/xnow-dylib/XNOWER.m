@@ -229,9 +229,25 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)showFloatingPanel {
     if (self.floatingPanelVisible) return;
 
+    // 等待窗口就绪后显示（TikTok 启动初期 window 可能还没创建）
+    [self _tryShowFloatingPanelWithRetry:0 maxRetries:20];
+}
+
+/// 递归重试显示浮窗，每秒一次，最多等待 20 秒
+- (void)_tryShowFloatingPanelWithRetry:(NSInteger)attempt maxRetries:(NSInteger)maxRetries {
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.floatingPanelVisible) return;
+
         UIWindow *keyWindow = XN_ActiveWindow();
-        if (!keyWindow) return;
+        if (!keyWindow) {
+            if (attempt < maxRetries) {
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), ^{
+                    [self _tryShowFloatingPanelWithRetry:attempt + 1 maxRetries:maxRetries];
+                });
+            }
+            return;
+        }
 
         self.floatingPanel = [[XNFloatingPanel alloc] init];
         self.floatingPanel.delegate = self;
@@ -240,6 +256,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
         [self.floatingPanel setConnected:self.isConnected];
         [self.floatingPanel showInWindow:keyWindow];
         self.floatingPanelVisible = YES;
+        NSLog(@"[XNOWER] Floating panel shown (attempt %ld/%ld)", (long)(attempt + 1), (long)maxRetries);
     });
 }
 
