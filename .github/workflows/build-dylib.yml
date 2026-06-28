@@ -31,11 +31,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode 14 (use ld_classic for iOS 16 compat)
+      - name: Select oldest Xcode (need ld_classic for iOS 16 compat)
         run: |
           echo "=== Available Xcodes ==="
           ls -d /Applications/Xcode*.app 2>/dev/null | sort
-          for xc in /Applications/Xcode_14.3.1.app /Applications/Xcode_14.2.app /Applications/Xcode_14.1.app /Applications/Xcode_14.0.app; do
+          for xc in /Applications/Xcode_15.0.app /Applications/Xcode_15.0.1.app /Applications/Xcode_14.3.1.app /Applications/Xcode_14.2.app; do
             if [ -d "$xc" ]; then
               sudo xcode-select -s "$xc"
               echo "Selected: $xc"
@@ -43,6 +43,8 @@ jobs:
               break
             fi
           done
+          # Check if ld_classic exists
+          xcrun --find ld_classic 2>/dev/null && echo "ld_classic FOUND" || echo "ld_classic NOT found"
           xcrun --sdk iphoneos --show-sdk-path
 
       - name: Compile .o files (no linking)
@@ -52,12 +54,19 @@ jobs:
         env:
           MIN_IOS: "14.0"
 
-      - name: Build dylib (Xcode 14 classic ld for iOS 16 compat)
+      - name: Build dylib (try ld_classic first for iOS 16 compat)
         run: |
           cd ios-plugin/xnow-dylib
-          make dylib LDFLAGS="" 2>&1
+          # Try ld_classic linker if available (no chained fixups ever)
+          if xcrun --find ld_classic 2>/dev/null; then
+            echo "=== Using ld_classic ==="
+            make dylib LDFLAGS="-Xlinker -ld_classic" 2>&1
+          else
+            echo "=== Using default ld with -no_fixup_chains ==="
+            make dylib LDFLAGS="-Wl,-no_fixup_chains" 2>&1
+          fi
           echo "=== Check format ==="
-          otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -10 || true
+          otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE|CHAINED" | head -10 || true
           ls -la build/xnower.dylib
 
       - name: Convert private cmds + strip + re-sign
