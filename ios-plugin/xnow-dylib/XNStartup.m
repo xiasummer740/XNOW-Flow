@@ -1,9 +1,10 @@
 // XNStartup.m
-// 用 +load 替代 __attribute__((constructor)) 触发插件启动
-// +load 由 libobjc 通过 dyld add_image 回调触发，不依赖 __mod_init_func
+// 用 CFRunLoopTimer 替代 pthread + dispatch_async 触发启动
+// 在 dylib 加载阶段 GCD 的 main queue 可能不可用
+// CFRunLoop 初始化最早，是最可靠的延迟执行机制
 
 #import "XNOWER.h"
-#import <pthread.h>
+#import <CoreFoundation/CoreFoundation.h>
 
 @interface XNStartup : NSObject
 @end
@@ -11,21 +12,25 @@
 @implementation XNStartup
 
 // libobjc 在 dyld add_image 时调用 +load
-// 它走的是 _dyld_register_func_for_add_image 回调，不是 __mod_init_func
 + (void)load {
-    static pthread_t thread;
-    if (pthread_create(&thread, NULL, xnow_startup_thread, NULL) == 0) {
-        pthread_detach(thread);
+    // 用 CFRunLoopTimer 替代 pthread+dispatch_async
+    // CFRunLoop 在进程早期就初始化了，比 GCD 更可靠
+    CFRunLoopTimerRef timer = CFRunLoopTimerCreate(
+        kCFAllocatorDefault,
+        CFAbsoluteTimeGetCurrent() + 5.0,  // 5 秒后触发
+        0, 0, 0,
+        xnow_startup_callback,
+        NULL
+    );
+    if (timer) {
+        CFRunLoopAddTimer(CFRunLoopGetMain(), timer, kCFRunLoopCommonModes);
+        CFRelease(timer);
     }
 }
 
-/// pthread 线程入口
-static void *xnow_startup_thread(void *arg) {
-    sleep(5);  // 等 UIApplicationMain 完成
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [[XNOWER sharedInstance] start];
-    });
-    return NULL;
+/// CFRunLoop 定时器回调
+static void xnow_startup_callback(CFRunLoopTimerRef timer, void *info) {
+    [[XNOWER sharedInstance] start];
 }
 
 @end
