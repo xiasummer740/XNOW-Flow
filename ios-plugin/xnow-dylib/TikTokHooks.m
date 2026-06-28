@@ -160,11 +160,6 @@ static __weak id<XNOWDataCollector> sDataCollector = nil;
 - (void)xnow_viewDidAppear:(BOOL)animated {
     [self xnow_viewDidAppear:animated];
 
-    // 页面出现时触发浮窗显示（此时 window 一定存在）
-    if (self.view.window) {
-        [[XNOWER sharedInstance] showFloatingPanelInWindow:self.view.window];
-    }
-
     NSString *className = NSStringFromClass([self class]);
     NSString *title = self.title ?: @"";
 
@@ -210,8 +205,16 @@ static __weak id<XNOWDataCollector> sDataCollector = nil;
 @implementation UIApplication (XNOWER)
 
 - (void)xnow_sendEvent:(UIEvent *)event {
-    // 在事件分发前拦截（可用于监控用户操作）
+    // 在事件分发前拦截
     [self xnow_sendEvent:event];
+
+    // 首次触摸时触发浮窗显示（此时 UI 已完全稳定）
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[XNOWER sharedInstance] showFloatingPanel];
+        });
+    });
 }
 
 - (void)xnow_applicationWillResignActive {

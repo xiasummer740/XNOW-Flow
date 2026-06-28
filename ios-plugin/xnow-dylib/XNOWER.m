@@ -24,10 +24,17 @@ static XNOWER *gSharedInstance = nil;
 // ======== C 构造函数 - dylib 加载时自动执行 ========
 __attribute__((constructor)) static void XNOWERLoad() {
     // dylib 被加载时自动运行，无需任何注入器
-    // 延迟 2 秒启动，等 TikTok 初始化完毕
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+    // 延迟 1 秒启动
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
                    dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
         [[XNOWER sharedInstance] start];
+    });
+
+    // === 诊断：4 秒后尝试改角标数字，如果看到则证明 dylib 被加载了 ===
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [UIApplication sharedApplication].applicationIconBadgeNumber = 77;
+        NSLog(@"[XNOWER_DIAG] Badge set to 77 — dylib IS loaded");
     });
 }
 
