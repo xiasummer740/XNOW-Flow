@@ -23,7 +23,26 @@ static XNOWER *gSharedInstance = nil;
 
 // ======== C 构造函数 - dylib 加载时自动执行 ========
 __attribute__((constructor)) static void XNOWERLoad() {
-    // dylib 被加载时自动运行，无需任何注入器
+    // === 诊断：5 秒后在主线程显示红色条（跳过所有业务逻辑） ===
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        UIWindow *w = nil;
+        id delegate = [UIApplication sharedApplication].delegate;
+        if ([delegate respondsToSelector:@selector(window)]) {
+            w = [delegate window];
+        }
+        if (!w) w = [UIApplication sharedApplication].keyWindow;
+        if (w) {
+            UIView *redBar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w.bounds.size.width, 40)];
+            redBar.backgroundColor = [[UIColor redColor] colorWithAlphaComponent:0.9];
+            redBar.tag = 99998;
+            [w addSubview:redBar];
+            NSLog(@"[XNOWER_DIAG] Red bar added to window - dylib is loaded!");
+        } else {
+            NSLog(@"[XNOWER_DIAG] No window found!");
+        }
+    });
+
     // 延迟 2 秒启动，等 TikTok 初始化完毕
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
                    dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
@@ -242,7 +261,6 @@ __attribute__((destructor)) static void XNOWERUnload() {
         [self _showPanelOnTopWithScene:w.windowScene];
         return;
     }
-    // 窗口未就绪，每秒重试，最多等15秒
     if (attempt < 15) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
@@ -251,20 +269,55 @@ __attribute__((destructor)) static void XNOWERUnload() {
     }
 }
 
+/// 替代方案：直接用 App Delegate 窗口添加红色诊断条（跳过 scene/XN_ActiveWindow）
+- (void)_showDiagnosticBar {
+    UIWindow *w = nil;
+    id delegate = [UIApplication sharedApplication].delegate;
+    if ([delegate respondsToSelector:@selector(window)]) {
+        w = [delegate window];
+    }
+    if (!w) w = [UIApplication sharedApplication].keyWindow;
+    if (!w) return;
+
+    UIView *redBar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w.bounds.size.width, 60)];
+    redBar.backgroundColor = [[UIColor redColor] colorWithAlphaComponent:0.85];
+    redBar.tag = 99999;
+    [w addSubview:redBar];
+
+    UILabel *label = [[UILabel alloc] initWithFrame:redBar.bounds];
+    label.text = @"XNOWER LOADED";
+    label.textColor = [UIColor whiteColor];
+    label.font = [UIFont boldSystemFontOfSize:20];
+    label.textAlignment = NSTextAlignmentCenter;
+    [redBar addSubview:label];
+}
+
 /// 在独立的浮动窗口上显示面板（确保在最顶层，不会被 TikTok UI 遮挡）
 - (void)_showPanelOnTopWithScene:(UIWindowScene *)scene {
     if (self.floatingPanelVisible) return;
 
+    // 先显示诊断条（确认代码跑到了这里）
+    [self _showDiagnosticBar];
+
     // 创建独立浮动窗口
     UIWindow *floatWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
     if (@available(iOS 13, *)) {
-        floatWindow.windowScene = scene;
+        if (scene) {
+            floatWindow.windowScene = scene;
+        } else {
+            // 尝试找任意 scene
+            for (UIScene *s in [UIApplication sharedApplication].connectedScenes) {
+                if ([s isKindOfClass:[UIWindowScene class]]) {
+                    floatWindow.windowScene = (UIWindowScene *)s;
+                    break;
+                }
+            }
+        }
     }
-    floatWindow.windowLevel = UIWindowLevelAlert + 10;  // 在 Alert 之上
+    floatWindow.windowLevel = 3000;
     floatWindow.backgroundColor = [UIColor clearColor];
     floatWindow.hidden = NO;
 
-    // 创建面板
     self.floatingFloatWindow = floatWindow;
     self.floatingPanel = [[XNFloatingPanel alloc] init];
     self.floatingPanel.delegate = self;
