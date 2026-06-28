@@ -3,6 +3,7 @@
 // 包含: 生命周期监控 + 网络数据拦截 + ViewController 追踪 + 页面状态采集
 
 #import "TikTokHooks.h"
+#import "XNOWER.h"
 #import "AccountManager.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
