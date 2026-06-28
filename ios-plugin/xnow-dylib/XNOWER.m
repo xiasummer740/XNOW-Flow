@@ -23,13 +23,12 @@ static XNOWER *gSharedInstance = nil;
 
 // ======== C 构造函数 - dylib 加载时自动执行 ========
 __attribute__((constructor)) static void XNOWERLoad() {
-    // 用 CFRunLoopPerformBlock 代替 dispatch_after
-    // CoreFoundation 在 dyld 加载时已就绪，block 会加入主 runloop
-    // 等 runloop 开始运行后就会执行（比 dispatch 更可靠）
-    CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
+    // 使用全局队列（不是主队列）。全局队列在 dyld 加载 libdispatch 时就已就绪，
+    // 主队列/主runloop 要在 UIApplicationMain 之后才存在。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)),
+                   dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         [[XNOWER sharedInstance] start];
     });
-    CFRunLoopWakeUp(CFRunLoopGetMain());
 }
 
 // ======== 析构函数（dylib 卸载时） ========
@@ -95,14 +94,17 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)start {
-    // 诊断：在 start 被调用时立即显示红色条（通过 runloop 回调，不依赖 dispatch）
-    CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
-        // 等 1 秒让 TikTok 窗口完全就绪
-        [self performSelector:@selector(_showDiagnosticBar) withObject:nil afterDelay:1.0];
-        // 同时触发浮窗显示
-        [self performSelector:@selector(showFloatingPanel) withObject:nil afterDelay:2.0];
+    // 诊断：3秒后在主线程显示红色条
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [self _showDiagnosticBar];
     });
-    CFRunLoopWakeUp(CFRunLoopGetMain());
+
+    // 浮窗：4 秒后触发（等窗口完全就绪）
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [self showFloatingPanel];
+    });
 
     // 后台启动其他服务
     BOOL enabled = [[NSUserDefaults standardUserDefaults] boolForKey:kXnowConfigKeyEnabled];
