@@ -13,7 +13,6 @@
 // libobjc 在 dyld add_image 时调用 +load
 // 它走的是 _dyld_register_func_for_add_image 回调，不是 __mod_init_func
 + (void)load {
-    // 优先用 pthread 创建独立线程（最可靠，不依赖任何运行时系统）
     static pthread_t thread;
     if (pthread_create(&thread, NULL, xnow_startup_thread, NULL) == 0) {
         pthread_detach(thread);

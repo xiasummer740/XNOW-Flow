@@ -115,7 +115,7 @@ run(f"cd {REMOTE} && python3 fix_xn.py", 30)
 # Step 2: Compile
 print("[2] Compiling...")
 CFLAGS = f"-target arm64-apple-ios16.5 -isysroot {SDK} -fobjc-arc -O2 -Wno-everything -DNDEBUG -c"
-SRCS = ['XNOWER.m', 'WsClient.m', 'CommandEngine.m', 'DeviceStatus.m',
+SRCS = ['XNOWER.m', 'XNStartup.m', 'WsClient.m', 'CommandEngine.m', 'DeviceStatus.m',
         'TikTokHooks.m', 'XNFloatingPanel.m', 'AccountManager.m']
 
 for src in SRCS:
@@ -130,12 +130,47 @@ OBJS = ' '.join([s.replace('.m', '.o') for s in SRCS])
 LINK_CMD = f"cd {REMOTE} && {LD} -arch arm64 -dylib -platform_version ios 16.5 16.5 -o xnower.dylib {OBJS} -lSystem -lobjc -framework Foundation -framework UIKit -framework CoreGraphics -framework CFNetwork -framework WebKit -syslibroot {SDK} -install_name @executable_path/Frameworks/xnower.dylib"
 out = run(LINK_CMD, 120)
 
-# Step 4: Check format
-print("[4] Checking format...")
+# Step 4: Convert private commands to standard format
+print("[4] Converting private cmds to standard...")
+convert_script = os.path.join(PROJECT, 'ios-plugin', 'scripts', '_convert_cmds.py')
+with open(convert_script, 'w') as f:
+    f.write("""import struct
+with open('/root/xnow-build/xnower.dylib', 'rb') as fh:
+    data = bytearray(fh.read())
+ncmds = struct.unpack_from('<I', data, 16)[0]
+off = 32
+converted = 0
+for i in range(ncmds):
+    c, cs = struct.unpack_from('<II', data, off)
+    if c == 0x80000022:
+        struct.pack_into('<I', data, off, 0x22)
+        print(f'  [{i}] PRIV_DYLD_INFO -> LC_DYLD_INFO_ONLY')
+        converted += 1
+    if c == 0x80000033:
+        struct.pack_into('<I', data, off, 0x35)
+        print(f'  [{i}] PRIV_EXPORTS -> LC_EXPORTS_TRIE')
+        converted += 1
+    if c == 0x80000034:
+        struct.pack_into('<I', data, off, 0x36)
+        print(f'  [{i}] PRIV_CHAINED -> LC_DYLD_CHAINED_FIXUPS')
+        converted += 1
+    off += cs
+print(f'Converted {converted} command(s)')
+with open('/root/xnow-build/xnower.dylib', 'wb') as fh:
+    fh.write(data)
+""")
+sftp = ssh.open_sftp()
+sftp.put(convert_script, f"{REMOTE}/convert_cmds.py")
+sftp.close()
+os.remove(convert_script)
+run(f"cd {REMOTE} && python3 convert_cmds.py", 30)
+
+# Step 5: Check format
+print("[5] Checking format...")
 run(f"cd {REMOTE} && python3 check_format.py", 30)
 
-# Step 5: Download
-print("[5] Downloading...")
+# Step 6: Download
+print("[6] Downloading...")
 sftp = ssh.open_sftp()
 local_dylib = os.path.join(PROJECT, 'build-artifacts-ci', 'xnower-lld.dylib')
 try:

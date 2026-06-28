@@ -87,8 +87,8 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)start {
-    // 诊断：3秒后在主线程显示红色条
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)),
+    // 诊断：3秒后在主窗口顶部显示红色条（确认代码执行到此处）
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         [self _showDiagnosticBar];
     });
@@ -247,7 +247,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     }
 }
 
-/// 替代方案：直接用 App Delegate 窗口添加红色诊断条（跳过 scene/XN_ActiveWindow）
+/// 诊断条：简单红色条，确认代码执行到此处
 - (void)_showDiagnosticBar {
     UIWindow *w = nil;
     id delegate = [UIApplication sharedApplication].delegate;
@@ -256,6 +256,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
     }
     if (!w) w = [UIApplication sharedApplication].keyWindow;
     if (!w) return;
+
+    // 避免重复添加
+    if ([w viewWithTag:99999]) return;
 
     UIView *redBar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w.bounds.size.width, 60)];
     redBar.backgroundColor = [[UIColor redColor] colorWithAlphaComponent:0.85];
@@ -274,38 +277,74 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)_showPanelOnTopWithScene:(UIWindowScene *)scene {
     if (self.floatingPanelVisible) return;
 
-    // 先显示诊断条（确认代码跑到了这里）
-    [self _showDiagnosticBar];
-
     // 创建独立浮动窗口
     UIWindow *floatWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+
+    // === 关键修复 1: 设置 windowScene（iOS 13+ 必须）===
     if (@available(iOS 13, *)) {
-        if (scene) {
-            floatWindow.windowScene = scene;
-        } else {
-            // 尝试找任意 scene
+        UIWindowScene *targetScene = scene;
+        if (!targetScene) {
+            // 遍历 scenes，优先找激活状态的
             for (UIScene *s in [UIApplication sharedApplication].connectedScenes) {
-                if ([s isKindOfClass:[UIWindowScene class]]) {
-                    floatWindow.windowScene = (UIWindowScene *)s;
+                if (![s isKindOfClass:[UIWindowScene class]]) continue;
+                UIWindowScene *ws = (UIWindowScene *)s;
+                if (ws.activationState == UISceneActivationStateForegroundActive) {
+                    targetScene = ws;
                     break;
                 }
             }
+            // fallback: 任意 scene
+            if (!targetScene) {
+                for (UIScene *s in [UIApplication sharedApplication].connectedScenes) {
+                    if ([s isKindOfClass:[UIWindowScene class]]) {
+                        targetScene = (UIWindowScene *)s;
+                        break;
+                    }
+                }
+            }
         }
+        floatWindow.windowScene = targetScene;
     }
-    floatWindow.windowLevel = 3000;
+
+    // === 关键修复 2: 高 windowLevel，确保覆盖 TikTok 所有 UI 层 ===
+    floatWindow.windowLevel = UIWindowLevelAlert + 1000;
+
+    // === 关键修复 3: 透明 rootViewController（iOS 13+ 需要 rootVC 窗口才能显示内容）===
+    UIViewController *rootVC = [[UIViewController alloc] init];
+    rootVC.view.backgroundColor = [UIColor clearColor];
+    rootVC.view.userInteractionEnabled = NO;  // 让事件穿透到面板
+    floatWindow.rootViewController = rootVC;
+
     floatWindow.backgroundColor = [UIColor clearColor];
-    floatWindow.hidden = NO;
+    floatWindow.opaque = NO;
+    floatWindow.hidden = NO;  // 不调 makeKeyAndVisible，避免抢 TikTok 的 keyWindow 状态
 
     self.floatingFloatWindow = floatWindow;
+
+    // === 创建面板，加到 rootViewController.view 上（而不是直接加 window）===
     self.floatingPanel = [[XNFloatingPanel alloc] init];
     self.floatingPanel.delegate = self;
     [self.floatingPanel setDeviceId:self.deviceId];
     [self.floatingPanel setServerURL:self.serverURL];
     [self.floatingPanel setConnected:self.isConnected];
-    [self.floatingPanel showInWindow:floatWindow];
+
+    // 把面板加到 rootViewController 的 view 上（标准做法）
+    [rootVC.view addSubview:self.floatingPanel];
+    [rootVC.view bringSubviewToFront:self.floatingPanel];
     self.floatingPanelVisible = YES;
 
-    NSLog(@"[XNOWER] Floating panel shown on dedicated window");
+    // 入场动画
+    self.floatingPanel.transform = CGAffineTransformMakeScale(0.5, 0.5);
+    self.floatingPanel.alpha = 0;
+    [UIView animateWithDuration:0.3
+                          delay:0.5
+         usingSpringWithDamping:0.6
+          initialSpringVelocity:0.8
+                        options:UIViewAnimationOptionCurveEaseOut
+                     animations:^{
+        self.floatingPanel.transform = CGAffineTransformIdentity;
+        self.floatingPanel.alpha = 1;
+    } completion:nil];
 }
 
 - (void)hideFloatingPanel {
