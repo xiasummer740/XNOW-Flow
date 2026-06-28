@@ -160,15 +160,6 @@ static __weak id<XNOWDataCollector> sDataCollector = nil;
 - (void)xnow_viewDidAppear:(BOOL)animated {
     [self xnow_viewDidAppear:animated];
 
-    // 首次页面出现后5秒启动插件（避开 dyld/启动阶段，确保 UI 就绪）
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            [[XNOWER sharedInstance] start];
-        });
-    });
-
     NSString *className = NSStringFromClass([self class]);
     NSString *title = self.title ?: @"";
 

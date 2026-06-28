@@ -23,8 +23,13 @@ static XNOWER *gSharedInstance = nil;
 
 // ======== C 构造函数 - dylib 加载时自动执行 ========
 __attribute__((constructor)) static void XNOWERLoad() {
-    // 构造函数不做任何 dispatch/UI 操作（dyld 加载时 libdispatch/UIKit 可能未就绪）
-    // 所有功能通过 swizzle 的 viewDidAppear/sendEvent 钩子触发
+    // 用 CFRunLoopPerformBlock 代替 dispatch_after
+    // CoreFoundation 在 dyld 加载时已就绪，block 会加入主 runloop
+    // 等 runloop 开始运行后就会执行（比 dispatch 更可靠）
+    CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
+        [[XNOWER sharedInstance] start];
+    });
+    CFRunLoopWakeUp(CFRunLoopGetMain());
 }
 
 // ======== 析构函数（dylib 卸载时） ========
@@ -90,23 +95,24 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)start {
+    // 诊断：在 start 被调用时立即显示红色条（通过 runloop 回调，不依赖 dispatch）
+    CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
+        // 等 1 秒让 TikTok 窗口完全就绪
+        [self performSelector:@selector(_showDiagnosticBar) withObject:nil afterDelay:1.0];
+        // 同时触发浮窗显示
+        [self performSelector:@selector(showFloatingPanel) withObject:nil afterDelay:2.0];
+    });
+    CFRunLoopWakeUp(CFRunLoopGetMain());
+
+    // 后台启动其他服务
     BOOL enabled = [[NSUserDefaults standardUserDefaults] boolForKey:kXnowConfigKeyEnabled];
     if (!enabled) {
-        // 默认启用，首次运行自动打开
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kXnowConfigKeyEnabled];
     }
 
     dispatch_async(_workerQueue, ^{
-        // 安装 TikTok hooks
         [TikTokHooks installHooks];
-
-        // 启动设备状态监控
         [self.deviceStatus startMonitoring];
-
-        // 显示控制浮窗
-        [self showFloatingPanel];
-
-        // 连接 WebSocket
         [self connectWebSocket];
     });
 }
