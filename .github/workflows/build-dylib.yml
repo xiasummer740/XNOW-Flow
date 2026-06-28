@@ -24,26 +24,21 @@ on:
 jobs:
   build:
     name: Build xnower.dylib
-    runs-on: macos-14
+    runs-on: macos-13
     timeout-minutes: 20
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select oldest Xcode available (to avoid chained fixups)
+      - name: Select Xcode 14.2 (classic ld for iOS 16 compat)
         run: |
           echo "=== Available Xcodes ==="
           ls -d /Applications/Xcode*.app 2>/dev/null | sort
-          # Try Xcode 15.0 first (has ld_classic)
-          for xc in /Applications/Xcode_15.0.app /Applications/Xcode_15.0.1.app; do
-            if [ -d "$xc" ]; then
-              sudo xcode-select -s "$xc"
-              echo "Selected: $xc"
-              xcodebuild -version
-              break
-            fi
-          done
+          sudo xcode-select -s /Applications/Xcode_14.2.app 2>/dev/null || \
+          sudo xcode-select -s /Applications/Xcode_14.1.app 2>/dev/null || \
+          echo "No Xcode 14 found, using default"
+          xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-path
 
       - name: Compile .o files (no linking)
@@ -53,68 +48,52 @@ jobs:
         env:
           MIN_IOS: "14.0"
 
-      - name: Try different linker strategies
+      - name: Build dylib (Xcode 14 classic ld for iOS 16 compat)
         run: |
-          STRAT_DIR="/tmp/xnower-strategies"
-          mkdir -p "$STRAT_DIR"
           cd ios-plugin/xnow-dylib
+          make dylib LDFLAGS="" 2>&1
+          echo "=== Check format ==="
+          otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -10 || true
+          ls -la build/xnower.dylib
 
-          # Strategy 1: -ld_classic (old Apple linker, generates old-style fixups)
-          echo "=== Strategy 1: -ld_classic ==="
-          make dylib LDFLAGS="-Xlinker -ld_classic" 2>&1 || true
-          if [ -f build/xnower.dylib ]; then
-            cp build/xnower.dylib "$STRAT_DIR/xnower-strat1.dylib"
-            otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -10 || true
-          else
-            echo "Strategy 1 FAILED"
-          fi
-          echo "---"
-
-          # Strategy 2: default Xcode 15.0.1 linker (new linker with maybe no chained fixups)
-          echo "=== Strategy 2: default linker ==="
-          make clean && make objs 2>&1 || true
-          make dylib LDFLAGS="" 2>&1 || true
-          if [ -f build/xnower.dylib ]; then
-            cp build/xnower.dylib "$STRAT_DIR/xnower-strat2.dylib"
-            otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -10 || true
-          else
-            echo "Strategy 2 FAILED"
-          fi
-          echo "---"
-
-          # Strategy 3: try -Wl,-no_fixup_chains (GCC-compatible spelling)
-          echo "=== Strategy 3: -no_fixup_chains ==="
-          make clean && make objs 2>&1 || true
-          make dylib LDFLAGS="-Wl,-no_fixup_chains" 2>&1 || true
-          if [ -f build/xnower.dylib ]; then
-            cp build/xnower.dylib "$STRAT_DIR/xnower-strat3.dylib"
-            otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -10 || true
-          else
-            echo "Strategy 3 FAILED"
-          fi
-
-          # Check which strategies are compatible with iOS 16
-          echo ""
-          echo "=== Compatibility check ==="
-          for f in "$STRAT_DIR"/*.dylib; do
-            [ ! -f "$f" ] && continue
-            name=$(basename "$f")
-            priv=$(otool -l "$f" | grep -c "PRIVATE" || true)
-            chain=$(otool -l "$f" | grep -c "CHAINED" || true)
-            dyldinfo=$(otool -l "$f" | grep -c "LC_DYLD_INFO_ONLY\|LC_DYLD_INFO " || true)
-            echo "$name: private=$priv chained=$chain dyld_info=$dyldinfo"
-          done
-
-          # Copy strategies back to build dir for artifact upload
-          cp "$STRAT_DIR"/*.dylib build/ 2>/dev/null || true
-          ls -la build/*.dylib 2>/dev/null || echo "No dylibs in build dir"
+      - name: Convert private cmds to standard (if needed)
+        run: |
+          cd ios-plugin/xnow-dylib/build
+          python3 -c "
+import struct
+with open('xnower.dylib', 'rb') as f:
+    data = bytearray(f.read())
+ncmds = struct.unpack_from('<I', data, 16)[0]
+off = 32
+converted = 0
+for i in range(ncmds):
+    c, cs = struct.unpack_from('<II', data, off)
+    if c == 0x80000022:
+        struct.pack_into('<I', data, off, 0x22)
+        print(f'  PRIV_DYLD_INFO -> LC_DYLD_INFO_ONLY [{i}]')
+        converted += 1
+    if c == 0x80000033:
+        struct.pack_into('<I', data, off, 0x35)
+        print(f'  PRIV_EXPORTS -> LC_EXPORTS_TRIE [{i}]')
+        converted += 1
+    if c == 0x80000034:
+        struct.pack_into('<I', data, off, 0x36)
+        print(f'  PRIV_CHAINED -> LC_DYLD_CHAINED_FIXUPS [{i}]')
+        converted += 1
+    off += cs
+print(f'Converted {converted} private command(s)')
+with open('xnower.dylib', 'wb') as f:
+    f.write(data)
+"
+          echo "=== After conversion ==="
+          otool -l xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -10 || true
 
       - name: Upload dylib artifact
         uses: actions/upload-artifact@v4
         with:
           name: xnower-dylib
           path: |
-            ios-plugin/xnow-dylib/build/xnower-strat*.dylib
+            ios-plugin/xnow-dylib/build/xnower.dylib
             ios-plugin/xnow-dylib/build/Config.plist
           retention-days: 30
 
@@ -122,7 +101,7 @@ jobs:
     name: Inject IPA (optional)
     needs: build
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.inject_ipa_url != ''
-    runs-on: macos-14
+    runs-on: macos-13
     timeout-minutes: 30
 
     steps:
