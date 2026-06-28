@@ -42,6 +42,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
 @property (nonatomic, strong) CommandEngine *cmdEngine;
 @property (nonatomic, strong) DeviceStatus *deviceStatus;
 @property (nonatomic, strong) XNFloatingPanel *floatingPanel;
+@property (nonatomic, strong) UIWindow *floatingFloatWindow;
 @property (nonatomic, strong) dispatch_queue_t workerQueue;
 @property (nonatomic, assign) BOOL floatingPanelVisible;
 @end
@@ -238,7 +239,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     if (self.floatingPanelVisible) return;
     UIWindow *w = XN_ActiveWindow();
     if (w) {
-        [self _showPanelInWindow:w];
+        [self _showPanelOnTopWithScene:w.windowScene];
         return;
     }
     // 窗口未就绪，每秒重试，最多等15秒
@@ -250,20 +251,37 @@ __attribute__((destructor)) static void XNOWERUnload() {
     }
 }
 
-- (void)_showPanelInWindow:(UIWindow *)window {
+/// 在独立的浮动窗口上显示面板（确保在最顶层，不会被 TikTok UI 遮挡）
+- (void)_showPanelOnTopWithScene:(UIWindowScene *)scene {
     if (self.floatingPanelVisible) return;
+
+    // 创建独立浮动窗口
+    UIWindow *floatWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+    if (@available(iOS 13, *)) {
+        floatWindow.windowScene = scene;
+    }
+    floatWindow.windowLevel = UIWindowLevelAlert + 10;  // 在 Alert 之上
+    floatWindow.backgroundColor = [UIColor clearColor];
+    floatWindow.hidden = NO;
+
+    // 创建面板
+    self.floatingFloatWindow = floatWindow;
     self.floatingPanel = [[XNFloatingPanel alloc] init];
     self.floatingPanel.delegate = self;
     [self.floatingPanel setDeviceId:self.deviceId];
     [self.floatingPanel setServerURL:self.serverURL];
     [self.floatingPanel setConnected:self.isConnected];
-    [self.floatingPanel showInWindow:window];
+    [self.floatingPanel showInWindow:floatWindow];
     self.floatingPanelVisible = YES;
+
+    NSLog(@"[XNOWER] Floating panel shown on dedicated window");
 }
 
 - (void)hideFloatingPanel {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.floatingPanel dismiss];
+        self.floatingFloatWindow.hidden = YES;
+        self.floatingFloatWindow = nil;
         self.floatingPanel = nil;
         self.floatingPanelVisible = NO;
     });
