@@ -72,19 +72,6 @@ jobs:
           ldid -S -M xnower.dylib 2>/dev/null || true
           echo "=== After ==="
           otool -l xnower.dylib | grep -E "CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -5 || true
-          python3 -c "
-import struct
-with open('xnower.dylib','rb') as f:
-    data = f.read()
-n=struct.unpack_from('<I',data,16)[0]
-off=32
-for i in range(n):
-    c,cs=struct.unpack_from('<II',data,off)
-    if c==0x22:
-        vals=struct.unpack_from('<IIIIIIIIII',data,off+8)
-        print(f'DYLD_INFO: r_off={vals[0]} b_off={vals[2]} e_off={vals[8]}')
-    off+=cs
-"
 
       - name: Upload dylib artifact
         uses: actions/upload-artifact@v4
