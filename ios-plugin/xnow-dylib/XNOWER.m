@@ -23,8 +23,8 @@ static XNOWER *gSharedInstance = nil;
 
 // ======== C 构造函数 - dylib 加载时自动执行 ========
 __attribute__((constructor)) static void XNOWERLoad() {
-    // === 诊断：5 秒后在主线程显示红色条（跳过所有业务逻辑） ===
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
+    // === 诊断红色条（20 秒延迟，等 TikTok 完全启动） ===
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         UIWindow *w = nil;
         id delegate = [UIApplication sharedApplication].delegate;
@@ -33,17 +33,20 @@ __attribute__((constructor)) static void XNOWERLoad() {
         }
         if (!w) w = [UIApplication sharedApplication].keyWindow;
         if (w) {
-            UIView *redBar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w.bounds.size.width, 40)];
-            redBar.backgroundColor = [[UIColor redColor] colorWithAlphaComponent:0.9];
+            UIView *redBar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w.bounds.size.width, 60)];
+            redBar.backgroundColor = [[UIColor redColor] colorWithAlphaComponent:0.85];
             redBar.tag = 99998;
             [w addSubview:redBar];
-            NSLog(@"[XNOWER_DIAG] Red bar added to window - dylib is loaded!");
-        } else {
-            NSLog(@"[XNOWER_DIAG] No window found!");
+            UILabel *label = [[UILabel alloc] initWithFrame:redBar.bounds];
+            label.text = @"XNOWER LOADED";
+            label.textColor = [UIColor whiteColor];
+            label.font = [UIFont boldSystemFontOfSize:22];
+            label.textAlignment = NSTextAlignmentCenter;
+            [redBar addSubview:label];
         }
     });
 
-    // 延迟 2 秒启动，等 TikTok 初始化完毕
+    // 延迟 2 秒启动主逻辑
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
                    dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0), ^{
         [[XNOWER sharedInstance] start];
