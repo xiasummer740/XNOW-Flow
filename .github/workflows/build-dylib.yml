@@ -59,7 +59,7 @@ jobs:
       - name: Convert private cmds to standard (if needed)
         run: |
           cd ios-plugin/xnow-dylib/build
-          python3 -c "
+          cat > /tmp/convert.py << 'EOF'
 import struct
 with open('xnower.dylib', 'rb') as f:
     data = bytearray(f.read())
@@ -84,7 +84,8 @@ for i in range(ncmds):
 print(f'Converted {converted} private command(s)')
 with open('xnower.dylib', 'wb') as f:
     f.write(data)
-"
+EOF
+          python3 /tmp/convert.py
           echo "=== After conversion ==="
           otool -l xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -10 || true
 
