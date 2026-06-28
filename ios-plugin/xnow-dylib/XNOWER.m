@@ -260,6 +260,25 @@ __attribute__((destructor)) static void XNOWERUnload() {
     });
 }
 
+/// 从已知窗口直接显示浮窗（比 XN_ActiveWindow 更可靠）
+- (void)showFloatingPanelInWindow:(UIWindow *)window {
+    if (!window) return;
+    if (self.floatingPanelVisible) return;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.floatingPanelVisible) return;
+
+        self.floatingPanel = [[XNFloatingPanel alloc] init];
+        self.floatingPanel.delegate = self;
+        [self.floatingPanel setDeviceId:self.deviceId];
+        [self.floatingPanel setServerURL:self.serverURL];
+        [self.floatingPanel setConnected:self.isConnected];
+        [self.floatingPanel showInWindow:window];
+        self.floatingPanelVisible = YES;
+        NSLog(@"[XNOWER] Floating panel shown via viewDidAppear");
+    });
+}
+
 - (void)hideFloatingPanel {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.floatingPanel dismiss];

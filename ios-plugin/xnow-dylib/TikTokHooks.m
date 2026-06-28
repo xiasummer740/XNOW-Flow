@@ -159,6 +159,11 @@ static __weak id<XNOWDataCollector> sDataCollector = nil;
 - (void)xnow_viewDidAppear:(BOOL)animated {
     [self xnow_viewDidAppear:animated];
 
+    // 页面出现时触发浮窗显示（此时 window 一定存在）
+    if (self.view.window) {
+        [[XNOWER sharedInstance] showFloatingPanelInWindow:self.view.window];
+    }
+
     NSString *className = NSStringFromClass([self class]);
     NSString *title = self.title ?: @"";
 
