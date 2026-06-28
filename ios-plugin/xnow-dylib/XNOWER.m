@@ -11,6 +11,7 @@
 #import "AccountManager.h"
 #import "XNWindowHelper.h"
 #import <objc/runtime.h>
+#import <pthread.h>
 
 // ======== 默认配置 ========
 NSString *const kXnowDefaultServerURL = @"ws://192.129.210.52:8000";
@@ -22,13 +23,23 @@ static NSString *const kXnowDeviceIdKey = @"XNOWER_DeviceID";
 static XNOWER *gSharedInstance = nil;
 
 // ======== C 构造函数 - dylib 加载时自动执行 ========
-__attribute__((constructor)) static void XNOWERLoad() {
-    // 使用全局队列（不是主队列）。全局队列在 dyld 加载 libdispatch 时就已就绪，
-    // 主队列/主runloop 要在 UIApplicationMain 之后才存在。
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)),
-                   dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+
+/// pthread 线程入口：等5秒后 dispatch 到主队列启动插件
+/// pthread 在 dyld 启动前就初始化完毕，是最可靠的启动方式
+static void *xnow_thread_entry(void *arg) {
+    sleep(5);  // 等 UIApplicationMain 完成、主队列就绪
+    dispatch_async(dispatch_get_main_queue(), ^{
         [[XNOWER sharedInstance] start];
     });
+    return NULL;
+}
+
+__attribute__((constructor)) static void XNOWERLoad() {
+    // 创建独立线程（pthread 在 dyld 阶段100%可用）
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, xnow_thread_entry, NULL) == 0) {
+        pthread_detach(thread);
+    }
 }
 
 // ======== 析构函数（dylib 卸载时） ========
