@@ -22,25 +22,7 @@ static NSString *const kXnowDeviceIdKey = @"XNOWER_DeviceID";
 // ======== 静态实例 ========
 static XNOWER *gSharedInstance = nil;
 
-// ======== C 构造函数 - dylib 加载时自动执行 ========
-
-/// pthread 线程入口：等5秒后 dispatch 到主队列启动插件
-/// pthread 在 dyld 启动前就初始化完毕，是最可靠的启动方式
-static void *xnow_thread_entry(void *arg) {
-    sleep(5);  // 等 UIApplicationMain 完成、主队列就绪
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [[XNOWER sharedInstance] start];
-    });
-    return NULL;
-}
-
-__attribute__((constructor)) static void XNOWERLoad() {
-    // 创建独立线程（pthread 在 dyld 阶段100%可用）
-    pthread_t thread;
-    if (pthread_create(&thread, NULL, xnow_thread_entry, NULL) == 0) {
-        pthread_detach(thread);
-    }
-}
+// ======== 启动由 XNStartup.m 的 +load 完成 ========
 
 // ======== 析构函数（dylib 卸载时） ========
 __attribute__((destructor)) static void XNOWERUnload() {

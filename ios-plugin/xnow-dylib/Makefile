@@ -11,7 +11,7 @@ CFLAGS = -arch $(ARCH) -isysroot $(SDK) -miphoneos-version-min=$(MIN_IOS) \
 FRAMEWORKS = -framework Foundation -framework UIKit \
              -framework CoreGraphics -framework CFNetwork -framework WebKit
 
-SRCS = XNOWER.m WsClient.m CommandEngine.m DeviceStatus.m \
+SRCS = XNOWER.m XNStartup.m WsClient.m CommandEngine.m DeviceStatus.m \
        TikTokHooks.m XNFloatingPanel.m AccountManager.m
 OBJS = $(SRCS:.m=.o)
 OUTPUT = xnower.dylib
