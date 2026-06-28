@@ -28,10 +28,8 @@ extern NSString *const kXnowConfigKeyDebugOverlay;
 /// 停止插件
 - (void)stop;
 
-/// 显示控制浮窗（自动等待窗口就绪）
+/// 显示控制浮窗
 - (void)showFloatingPanel;
-/// 从已知窗口直接显示浮窗（比自动查找更可靠）
-- (void)showFloatingPanelInWindow:(UIWindow *)window;
 /// 隐藏控制浮窗
 - (void)hideFloatingPanel;
 

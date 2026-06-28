@@ -3,7 +3,6 @@
 // 包含: 生命周期监控 + 网络数据拦截 + ViewController 追踪 + 页面状态采集
 
 #import "TikTokHooks.h"
-#import "XNOWER.h"
 #import "AccountManager.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -205,16 +204,8 @@ static __weak id<XNOWDataCollector> sDataCollector = nil;
 @implementation UIApplication (XNOWER)
 
 - (void)xnow_sendEvent:(UIEvent *)event {
-    // 在事件分发前拦截
+    // 在事件分发前拦截（可用于监控用户操作）
     [self xnow_sendEvent:event];
-
-    // 首次触摸时触发浮窗显示（此时 UI 已完全稳定）
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [[XNOWER sharedInstance] showFloatingPanel];
-        });
-    });
 }
 
 - (void)xnow_applicationWillResignActive {
