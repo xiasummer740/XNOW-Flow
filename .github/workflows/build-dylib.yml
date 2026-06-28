@@ -59,35 +59,10 @@ jobs:
       - name: Convert private cmds to standard (if needed)
         run: |
           cd ios-plugin/xnow-dylib/build
-          cat > /tmp/convert.py << 'EOF'
-import struct
-with open('xnower.dylib', 'rb') as f:
-    data = bytearray(f.read())
-ncmds = struct.unpack_from('<I', data, 16)[0]
-off = 32
-converted = 0
-for i in range(ncmds):
-    c, cs = struct.unpack_from('<II', data, off)
-    if c == 0x80000022:
-        struct.pack_into('<I', data, off, 0x22)
-        print(f'  PRIV_DYLD_INFO -> LC_DYLD_INFO_ONLY [{i}]')
-        converted += 1
-    if c == 0x80000033:
-        struct.pack_into('<I', data, off, 0x35)
-        print(f'  PRIV_EXPORTS -> LC_EXPORTS_TRIE [{i}]')
-        converted += 1
-    if c == 0x80000034:
-        struct.pack_into('<I', data, off, 0x36)
-        print(f'  PRIV_CHAINED -> LC_DYLD_CHAINED_FIXUPS [{i}]')
-        converted += 1
-    off += cs
-print(f'Converted {converted} private command(s)')
-with open('xnower.dylib', 'wb') as f:
-    f.write(data)
-EOF
-          python3 /tmp/convert.py
-          echo "=== After conversion ==="
-          otool -l xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -10 || true
+          otool -l xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -5 || true
+          python3 ../../scripts/convert-private-cmds.py xnower.dylib
+          echo "=== After ==="
+          otool -l xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -5 || true
 
       - name: Upload dylib artifact
         uses: actions/upload-artifact@v4
