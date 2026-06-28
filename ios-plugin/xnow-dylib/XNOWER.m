@@ -230,20 +230,24 @@ __attribute__((destructor)) static void XNOWERUnload() {
     if (self.floatingPanelVisible) return;
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.floatingPanelVisible) return;
-        UIWindow *keyWindow = XN_ActiveWindow();
-        if (!keyWindow) {
-            // 窗口暂未就绪，1秒后重试（最多10次）
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{
-                UIWindow *w2 = XN_ActiveWindow();
-                if (!w2) return;
-                [self _showPanelInWindow:w2];
-            });
-            return;
-        }
-        [self _showPanelInWindow:keyWindow];
+        [self _tryShowPanel:0];
     });
+}
+
+- (void)_tryShowPanel:(NSInteger)attempt {
+    if (self.floatingPanelVisible) return;
+    UIWindow *w = XN_ActiveWindow();
+    if (w) {
+        [self _showPanelInWindow:w];
+        return;
+    }
+    // 窗口未就绪，每秒重试，最多等15秒
+    if (attempt < 15) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [self _tryShowPanel:attempt + 1];
+        });
+    }
 }
 
 - (void)_showPanelInWindow:(UIWindow *)window {
