@@ -230,17 +230,31 @@ __attribute__((destructor)) static void XNOWERUnload() {
     if (self.floatingPanelVisible) return;
 
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.floatingPanelVisible) return;
         UIWindow *keyWindow = XN_ActiveWindow();
-        if (!keyWindow) return;
-
-        self.floatingPanel = [[XNFloatingPanel alloc] init];
-        self.floatingPanel.delegate = self;
-        [self.floatingPanel setDeviceId:self.deviceId];
-        [self.floatingPanel setServerURL:self.serverURL];
-        [self.floatingPanel setConnected:self.isConnected];
-        [self.floatingPanel showInWindow:keyWindow];
-        self.floatingPanelVisible = YES;
+        if (!keyWindow) {
+            // 窗口暂未就绪，1秒后重试（最多10次）
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                UIWindow *w2 = XN_ActiveWindow();
+                if (!w2) return;
+                [self _showPanelInWindow:w2];
+            });
+            return;
+        }
+        [self _showPanelInWindow:keyWindow];
     });
+}
+
+- (void)_showPanelInWindow:(UIWindow *)window {
+    if (self.floatingPanelVisible) return;
+    self.floatingPanel = [[XNFloatingPanel alloc] init];
+    self.floatingPanel.delegate = self;
+    [self.floatingPanel setDeviceId:self.deviceId];
+    [self.floatingPanel setServerURL:self.serverURL];
+    [self.floatingPanel setConnected:self.isConnected];
+    [self.floatingPanel showInWindow:window];
+    self.floatingPanelVisible = YES;
 }
 
 - (void)hideFloatingPanel {
