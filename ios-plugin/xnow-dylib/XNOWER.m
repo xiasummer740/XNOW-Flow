@@ -35,7 +35,6 @@ __attribute__((destructor)) static void XNOWERUnload() {
 @property (nonatomic, strong) CommandEngine *cmdEngine;
 @property (nonatomic, strong) DeviceStatus *deviceStatus;
 @property (nonatomic, strong) XNFloatingPanel *floatingPanel;
-@property (nonatomic, strong) UIWindow *floatingFloatWindow;
 @property (nonatomic, strong) dispatch_queue_t workerQueue;
 @property (nonatomic, assign) BOOL floatingPanelVisible;
 @end
@@ -228,23 +227,82 @@ __attribute__((destructor)) static void XNOWERUnload() {
     if (self.floatingPanelVisible) return;
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self _tryShowPanel:0];
+        [self _tryAttachPanel];
     });
 }
 
-- (void)_tryShowPanel:(NSInteger)attempt {
+/// 找到 TikTok 的 keyWindow 并直接加上浮窗（和诊断条同一策略，已被验证可靠）
+- (void)_tryAttachPanel {
     if (self.floatingPanelVisible) return;
-    UIWindow *w = XN_ActiveWindow();
-    if (w) {
-        [self _showPanelOnTopWithScene:w.windowScene];
+
+    UIWindow *targetWindow = nil;
+
+    // 策略1: App Delegate 的 window（诊断条用的这个，确定可用）
+    id delegate = [UIApplication sharedApplication].delegate;
+    if ([delegate respondsToSelector:@selector(window)]) {
+        targetWindow = [delegate window];
+    }
+
+    // 策略2: keyWindow（iOS 16+ 可能已废弃但部分情况可用）
+    if (!targetWindow || targetWindow.hidden) {
+        targetWindow = [UIApplication sharedApplication].keyWindow;
+    }
+
+    // 策略3: UIScene 任意可见窗口（TikTok UIScene 架构用这个）
+    if (!targetWindow || targetWindow.hidden) {
+        if (@available(iOS 13, *)) {
+            for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+                if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+                UIWindowScene *ws = (UIWindowScene *)scene;
+                for (UIWindow *w in ws.windows) {
+                    if (!w.hidden && w.rootViewController) {
+                        targetWindow = w;
+                        break;
+                    }
+                }
+                if (targetWindow) break;
+            }
+        }
+    }
+
+    if (!targetWindow || targetWindow.hidden) {
+        // 还没找到窗口，继续重试（最多20秒）
+        static NSInteger retryCount = 0;
+        retryCount++;
+        if (retryCount < 20) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                [self _tryAttachPanel];
+            });
+        } else {
+            retryCount = 0;
+        }
         return;
     }
-    if (attempt < 15) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            [self _tryShowPanel:attempt + 1];
-        });
-    }
+
+    // 创建浮窗，直接加到目标窗口上（和诊断条 _showDiagnosticBar 同样的策略）
+    self.floatingPanel = [[XNFloatingPanel alloc] init];
+    self.floatingPanel.delegate = self;
+    [self.floatingPanel setDeviceId:self.deviceId];
+    [self.floatingPanel setServerURL:self.serverURL];
+    [self.floatingPanel setConnected:self.isConnected];
+
+    [targetWindow addSubview:self.floatingPanel];
+    [targetWindow bringSubviewToFront:self.floatingPanel];
+    self.floatingPanelVisible = YES;
+
+    // 入场动画
+    self.floatingPanel.transform = CGAffineTransformMakeScale(0.5, 0.5);
+    self.floatingPanel.alpha = 0;
+    [UIView animateWithDuration:0.3
+                          delay:0.5
+         usingSpringWithDamping:0.6
+          initialSpringVelocity:0.8
+                        options:UIViewAnimationOptionCurveEaseOut
+                     animations:^{
+        self.floatingPanel.transform = CGAffineTransformIdentity;
+        self.floatingPanel.alpha = 1;
+    } completion:nil];
 }
 
 /// 诊断条：简单红色条，确认代码执行到此处
@@ -273,85 +331,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
     [redBar addSubview:label];
 }
 
-/// 在独立的浮动窗口上显示面板（确保在最顶层，不会被 TikTok UI 遮挡）
-- (void)_showPanelOnTopWithScene:(UIWindowScene *)scene {
-    if (self.floatingPanelVisible) return;
-
-    // 创建独立浮动窗口
-    UIWindow *floatWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
-
-    // === 关键修复 1: 设置 windowScene（iOS 13+ 必须）===
-    if (@available(iOS 13, *)) {
-        UIWindowScene *targetScene = scene;
-        if (!targetScene) {
-            // 遍历 scenes，优先找激活状态的
-            for (UIScene *s in [UIApplication sharedApplication].connectedScenes) {
-                if (![s isKindOfClass:[UIWindowScene class]]) continue;
-                UIWindowScene *ws = (UIWindowScene *)s;
-                if (ws.activationState == UISceneActivationStateForegroundActive) {
-                    targetScene = ws;
-                    break;
-                }
-            }
-            // fallback: 任意 scene
-            if (!targetScene) {
-                for (UIScene *s in [UIApplication sharedApplication].connectedScenes) {
-                    if ([s isKindOfClass:[UIWindowScene class]]) {
-                        targetScene = (UIWindowScene *)s;
-                        break;
-                    }
-                }
-            }
-        }
-        floatWindow.windowScene = targetScene;
-    }
-
-    // === 关键修复 2: 高 windowLevel，确保覆盖 TikTok 所有 UI 层 ===
-    floatWindow.windowLevel = UIWindowLevelAlert + 1000;
-
-    // === 关键修复 3: 透明 rootViewController（iOS 13+ 需要 rootVC 窗口才能显示内容）===
-    UIViewController *rootVC = [[UIViewController alloc] init];
-    rootVC.view.backgroundColor = [UIColor clearColor];
-    rootVC.view.userInteractionEnabled = NO;  // 让事件穿透到面板
-    floatWindow.rootViewController = rootVC;
-
-    floatWindow.backgroundColor = [UIColor clearColor];
-    floatWindow.opaque = NO;
-    floatWindow.hidden = NO;  // 不调 makeKeyAndVisible，避免抢 TikTok 的 keyWindow 状态
-
-    self.floatingFloatWindow = floatWindow;
-
-    // === 创建面板，加到 rootViewController.view 上（而不是直接加 window）===
-    self.floatingPanel = [[XNFloatingPanel alloc] init];
-    self.floatingPanel.delegate = self;
-    [self.floatingPanel setDeviceId:self.deviceId];
-    [self.floatingPanel setServerURL:self.serverURL];
-    [self.floatingPanel setConnected:self.isConnected];
-
-    // 把面板加到 rootViewController 的 view 上（标准做法）
-    [rootVC.view addSubview:self.floatingPanel];
-    [rootVC.view bringSubviewToFront:self.floatingPanel];
-    self.floatingPanelVisible = YES;
-
-    // 入场动画
-    self.floatingPanel.transform = CGAffineTransformMakeScale(0.5, 0.5);
-    self.floatingPanel.alpha = 0;
-    [UIView animateWithDuration:0.3
-                          delay:0.5
-         usingSpringWithDamping:0.6
-          initialSpringVelocity:0.8
-                        options:UIViewAnimationOptionCurveEaseOut
-                     animations:^{
-        self.floatingPanel.transform = CGAffineTransformIdentity;
-        self.floatingPanel.alpha = 1;
-    } completion:nil];
-}
-
 - (void)hideFloatingPanel {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.floatingPanel dismiss];
-        self.floatingFloatWindow.hidden = YES;
-        self.floatingFloatWindow = nil;
         self.floatingPanel = nil;
         self.floatingPanelVisible = NO;
     });
