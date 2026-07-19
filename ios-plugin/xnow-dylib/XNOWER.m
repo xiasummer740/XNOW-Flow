@@ -88,44 +88,10 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)start {
     NSLog(@"[XNOWER] 🚀 start() 已执行 — dylib 加载成功");
 
-    // 诊断：2秒后在主窗口顶部显示红色条（确认代码执行到此处）
+    // 仅显示诊断条，排除所有其他功能（逐步排查崩溃问题）
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         [self _showDiagnosticBar];
-    });
-
-    // 浮窗：4 秒后触发（等窗口完全就绪）
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [self showFloatingPanel];
-    });
-
-    // 后台启动其他服务（全部包 try/catch，防止任何崩溃传播）
-    @try {
-        BOOL enabled = [[NSUserDefaults standardUserDefaults] boolForKey:kXnowConfigKeyEnabled];
-        if (!enabled) {
-            [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kXnowConfigKeyEnabled];
-        }
-    } @catch (NSException *e) {
-        NSLog(@"[XNOWER] NSUserDefaults 异常: %@", e.reason);
-    }
-
-    dispatch_async(_workerQueue, ^{
-        @try {
-            [TikTokHooks installHooks];
-        } @catch (NSException *e) {
-            NSLog(@"[XNOWER] ⚠️ TikTokHooks 安装异常: %@", e.reason);
-        }
-        @try {
-            [self.deviceStatus startMonitoring];
-        } @catch (NSException *e) {
-            NSLog(@"[XNOWER] ⚠️ DeviceStatus 异常: %@", e.reason);
-        }
-        @try {
-            [self connectWebSocket];
-        } @catch (NSException *e) {
-            NSLog(@"[XNOWER] ⚠️ WebSocket 连接异常: %@", e.reason);
-        }
     });
 }
 
