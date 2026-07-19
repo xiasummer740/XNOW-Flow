@@ -311,9 +311,232 @@ def patch_fat(data, dylib_ref):
 
 
 def patch_thin(data, dylib_ref):
-    """处理 thin arm64 二进制"""
+    """处理 thin arm64 二进制（添加新命令模式）"""
     result, delta, changed, summary = inject_slice(data, dylib_ref, "arm64")
     return result, [summary]
+
+
+def path_replace_thin(data, old_name, new_name="Frameworks/xnower.dylib"):
+    """
+    替换模式：在 thin arm64 二进制中查找加载 old_name 的 LC_LOAD_DYLIB 命令，
+    将其路径替换为 new_name。sizeofcmds 不变，无偏移更新。
+    返回 (new_data, summaries)
+    """
+    cmds = parse_load_commands(data)
+    ncmds = struct.unpack_from('<I', data, 16)[0]
+
+    result = bytearray(data)
+    replaced_count = 0
+    summaries = []
+
+    for ct, cs, cmd_data, off in cmds:
+        base_ct = ct & ~0x80000000
+        if base_ct not in (0x0C, 0x18) or cs <= 24:
+            continue
+        noff = struct.unpack_from('<I', cmd_data, 8)[0]
+        name_data = cmd_data[noff:cs]
+        name_end = name_data.find(b'\x00')
+        if name_end < 0:
+            continue
+        path = name_data[:name_end].decode('ascii', errors='replace')
+
+        # 检查是否匹配要替换的 dylib 名（在路径末尾）
+        if not path.endswith(old_name):
+            continue
+
+        # 新路径：直接把文件名替换为 xnower.dylib
+        new_path = path[:-len(old_name)] + "xnower.dylib"
+        new_bytes = new_path.encode() + b'\x00'
+        max_len = cs - noff  # 命令内路径最大可用空间
+
+        if len(new_bytes) > max_len:
+            summaries.append(f"  ⚠️  {path} -> 新路径过长 ({len(new_bytes)} > {max_len})，跳过")
+            continue
+
+        # 填充到原空间大小（保持命令大小不变）
+        padded = new_bytes + b'\x00' * (max_len - len(new_bytes))
+        result[off + noff:off + noff + len(padded)] = padded
+        replaced_count += 1
+        summaries.append(f"  ✅ {path} -> {new_path}")
+
+    if replaced_count == 0:
+        summaries.append(f"  ⚠️ 未找到包含 {old_name} 的加载命令")
+    else:
+        summaries.append(f"  替换了 {replaced_count} 个命令，sizeofcmds 不变 ✓")
+
+    return bytes(result), summaries
+
+
+def patch_replace_thin(data, old_name, new_name):
+    """对外包装"""
+    return path_replace_thin(data, old_name, new_name)
+
+
+def add_dummy_codesig(path):
+    """
+    给 dylib 添加 LC_CODE_SIGNATURE 结构。
+    签名工具（爱思助手）需要看到已有的签名命令才会重签。
+    """
+    with open(path, 'rb') as f:
+        data = bytearray(f.read())
+
+    magic = struct.unpack_from('<I', data, 0)[0]
+    assert magic == MAGIC_MH_MAGIC_64, f"dylib must be thin arm64: 0x{magic:08X}"
+
+    ncmds = struct.unpack_from('<I', data, 16)[0]
+    sizeofcmds = struct.unpack_from('<I', data, 20)[0]
+
+    # 检查是否已有 LC_CODE_SIGNATURE
+    cmds = parse_load_commands(data)
+    for ct, cs, _, _ in cmds:
+        if ct == LC_CODE_SIGNATURE:
+            print(f"  dylib 已有 LC_CODE_SIGNATURE，跳过")
+            return
+
+    # 构造 LC_CODE_SIGNATURE command (16 字节)
+    dummy_blob_size = 64  # 最小可用的 CSSuperBlob
+    cur_file_end = len(data)
+
+    # 计算签名 blob 位置：当前文件末尾
+    sig_dataoff = cur_file_end
+    sig_datasize = dummy_blob_size
+
+    cmd = bytearray(16)
+    struct.pack_into('<II', cmd, 0, LC_CODE_SIGNATURE, 16)
+    struct.pack_into('<II', cmd, 8, sig_dataoff, sig_datasize)
+
+    # 构建新 load commands（追加到末尾）
+    new_cmds_list = [cmd_data for _, _, cmd_data, _ in cmds]
+    new_cmds_list.append(bytes(cmd))
+
+    new_sizeofcmds = sum(len(c) for c in new_cmds_list)
+    new_ncmds = ncmds + 1
+    delta = new_sizeofcmds - sizeofcmds
+
+    # 构建新二进制
+    remaining_data = data[32 + sizeofcmds:]
+    new_data = bytearray(32)
+    new_data[:32] = data[:32]
+    struct.pack_into('<I', new_data, 16, new_ncmds)
+    struct.pack_into('<I', new_data, 20, new_sizeofcmds)
+    for cmd_bytes in new_cmds_list:
+        new_data.extend(cmd_bytes)
+    new_data.extend(remaining_data)
+
+    # 更新所有 LC_SEGMENT_64 偏移
+    off = 32
+    orig_cmds_end = 32 + sizeofcmds
+    for ct, cs, cmd_data, _ in cmds:
+        if ct == LC_SEGMENT_64 and cs > 40:
+            segname = cmd_data[8:24].rstrip(b'\x00').decode('ascii', errors='replace')
+            if segname == '__PAGEZERO':
+                off += cs
+                continue
+            old_fo = struct.unpack_from('<Q', cmd_data, 40)[0]
+            old_fs = struct.unpack_from('<Q', cmd_data, 48)[0]
+            old_vs = struct.unpack_from('<Q', cmd_data, 32)[0]
+            if old_fo > 0 and old_fo >= orig_cmds_end:
+                struct.pack_into('<Q', new_data, off + 40, old_fo + delta)
+            if segname == '__TEXT' and old_fs > 0:
+                struct.pack_into('<Q', new_data, off + 48, old_fs + delta)
+                struct.pack_into('<Q', new_data, off + 32, old_vs + delta)
+            # Update section offsets
+            nsects = struct.unpack_from('<I', cmd_data, 64)[0]
+            sect_off = off + 72
+            for si in range(nsects):
+                s_off = struct.unpack_from('<I', new_data, sect_off + 48)[0]
+                if s_off > 0 and s_off >= orig_cmds_end:
+                    struct.pack_into('<I', new_data, sect_off + 48, s_off + delta)
+                sect_off += 80
+        off += cs
+
+    # 更新 dataoff 命令的偏移
+    off = 32
+    for ct, cs, cmd_data, _ in cmds:
+        base = ct & ~0x80000000
+        if base in DATAOFF_COMMANDS and base != LC_CODE_SIGNATURE:
+            for foff in DATAOFF_COMMANDS[base]:
+                val = struct.unpack_from('<I', cmd_data, foff)[0]
+                if val > 0 and val >= orig_cmds_end:
+                    struct.pack_into('<I', new_data, off + foff, val + delta)
+        if base in DATAOFF_COMMANDS_64:
+            for foff in DATAOFF_COMMANDS_64[base]:
+                val = struct.unpack_from('<Q', cmd_data, foff)[0]
+                if val > 0 and val >= orig_cmds_end:
+                    struct.pack_into('<Q', new_data, off + foff, val + delta)
+        off += cs
+
+    # 追加 dummy signature blob
+    blob = b'\x00' * dummy_blob_size
+    new_data.extend(blob)
+
+    with open(path, 'wb') as f:
+        f.write(bytes(new_data))
+
+    new_size = len(new_data)
+    print(f"  ✅ 添加 LC_CODE_SIGNATURE ({delta:+d}B, file: {new_size:,} bytes)")
+
+
+def patch_replace_fat(data, old_name, new_name):
+    """FAT 版本：对每个 arm64 slice 执行路径替换"""
+    magic = struct.unpack_from('>I', data, 0)[0]
+    narch = struct.unpack_from('>I', data, 4)[0]
+    arch_off = 8
+
+    archs = []
+    for i in range(narch):
+        ca = arch_off + i * 20
+        cpu, sub, off, sz, al = struct.unpack_from('>IIIII', data, ca)
+        archs.append({'cpu': cpu, 'sub': sub, 'offset': off, 'size': sz, 'align': al,
+                      'data': data[off:off + sz]})
+
+    all_summaries = []
+    any_change = False
+
+    for i in range(len(archs) - 1, -1, -1):
+        arch = archs[i]
+        if arch['cpu'] not in (CPU_TYPE_ARM64, CPU_TYPE_ARM64_32):
+            continue
+        slice_data = arch['data']
+        smagic = struct.unpack_from('<I', slice_data, 0)[0]
+        if smagic != MAGIC_MH_MAGIC_64:
+            continue
+
+        result, summaries = path_replace_thin(slice_data, old_name, new_name)
+        all_summaries.extend(summaries)
+        if result != slice_data:
+            archs[i]['data'] = result
+            archs[i]['size'] = len(result)
+            any_change = True
+
+    if not any_change:
+        return data, all_summaries + ["无变更"]
+
+    # 重建 FAT
+    fat_hdr_size = 8 + narch * 20
+    hdr_pad = align(fat_hdr_size, 4096)
+    new_file = bytearray(hdr_pad)
+    struct.pack_into('>I', new_file, 0, MAGIC_FAT)
+    struct.pack_into('>I', new_file, 4, narch)
+
+    for i, arch in enumerate(archs):
+        ca = arch_off + i * 20
+        struct.pack_into('>IIIII', new_file, ca,
+                         arch['cpu'], arch['sub'], 0, 0, arch['align'])
+
+    cur_offset = hdr_pad
+    for i, arch in enumerate(archs):
+        align_bytes = max(1 << arch['align'], 0x1000)
+        cur_offset = align(cur_offset, align_bytes)
+        ca = arch_off + i * 20
+        struct.pack_into('>I', new_file, ca + 8, cur_offset)
+        struct.pack_into('>I', new_file, ca + 12, len(arch['data']))
+        while len(new_file) < cur_offset:
+            new_file.append(0)
+        new_file.extend(arch['data'])
+        cur_offset += len(arch['data'])
+
+    return bytes(new_file), all_summaries
 
 
 def main():
@@ -331,6 +554,12 @@ def main():
                         help="输出 IPA 路径（默认: 输入名 _XNOW.ipa）")
     parser.add_argument("--target", default="main",
                         help='注入目标: "main" (主二进制/默认), "Frameworks/BHTikTok.dylib", 等')
+    parser.add_argument("--mode", default="inject",
+                        choices=["inject", "replace"],
+                        help='注入模式: "inject" 添加新命令（默认，旧方式，可能闪退）, '
+                             '"replace" 替换已有命令路径（安全，无偏移变化）')
+    parser.add_argument("--replace-from", default="FLEXing.dylib",
+                        help='替换模式：要替换的 dylib 文件名（默认 FLEXing.dylib）')
     args = parser.parse_args()
 
     if not os.path.exists(args.ipa):
@@ -407,6 +636,25 @@ def main():
         os.chmod(dylib_dest, 0o755)
         print(f"  ✅ {dylib_dest} ({os.path.getsize(dylib_dest):,} bytes)")
 
+        # Step 3b: 检查 dylib 是否有 LC_CODE_SIGNATURE，没有则添加
+        print()
+        with open(dylib_dest, 'rb') as f:
+            dd = f.read()
+        dncmds = struct.unpack_from('<I', dd, 16)[0]
+        doff = 32
+        has_codesig = False
+        for _ in range(dncmds):
+            ct, cs = struct.unpack_from('<II', dd, doff)
+            if ct == LC_CODE_SIGNATURE:
+                has_codesig = True
+                break
+            doff += cs
+        if has_codesig:
+            print("[3b/5] dylib 已有 LC_CODE_SIGNATURE，跳过")
+        else:
+            print("[3b/5] dylib 无 LC_CODE_SIGNATURE，添加默认结构...")
+            add_dummy_codesig(dylib_dest)
+
         # Step 4: 修改目标二进制
         print()
         print("[4/5] 修改目标二进制...")
@@ -416,21 +664,35 @@ def main():
         magic = struct.unpack_from('<I', main_data, 0)[0]
         magic_be = struct.unpack_from('>I', main_data, 0)[0]
 
-        if magic == MAGIC_MH_MAGIC_64:
-            print("  📄 Thin arm64 格式")
-            result, summaries = patch_thin(main_data, dylib_ref)
-        elif magic_be == MAGIC_FAT or magic_be == MAGIC_FAT_CIGAM:
-            narch = struct.unpack_from('>I', main_data, 4)[0]
-            print(f"  📄 FAT 格式 ({narch} architectures)")
-            result, summaries = patch_fat(main_data, dylib_ref)
+        if args.mode == "replace":
+            old_name = args.replace_from
+            new_name = "Frameworks/xnower.dylib"
+            print(f"  🔄 替换模式: {old_name} -> xnower.dylib")
+
+            if magic == MAGIC_MH_MAGIC_64:
+                result, summaries = patch_replace_thin(main_data, old_name, new_name)
+            elif magic_be in (MAGIC_FAT, MAGIC_FAT_CIGAM):
+                result, summaries = patch_replace_fat(main_data, old_name, new_name)
+            else:
+                print(f"  ❌ 未知格式: magic=0x{magic:08X}")
+                sys.exit(1)
         else:
-            print(f"  ❌ 未知格式: magic=0x{magic:08X}")
-            sys.exit(1)
+            # 标准注入模式（添加新 LC_LOAD_DYLIB）
+            if magic == MAGIC_MH_MAGIC_64:
+                print("  📄 Thin arm64 格式")
+                result, summaries = patch_thin(main_data, dylib_ref)
+            elif magic_be in (MAGIC_FAT, MAGIC_FAT_CIGAM):
+                narch = struct.unpack_from('>I', main_data, 4)[0]
+                print(f"  📄 FAT 格式 ({narch} architectures)")
+                result, summaries = patch_fat(main_data, dylib_ref)
+            else:
+                print(f"  ❌ 未知格式: magic=0x{magic:08X}")
+                sys.exit(1)
 
         for line in summaries:
             print(f"  {line}")
 
-        if len(result) == len(main_data):
+        if result == main_data:
             print("  ℹ️  xnower.dylib 已在主二进制中（无需修改）")
         else:
             bak = target_path + ".bak"

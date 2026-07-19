@@ -69,18 +69,21 @@ jobs:
           otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE|CHAINED" | head -10 || true
           ls -la build/xnower.dylib
 
-      - name: Convert private cmds + strip + re-sign
+      - name: Convert private cmds + strip + re-sign with Apple codesign
         run: |
           cd ios-plugin/xnow-dylib/build
           echo "=== Before ==="
-          otool -l xnower.dylib | grep -E "CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -5 || true
+          otool -l xnower.dylib | grep -E "CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE|SIGNATURE" | head -5 || true
           # Convert private cmds to standard
           python3 ../../scripts/convert-private-cmds.py xnower.dylib
-          # Strip unnecessary data + ad-hoc re-sign
+          # Strip unnecessary symbols
           strip -S -x xnower.dylib 2>/dev/null || true
-          ldid -S -M xnower.dylib 2>/dev/null || true
+          # Apple codesign 创建标准 LC_CODE_SIGNATURE（比 ldid -M 更规范，爱思助手可识别）
+          codesign -f -s - --generate-adhoc-signature xnower.dylib 2>/dev/null || \
+            codesign -f -s - xnower.dylib 2>/dev/null || \
+            ldid -S -M xnower.dylib 2>/dev/null || true
           echo "=== After ==="
-          otool -l xnower.dylib | grep -E "CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE" | head -5 || true
+          otool -l xnower.dylib | grep -E "CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE|SIGNATURE|CODE" | head -10 || true
 
       - name: Upload dylib artifact
         uses: actions/upload-artifact@v4
