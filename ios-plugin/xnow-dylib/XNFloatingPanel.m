@@ -276,7 +276,7 @@ static const CGFloat kMargin = 12;
 
     // 版本
     UILabel *versionLabel = [[UILabel alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth - 2*kMargin, 12)];
-    versionLabel.text = @"XNOWER v1.0 • iOS 注入插件";
+    versionLabel.text = @"XNOWER v1.1 • iOS 注入插件";
     versionLabel.font = [UIFont systemFontOfSize:9];
     versionLabel.textColor = [UIColor colorWithWhite:1 alpha:0.3];
     versionLabel.textAlignment = NSTextAlignmentCenter;

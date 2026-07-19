@@ -23,7 +23,7 @@ from models.collected_data import CollectedData
 # 创建表
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="XNOW Cloud Control API", version="1.0.0")
+app = FastAPI(title="XNOW Cloud Control API", version="1.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,4 +67,4 @@ app.include_router(device_commands.router)
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": "1.1.0"}
