@@ -32,6 +32,7 @@ MAGIC_FAT = 0xCAFEBABE              # FAT big-endian
 MAGIC_MH_MAGIC_64 = 0xFEEDFACF      # arm64 thin
 
 CPU_TYPE_ARM64 = 0x0100000C
+CPU_TYPE_ARM64_32 = 0x0201000C
 CPU_SUBTYPE_ARM64_ALL = 0x00000000
 
 LC_LOAD_DYLIB = 0x0C                # Load a dylib
@@ -336,6 +337,8 @@ def main():
                         help="xnower.dylib 路径")
     parser.add_argument("-o", "--output", default=None,
                         help="输出 IPA 路径（默认: 输入名 _XNOW.ipa）")
+    parser.add_argument("--target", default="main",
+                        help='注入目标: "main" (主二进制/默认), "Frameworks/BHTikTok.dylib", 等')
     args = parser.parse_args()
 
     if not os.path.exists(args.ipa):
@@ -375,40 +378,47 @@ def main():
         app_name = apps[0]
         print(f"  ✅ {app_name}")
 
-        fw_dir = os.path.join(app_dir, "Frameworks")
-        main_binary = os.path.join(app_dir, app_name.replace(".app", ""))
-        if not os.path.exists(main_binary):
-            main_binary = os.path.join(app_dir, "TikTok")
-        if not os.path.exists(main_binary):
-            # Final fallback: find the main executable via Info.plist
-            import plistlib
-            info_plist = os.path.join(app_dir, "Info.plist")
-            if os.path.exists(info_plist):
-                with open(info_plist, 'rb') as f:
-                    info = plistlib.load(f)
-                exec_name = info.get('CFBundleExecutable', '')
-                main_binary = os.path.join(app_dir, exec_name)
+        # Step 2: 定位目标二进制
+        # 根据 --target 参数决定修改哪个二进制
+        target_rel = args.target
+        if target_rel == "main":
+            # Find main binary
+            target_path = os.path.join(app_dir, app_name.replace(".app", ""))
+            if not os.path.exists(target_path):
+                target_path = os.path.join(app_dir, "TikTok")
+            if not os.path.exists(target_path):
+                import plistlib
+                info_plist = os.path.join(app_dir, "Info.plist")
+                if os.path.exists(info_plist):
+                    with open(info_plist, 'rb') as f:
+                        info = plistlib.load(f)
+                    exec_name = info.get('CFBundleExecutable', '')
+                    target_path = os.path.join(app_dir, exec_name)
+        else:
+            target_path = os.path.join(app_dir, target_rel)
 
-        if not os.path.exists(main_binary):
-            print(f"  ❌ 无法找到主二进制")
+        if not os.path.exists(target_path):
+            print(f"  ❌ 无法找到目标二进制: {target_rel}")
+            print(f"     路径: {target_path}")
             sys.exit(1)
 
-        main_size = os.path.getsize(main_binary)
-        print(f"  📱 主二进制: {os.path.basename(main_binary)} ({main_size:,} bytes)")
+        target_size = os.path.getsize(target_path)
+        print(f"  📱 目标: {target_rel} ({target_size:,} bytes)")
 
-        # Step 2: 复制 dylib
+        # Step 3: 复制 dylib 到 Frameworks/
         print()
-        print("[2/5] 复制 xnower.dylib 到 Frameworks/...")
+        print("[3/5] 复制 xnower.dylib 到 Frameworks/...")
+        fw_dir = os.path.join(app_dir, "Frameworks")
         os.makedirs(fw_dir, exist_ok=True)
         dylib_dest = os.path.join(fw_dir, "xnower.dylib")
         shutil.copy2(args.dylib, dylib_dest)
         os.chmod(dylib_dest, 0o755)
         print(f"  ✅ {dylib_dest} ({os.path.getsize(dylib_dest):,} bytes)")
 
-        # Step 3: 修改主二进制
+        # Step 4: 修改目标二进制
         print()
-        print("[3/5] 修改主二进制...")
-        with open(main_binary, 'rb') as f:
+        print("[4/5] 修改目标二进制...")
+        with open(target_path, 'rb') as f:
             main_data = f.read()
 
         magic = struct.unpack_from('<I', main_data, 0)[0]
@@ -431,17 +441,17 @@ def main():
         if len(result) == len(main_data):
             print("  ℹ️  xnower.dylib 已在主二进制中（无需修改）")
         else:
-            bak = main_binary + ".bak"
+            bak = target_path + ".bak"
             if not os.path.exists(bak):
-                shutil.copy2(main_binary, bak)
-            with open(main_binary, 'wb') as f:
+                shutil.copy2(target_path, bak)
+            with open(target_path, 'wb') as f:
                 f.write(result)
             delta = len(result) - len(main_data)
             print(f"  ✅ 写入完成: {len(result):,} bytes ({delta:+,d} bytes)")
 
-        # Step 4: 打包 IPA
+        # Step 5: 打包 IPA
         print()
-        print("[4/5] 打包 IPA...")
+        print("[5/5] 打包 IPA...")
         if os.path.exists(output):
             os.remove(output)
         with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED, compresslevel=5) as zout:
