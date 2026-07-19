@@ -137,7 +137,8 @@ def inject_slice(slice_data, dylib_ref, slice_name="arm64"):
     new_cmds_list = []
     removed_code_signature = False
     for ct, cs, cmd_data, _ in cmds:
-        if ct == LC_CODE_SIGNATURE:
+        base_ct = ct & ~0x80000000
+        if base_ct == LC_CODE_SIGNATURE:
             removed_code_signature = True
             continue  # 跳过，之后让签名工具重签
         new_cmds_list.append(cmd_data)
@@ -199,13 +200,15 @@ def inject_slice(slice_data, dylib_ref, slice_name="arm64"):
                 sect_off_off += 80
         off += cs
 
-    # Step 7: 更新其他命令的 dataoff（符号表等）
+    # Step 7: 更新所有命令的 dataoff（符号表等）
+    # 注意：TikTok 主二进制使用私有命令（带 0x80000000 标志位），
+    # 需要剥离该标志后才与标准命令匹配
     off = 32
     orig_cmds_end = 32 + sizeofcmds
     for ct, cs, cmd_data, _ in cmds:
-        if ct in DATAOFF_COMMANDS and ct != LC_CODE_SIGNATURE:
-            # 只有不在原始命令中的偏移才需要更新
-            for foff in DATAOFF_COMMANDS[ct]:
+        base_ct = ct & ~0x80000000  # 剥离 LC_REQ_DYLD 私有标志
+        if base_ct in DATAOFF_COMMANDS and base_ct != LC_CODE_SIGNATURE:
+            for foff in DATAOFF_COMMANDS[base_ct]:
                 val = struct.unpack_from('<I', cmd_data, foff)[0]
                 if val > 0 and val >= orig_cmds_end:
                     struct.pack_into('<I', new_data, off + foff, val + delta)
