@@ -118,13 +118,12 @@ jobs:
           curl -L -o TikTok.ipa "$IPA_URL"
           ls -lh TikTok.ipa
 
-      - name: Inject dylib into IPA
+      - name: Inject dylib into IPA (build-xnow-ipa.py)
         run: |
-          chmod +x ios-plugin/scripts/inject-ipa.sh
-          bash ios-plugin/scripts/inject-ipa.sh \
+          python3 build-xnow-ipa.py \
             ./TikTok.ipa \
             ./build/xnower.dylib \
-            ./TikTok_XNOW.ipa
+            -o ./TikTok_XNOW.ipa
 
       - name: Upload injected IPA
         uses: actions/upload-artifact@v4
