@@ -98,6 +98,9 @@ static const CGFloat kMargin = 12;
     self.badgeButton.titleLabel.font = [UIFont boldSystemFontOfSize:20];
     [self.badgeButton setTitle:@"X" forState:UIControlStateNormal];
     [self.badgeButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    // 点击展开/折叠（直接绑按钮事件，不走手势识别器——手势会被按钮拦截）
+    [self.badgeButton addTarget:self action:@selector(_handleTap)
+               forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:self.badgeButton];
 
     // 状态指示点
