@@ -47,6 +47,8 @@ LC_LINKER_OPTION = 0x2D
 LC_DYLD_EXPORTS_TRIE = 0x33
 LC_DYLD_CHAINED_FIXUPS = 0x34
 LC_LINKER_OPTIMIZATION_HINT = 0x2E
+LC_MAIN = 0x28                    # Entry point
+LC_DATA_IN_CODE = 0x29            # Data in code entries
 
 # 需要更新 dataoff 的 load command 类型
 # 这些命令的 dataoff 指向文件中的数据，可能随 sizeofcmds 变化
@@ -55,13 +57,19 @@ DATAOFF_COMMANDS = {
     LC_DYSYMTAB: [8, 16, 24, 32, 40, 48],
     LC_CODE_SIGNATURE: [8],
     LC_SEGMENT_SPLIT_INFO: [8],
-    LC_DYLD_INFO_ONLY: [8, 12, 16, 20, 24, 28, 32, 36],
+    LC_DYLD_INFO_ONLY: list(range(8, 48, 4)),  # +8~+44: rebase/bind/weak/lazy/export offset+size
     LC_DYLD_EXPORTS_TRIE: [8],
     LC_DYLD_CHAINED_FIXUPS: [8],
     LC_LINKER_OPTIMIZATION_HINT: [8],
     LC_ENCRYPTION_INFO_64: [8],
     LC_DYLD_ENVIRONMENT: [8],      # 字符串偏移
     LC_LINKER_OPTION: [12],        # 字符串偏移
+    LC_DATA_IN_CODE: [8],          # dataoff
+}
+
+# 使用 64 位（QWORD）文件偏移的命令
+DATAOFF_COMMANDS_64 = {
+    LC_MAIN: [8],                  # entryoff (64位)
 }
 
 
@@ -187,16 +195,13 @@ def inject_slice(slice_data, dylib_ref, slice_name="arm64"):
                 struct.pack_into('<Q', new_data, off + 48, old_filesize + delta)
                 struct.pack_into('<Q', new_data, off + 32, old_vmsize + delta)
 
-            # 更新 section 偏移
+            # 更新 section 偏移（section_64.offset 是 32-bit）
             nsects = struct.unpack_from('<I', cmd_data, 64)[0]
             sect_off_off = off + 72  # section 起始在 cmd 中的偏移
             for si in range(nsects):
                 s_off = struct.unpack_from('<I', new_data, sect_off_off + 48)[0]
                 if s_off > 0 and s_off >= (32 + sizeofcmds):
                     struct.pack_into('<I', new_data, sect_off_off + 48, s_off + delta)
-                s_off_64 = struct.unpack_from('<Q', new_data, sect_off_off + 48)[0]
-                if s_off_64 > 0 and s_off_64 >= (32 + sizeofcmds):
-                    struct.pack_into('<Q', new_data, sect_off_off + 48, s_off_64 + delta)
                 sect_off_off += 80
         off += cs
 
@@ -212,6 +217,11 @@ def inject_slice(slice_data, dylib_ref, slice_name="arm64"):
                 val = struct.unpack_from('<I', cmd_data, foff)[0]
                 if val > 0 and val >= orig_cmds_end:
                     struct.pack_into('<I', new_data, off + foff, val + delta)
+        if base_ct in DATAOFF_COMMANDS_64:
+            for foff in DATAOFF_COMMANDS_64[base_ct]:
+                val = struct.unpack_from('<Q', cmd_data, foff)[0]
+                if val > 0 and val >= orig_cmds_end:
+                    struct.pack_into('<Q', new_data, off + foff, val + delta)
         off += cs
 
     summary = []
