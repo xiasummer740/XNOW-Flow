@@ -35,6 +35,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
 @property (nonatomic, strong) CommandEngine *cmdEngine;
 @property (nonatomic, strong) DeviceStatus *deviceStatus;
 @property (nonatomic, strong) XNFloatingPanel *floatingPanel;
+@property (nonatomic, strong) UIWindow *overlayWindow;
 @property (nonatomic, strong) dispatch_queue_t workerQueue;
 @property (nonatomic, assign) BOOL floatingPanelVisible;
 @end
@@ -225,19 +226,44 @@ __attribute__((destructor)) static void XNOWERUnload() {
     });
 }
 
-/// 找到 TikTok 的 keyWindow 并直接加上浮窗（和诊断条同一策略，已被验证可靠）
+/// 用独立 UIWindow 显示浮窗（最高层级，TikTok 视图变化不影响）
 - (void)_tryAttachPanel {
     if (self.floatingPanelVisible) return;
 
-    // 直接用诊断条证明有效的方法找窗口
-    UIWindow *targetWindow = XN_ActiveWindow();
-    if (!targetWindow) {
-        NSLog(@"[XNOWER] 窗口未找到（XN_ActiveWindow 返回 nil）");
-        return;
+    // 获取当前活跃 UIWindowScene（iOS 13+ 必须用 scene 创建窗口）
+    UIWindowScene *activeScene = nil;
+    if (@available(iOS 13, *)) {
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if ([scene isKindOfClass:[UIWindowScene class]] &&
+                scene.activationState == UISceneActivationStateForegroundActive) {
+                activeScene = (UIWindowScene *)scene;
+                break;
+            }
+        }
+        // fallback: 任何可见 scene
+        if (!activeScene) {
+            for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+                if ([scene isKindOfClass:[UIWindowScene class]]) {
+                    activeScene = (UIWindowScene *)scene;
+                    break;
+                }
+            }
+        }
     }
-    NSLog(@"[XNOWER] 找到窗口: %@", targetWindow);
 
-    // 创建浮窗，直接加到目标窗口上（和诊断条 _showDiagnosticBar 同样的策略）
+    // 创建独立 UIWindow（永远在最顶层，不依赖 TikTok 的视图层级）
+    self.overlayWindow = nil;
+    UIWindow *overlayWindow;
+    if (@available(iOS 13, *)) {
+        overlayWindow = [[UIWindow alloc] initWithWindowScene:activeScene];
+    } else {
+        overlayWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+    }
+    overlayWindow.windowLevel = UIWindowLevelStatusBar + 100;
+    overlayWindow.backgroundColor = [UIColor clearColor];
+    overlayWindow.userInteractionEnabled = YES;
+
+    // 创建浮窗
     self.floatingPanel = [[XNFloatingPanel alloc] init];
     if (!self.floatingPanel) {
         NSLog(@"[XNOWER] ⚠️ 浮窗创建失败（alloc 返回 nil）");
@@ -248,11 +274,12 @@ __attribute__((destructor)) static void XNOWERUnload() {
     [self.floatingPanel setServerURL:self.serverURL];
     [self.floatingPanel setConnected:self.isConnected];
 
-    [targetWindow addSubview:self.floatingPanel];
-    [targetWindow bringSubviewToFront:self.floatingPanel];
+    [overlayWindow addSubview:self.floatingPanel];
+    overlayWindow.hidden = NO;  // 显示窗口
+    self.overlayWindow = overlayWindow;
     self.floatingPanelVisible = YES;
 
-    NSLog(@"[XNOWER] ✅ 浮窗已添加到窗口 (frame=%@)", NSStringFromCGRect(self.floatingPanel.frame));
+    NSLog(@"[XNOWER] ✅ 浮窗独立窗口已创建 (frame=%@)", NSStringFromCGRect(self.floatingPanel.frame));
 
     // 入场动画
     self.floatingPanel.transform = CGAffineTransformMakeScale(0.5, 0.5);
@@ -299,6 +326,8 @@ __attribute__((destructor)) static void XNOWERUnload() {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.floatingPanel dismiss];
         self.floatingPanel = nil;
+        self.overlayWindow.hidden = YES;
+        self.overlayWindow = nil;
         self.floatingPanelVisible = NO;
     });
 }

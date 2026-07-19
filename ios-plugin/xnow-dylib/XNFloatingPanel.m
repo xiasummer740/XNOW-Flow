@@ -355,11 +355,8 @@ static const CGFloat kMargin = 12;
         }
     }
 
-    // 操作后自动收起
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.8 * NSEC_PER_SEC),
-                   dispatch_get_main_queue(), ^{
-        [self _togglePanel];
-    });
+    // 不自动收起，让用户操作后面板保持展开
+    // 想关闭点右上角 ✕ 按钮即可
 }
 
 #pragma mark - 动画切换
