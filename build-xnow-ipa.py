@@ -35,7 +35,8 @@ CPU_TYPE_ARM64 = 0x0100000C
 CPU_TYPE_ARM64_32 = 0x0201000C
 CPU_SUBTYPE_ARM64_ALL = 0x00000000
 
-LC_LOAD_DYLIB = 0x0C                # Load a dylib
+LC_LOAD_DYLIB = 0x0C                # Load a dylib (standard)
+LC_LOAD_DYLIB_PRIV = 0x80000018     # Load a dylib (private, BH 补丁使用的格式)
 LC_SEGMENT_64 = 0x19                # 64-bit segment
 LC_SYMTAB = 0x02                    # Symbol table
 LC_DYSYMTAB = 0x0B                 # Dynamic symbol table
@@ -89,7 +90,8 @@ def make_load_dylib_cmd(path_bytes):
     name_off = 24  # dylib_command 中 name 的偏移
     cmd_size = align(name_off + len(npad), 8)
     cmd = bytearray(cmd_size)
-    struct.pack_into('<II', cmd, 0, LC_LOAD_DYLIB, cmd_size)
+    # 使用私有命令类型匹配 BH 补丁的格式，避免与标准 LC_LOAD_DYLIB 混淆
+    struct.pack_into('<II', cmd, 0, LC_LOAD_DYLIB_PRIV, cmd_size)
     struct.pack_into('<IIII', cmd, 8, name_off, 0, 0, 0)  # name_off, timestamp, cur_ver, compat_ver
     cmd[name_off:name_off + len(npad)] = npad
     return bytes(cmd)
@@ -131,10 +133,11 @@ def inject_slice(slice_data, dylib_ref, slice_name="arm64"):
     original_cmds_data = slice_data[32:32 + sizeofcmds]
     remaining_data = slice_data[32 + sizeofcmds:]
 
-    # Step 2: 检查是否已有 xnower.dylib 引用
+    # Step 2: 检查是否已有 xnower.dylib 引用（标准 0x0C 或私有 0x80000018）
     has_xnower = False
     for ct, cs, cmd_data, _ in cmds:
-        if ct != LC_LOAD_DYLIB or cs <= 24:
+        base_ct = ct & ~0x80000000
+        if base_ct not in (0x0C, 0x18) or cs <= 24:
             continue
         noff = struct.unpack_from('<I', cmd_data, 8)[0]
         nend = cmd_data.find(b'\x00', noff, cs)
