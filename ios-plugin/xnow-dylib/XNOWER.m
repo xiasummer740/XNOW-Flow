@@ -88,10 +88,16 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)start {
     NSLog(@"[XNOWER] 🚀 start() 已执行 — dylib 加载成功");
 
-    // 仅显示诊断条，排除所有其他功能（逐步排查崩溃问题）
+    // 诊断条：2秒后显示
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         [self _showDiagnosticBar];
+    });
+
+    // 浮窗：4秒后显示（仅 UI 面板，不启动后台服务）
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [self showFloatingPanel];
     });
 }
 
