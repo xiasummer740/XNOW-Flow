@@ -26,6 +26,8 @@ class DeviceBinding(Base):
     # Tasks
     daily_task_count = Column(Integer, default=0)       # 今日任务数
     current_task = Column(String(255), default=None)    # 当前执行任务
+    # Account
+    current_account_id = Column(Integer, default=0)      # 当前登录的账号 ID
     # Group
     group_name = Column(String(100), default="未分组")  # 所属分组
     tags = Column(Text, default="[]")                   # JSON tags

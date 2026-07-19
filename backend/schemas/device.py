@@ -19,6 +19,7 @@ class DeviceResponse(BaseModel):
     max_accounts: Optional[int] = 20
     daily_task_count: Optional[int] = 0
     current_task: Optional[str] = None
+    current_account_id: Optional[int] = 0
     group_name: Optional[str] = "未分组"
     tags: Optional[List[str]] = []
     api_id: Optional[int] = 0

@@ -59,6 +59,15 @@ class ConnectionManager:
         for did in disconnected:
             await self.disconnect(did)
 
+    async def switch_account(self, device_id: str, aweme_id: str) -> bool:
+        """向设备发送切换账号指令"""
+        return await self.send_command(device_id, {
+            "type": "command",
+            "action": "switch_account",
+            "params": {"aweme_id": aweme_id},
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+
     def get_online_devices(self) -> list:
         return list(self._connections.keys())
 

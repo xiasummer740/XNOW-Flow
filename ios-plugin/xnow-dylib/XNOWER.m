@@ -86,7 +86,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)start {
-    // 诊断：3秒后在主窗口顶部显示红色条（确认代码执行到此处）
+    NSLog(@"[XNOWER] 🚀 start() 已执行 — dylib 加载成功");
+
+    // 诊断：2秒后在主窗口顶部显示红色条（确认代码执行到此处）
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         [self _showDiagnosticBar];
@@ -224,8 +226,12 @@ __attribute__((destructor)) static void XNOWERUnload() {
 // ======== 浮动控制面板 ========
 
 - (void)showFloatingPanel {
-    if (self.floatingPanelVisible) return;
+    if (self.floatingPanelVisible) {
+        NSLog(@"[XNOWER] 浮窗已显示，跳过");
+        return;
+    }
 
+    NSLog(@"[XNOWER] 触发浮窗显示...");
     dispatch_async(dispatch_get_main_queue(), ^{
         [self _tryAttachPanel];
     });
@@ -237,18 +243,22 @@ __attribute__((destructor)) static void XNOWERUnload() {
 
     UIWindow *targetWindow = nil;
 
-    // 策略1: App Delegate 的 window（诊断条用的这个，确定可用）
+    // 策略1: App Delegate 的 window
     id delegate = [UIApplication sharedApplication].delegate;
     if ([delegate respondsToSelector:@selector(window)]) {
         targetWindow = [delegate window];
+        if (targetWindow && !targetWindow.hidden)
+            NSLog(@"[XNOWER] 窗口来源: App Delegate");
     }
 
-    // 策略2: keyWindow（iOS 16+ 可能已废弃但部分情况可用）
+    // 策略2: keyWindow（iOS 16+ 仍可用）
     if (!targetWindow || targetWindow.hidden) {
         targetWindow = [UIApplication sharedApplication].keyWindow;
+        if (targetWindow && !targetWindow.hidden)
+            NSLog(@"[XNOWER] 窗口来源: keyWindow");
     }
 
-    // 策略3: UIScene 任意可见窗口（TikTok UIScene 架构用这个）
+    // 策略3: UIScene 遍历
     if (!targetWindow || targetWindow.hidden) {
         if (@available(iOS 13, *)) {
             for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
@@ -262,6 +272,8 @@ __attribute__((destructor)) static void XNOWERUnload() {
                 }
                 if (targetWindow) break;
             }
+            if (targetWindow && !targetWindow.hidden)
+                NSLog(@"[XNOWER] 窗口来源: UIScene");
         }
     }
 
@@ -269,12 +281,14 @@ __attribute__((destructor)) static void XNOWERUnload() {
         // 还没找到窗口，继续重试（最多20秒）
         static NSInteger retryCount = 0;
         retryCount++;
+        NSLog(@"[XNOWER] 窗口未就绪，重试 %ld/20", (long)retryCount);
         if (retryCount < 20) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
                 [self _tryAttachPanel];
             });
         } else {
+            NSLog(@"[XNOWER] ⚠️ 窗口查找超时（20次重试均失败）");
             retryCount = 0;
         }
         return;
@@ -291,6 +305,8 @@ __attribute__((destructor)) static void XNOWERUnload() {
     [targetWindow bringSubviewToFront:self.floatingPanel];
     self.floatingPanelVisible = YES;
 
+    NSLog(@"[XNOWER] ✅ 浮窗已添加到窗口 (frame=%@)", NSStringFromCGRect(self.floatingPanel.frame));
+
     // 入场动画
     self.floatingPanel.transform = CGAffineTransformMakeScale(0.5, 0.5);
     self.floatingPanel.alpha = 0;
@@ -305,30 +321,31 @@ __attribute__((destructor)) static void XNOWERUnload() {
     } completion:nil];
 }
 
-/// 诊断条：简单红色条，确认代码执行到此处
+/// 诊断条：红色顶部条，确认代码已执行到此（dylib 已加载 + start 已运行）
 - (void)_showDiagnosticBar {
-    UIWindow *w = nil;
-    id delegate = [UIApplication sharedApplication].delegate;
-    if ([delegate respondsToSelector:@selector(window)]) {
-        w = [delegate window];
-    }
-    if (!w) w = [UIApplication sharedApplication].keyWindow;
+    UIWindow *w = XN_ActiveWindow();
     if (!w) return;
 
     // 避免重复添加
     if ([w viewWithTag:99999]) return;
 
-    UIView *redBar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w.bounds.size.width, 60)];
+    CGFloat barHeight = 60;
+    UIView *redBar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, w.bounds.size.width, barHeight)];
     redBar.backgroundColor = [[UIColor redColor] colorWithAlphaComponent:0.85];
     redBar.tag = 99999;
+    redBar.autoresizingMask = UIViewAutoresizingFlexibleWidth;
     [w addSubview:redBar];
+    [w bringSubviewToFront:redBar];
 
     UILabel *label = [[UILabel alloc] initWithFrame:redBar.bounds];
     label.text = @"XNOWER LOADED";
     label.textColor = [UIColor whiteColor];
     label.font = [UIFont boldSystemFontOfSize:20];
     label.textAlignment = NSTextAlignmentCenter;
+    label.autoresizingMask = UIViewAutoresizingFlexibleWidth;
     [redBar addSubview:label];
+
+    NSLog(@"[XNOWER] ✅ 诊断条已显示 — dylib 加载 + start() 执行成功");
 }
 
 - (void)hideFloatingPanel {

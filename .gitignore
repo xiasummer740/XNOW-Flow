@@ -1,0 +1,32 @@
+# IPA 构建产物
+*.ipa
+*.ipa.zip
+
+# 证书目录
+证书_*/
+.credential/
+
+# 注入备份
+*.bak
+*.orig
+
+# 构建脚本（历史版本）
+build-ipa-v*.py
+build-inject-*.py
+build-final*.py
+build-replace-*.py
+build-minimal-*.py
+setup-vps*.py
+fix-dylib.py
+diagnose_dylib.py
+construct-minimal-dylib.py
+
+# 构建产物目录
+build-artifacts/
+build-artifacts-ci/
+raw-analysis/
+
+# 系统文件
+*.exe
+*.png
+*.zip
