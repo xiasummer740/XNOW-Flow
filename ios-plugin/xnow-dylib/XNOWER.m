@@ -229,61 +229,20 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)_tryAttachPanel {
     if (self.floatingPanelVisible) return;
 
-    UIWindow *targetWindow = nil;
-
-    // 策略1: App Delegate 的 window
-    id delegate = [UIApplication sharedApplication].delegate;
-    if ([delegate respondsToSelector:@selector(window)]) {
-        targetWindow = [delegate window];
-        if (targetWindow && !targetWindow.hidden)
-            NSLog(@"[XNOWER] 窗口来源: App Delegate");
-    }
-
-    // 策略2: keyWindow（iOS 16+ 仍可用）
-    if (!targetWindow || targetWindow.hidden) {
-        targetWindow = [UIApplication sharedApplication].keyWindow;
-        if (targetWindow && !targetWindow.hidden)
-            NSLog(@"[XNOWER] 窗口来源: keyWindow");
-    }
-
-    // 策略3: UIScene 遍历
-    if (!targetWindow || targetWindow.hidden) {
-        if (@available(iOS 13, *)) {
-            for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-                if (![scene isKindOfClass:[UIWindowScene class]]) continue;
-                UIWindowScene *ws = (UIWindowScene *)scene;
-                for (UIWindow *w in ws.windows) {
-                    if (!w.hidden && w.rootViewController) {
-                        targetWindow = w;
-                        break;
-                    }
-                }
-                if (targetWindow) break;
-            }
-            if (targetWindow && !targetWindow.hidden)
-                NSLog(@"[XNOWER] 窗口来源: UIScene");
-        }
-    }
-
-    if (!targetWindow || targetWindow.hidden) {
-        // 还没找到窗口，继续重试（最多20秒）
-        static NSInteger retryCount = 0;
-        retryCount++;
-        NSLog(@"[XNOWER] 窗口未就绪，重试 %ld/20", (long)retryCount);
-        if (retryCount < 20) {
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{
-                [self _tryAttachPanel];
-            });
-        } else {
-            NSLog(@"[XNOWER] ⚠️ 窗口查找超时（20次重试均失败）");
-            retryCount = 0;
-        }
+    // 直接用诊断条证明有效的方法找窗口
+    UIWindow *targetWindow = XN_ActiveWindow();
+    if (!targetWindow) {
+        NSLog(@"[XNOWER] 窗口未找到（XN_ActiveWindow 返回 nil）");
         return;
     }
+    NSLog(@"[XNOWER] 找到窗口: %@", targetWindow);
 
     // 创建浮窗，直接加到目标窗口上（和诊断条 _showDiagnosticBar 同样的策略）
     self.floatingPanel = [[XNFloatingPanel alloc] init];
+    if (!self.floatingPanel) {
+        NSLog(@"[XNOWER] ⚠️ 浮窗创建失败（alloc 返回 nil）");
+        return;
+    }
     self.floatingPanel.delegate = self;
     [self.floatingPanel setDeviceId:self.deviceId];
     [self.floatingPanel setServerURL:self.serverURL];
