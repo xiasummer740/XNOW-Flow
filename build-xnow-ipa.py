@@ -142,14 +142,10 @@ def inject_slice(slice_data, dylib_ref, slice_name="arm64"):
             has_xnower = True
             break
 
-    # Step 3: 构建新命令列表（移除 LC_CODE_SIGNATURE，可选的添加 LC_LOAD_DYLIB）
+    # Step 3: 构建新命令列表（保留所有命令，包括 LC_CODE_SIGNATURE，
+    # 让签名工具能直接重签；若未注入则添加 LC_LOAD_DYLIB）
     new_cmds_list = []
-    removed_code_signature = False
     for ct, cs, cmd_data, _ in cmds:
-        base_ct = ct & ~0x80000000
-        if base_ct == LC_CODE_SIGNATURE:
-            removed_code_signature = True
-            continue  # 跳过，之后让签名工具重签
         new_cmds_list.append(cmd_data)
 
     if not has_xnower:
@@ -213,7 +209,7 @@ def inject_slice(slice_data, dylib_ref, slice_name="arm64"):
     orig_cmds_end = 32 + sizeofcmds
     for ct, cs, cmd_data, _ in cmds:
         base_ct = ct & ~0x80000000  # 剥离 LC_REQ_DYLD 私有标志
-        if base_ct in DATAOFF_COMMANDS and base_ct != LC_CODE_SIGNATURE:
+        if base_ct in DATAOFF_COMMANDS:
             for foff in DATAOFF_COMMANDS[base_ct]:
                 val = struct.unpack_from('<I', cmd_data, foff)[0]
                 if val > 0 and val >= orig_cmds_end:
@@ -226,17 +222,10 @@ def inject_slice(slice_data, dylib_ref, slice_name="arm64"):
         off += cs
 
     summary = []
-    if has_xnower and not removed_code_signature:
-        summary.append(f"{slice_name}: 已注入，无变更")
+    if has_xnower:
+        summary.append(f"{slice_name}: 已含 xnower.dylib，无变更")
     else:
-        changes = []
-        if has_xnower:
-            changes.append("含 xnower.dylib")
-        elif not has_xnower:
-            changes.append("已添加 LC_LOAD_DYLIB")
-        if removed_code_signature:
-            changes.append("已移除 LC_CODE_SIGNATURE")
-        summary.append(f"{slice_name}: {', '.join(changes)} ({delta:+d}B)")
+        summary.append(f"{slice_name}: 已添加 LC_LOAD_DYLIB ({delta:+d}B)")
 
     return bytes(new_data), delta, not has_xnower, ' | '.join(summary)
 
