@@ -100,16 +100,32 @@ __attribute__((destructor)) static void XNOWERUnload() {
         [self showFloatingPanel];
     });
 
-    // 后台启动其他服务
-    BOOL enabled = [[NSUserDefaults standardUserDefaults] boolForKey:kXnowConfigKeyEnabled];
-    if (!enabled) {
-        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kXnowConfigKeyEnabled];
+    // 后台启动其他服务（全部包 try/catch，防止任何崩溃传播）
+    @try {
+        BOOL enabled = [[NSUserDefaults standardUserDefaults] boolForKey:kXnowConfigKeyEnabled];
+        if (!enabled) {
+            [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kXnowConfigKeyEnabled];
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] NSUserDefaults 异常: %@", e.reason);
     }
 
     dispatch_async(_workerQueue, ^{
-        [TikTokHooks installHooks];
-        [self.deviceStatus startMonitoring];
-        [self connectWebSocket];
+        @try {
+            [TikTokHooks installHooks];
+        } @catch (NSException *e) {
+            NSLog(@"[XNOWER] ⚠️ TikTokHooks 安装异常: %@", e.reason);
+        }
+        @try {
+            [self.deviceStatus startMonitoring];
+        } @catch (NSException *e) {
+            NSLog(@"[XNOWER] ⚠️ DeviceStatus 异常: %@", e.reason);
+        }
+        @try {
+            [self connectWebSocket];
+        } @catch (NSException *e) {
+            NSLog(@"[XNOWER] ⚠️ WebSocket 连接异常: %@", e.reason);
+        }
     });
 }
 
