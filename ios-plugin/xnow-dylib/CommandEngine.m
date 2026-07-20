@@ -358,10 +358,10 @@ static const CGFloat kAvatarRatioY = 0.82;
         UIView *commentView = [self _findViewWithAccessibilityIdentifier:kAccComment
                                                                   inView:XN_ActiveWindow()];
         if (commentView) {
-            [self _simulateTapAtPoint:[commentView.superview convertPoint:commentView.center toView:nil]];
+            [self _safeTapAtPoint:[commentView.superview convertPoint:commentView.center toView:nil]];
         } else {
             CGSize screen = [UIScreen mainScreen].bounds.size;
-            [self _simulateTapAtPoint:CGPointMake(screen.width * 0.5, screen.height * 0.15)];
+            [self _safeTapAtPoint:CGPointMake(screen.width * 0.5, screen.height * 0.15)];
         }
     });
 
@@ -397,14 +397,14 @@ static const CGFloat kAvatarRatioY = 0.82;
                                                           inView:XN_ActiveWindow()];
         }
         if (sendBtn) {
-            [self _simulateTapAtPoint:[sendBtn.superview convertPoint:sendBtn.center toView:nil]];
+            [self _safeTapAtPoint:[sendBtn.superview convertPoint:sendBtn.center toView:nil]];
         } else {
             // 尝试找到底部工具栏的发发送按钮
             UIButton *btn = [self _findButtonWithAnyLabel:@[@"send", @"Send", @"Post",
                                                              @"发送", @"发布"]
                                                    inView:XN_ActiveWindow()];
             if (btn) {
-                [self _simulateTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
+                [self _safeTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
             }
         }
     });
@@ -419,14 +419,14 @@ static const CGFloat kAvatarRatioY = 0.82;
                                                                   inView:XN_ActiveWindow()];
         if (collectView) {
             // 先点分享
-            [self _simulateTapAtPoint:[collectView.superview convertPoint:collectView.center toView:nil]];
+            [self _safeTapAtPoint:[collectView.superview convertPoint:collectView.center toView:nil]];
         } else {
             // 直接搜索 "save" 或 "bookmark"
             UIButton *btn = [self _findButtonWithAnyLabel:@[@"save", @"Save", @"bookmark",
                                                              @"收藏", @"Add to Favorites"]
                                                    inView:XN_ActiveWindow()];
             if (btn) {
-                [self _simulateTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
+                [self _safeTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
             }
         }
     });
@@ -469,10 +469,10 @@ static const CGFloat kAvatarRatioY = 0.82;
         UIView *avatarView = [self _findViewWithAccessibilityIdentifier:kAccProfileAvatar
                                                                  inView:XN_ActiveWindow()];
         if (avatarView) {
-            [self _simulateTapAtPoint:[avatarView.superview convertPoint:avatarView.center toView:nil]];
+            [self _safeTapAtPoint:[avatarView.superview convertPoint:avatarView.center toView:nil]];
         } else {
             CGSize screen = [UIScreen mainScreen].bounds.size;
-            [self _simulateTapAtPoint:CGPointMake(
+            [self _safeTapAtPoint:CGPointMake(
                 screen.width * kAvatarRatioX,
                 screen.height * kAvatarRatioY)];
         }
@@ -498,7 +498,7 @@ static const CGFloat kAvatarRatioY = 0.82;
                                                              @"粉丝", @"Followers"]
                                                    inView:XN_ActiveWindow()];
         if (fansBtn) {
-            [self _simulateTapAtPoint:[fansBtn.superview convertPoint:fansBtn.center toView:nil]];
+            [self _safeTapAtPoint:[fansBtn.superview convertPoint:fansBtn.center toView:nil]];
         }
     });
 
@@ -549,7 +549,7 @@ static const CGFloat kAvatarRatioY = 0.82;
                                                               @"post", @"Post"]
                                                     inView:XN_ActiveWindow()];
         if (videoBtn) {
-            [self _simulateTapAtPoint:[videoBtn.superview convertPoint:videoBtn.center toView:nil]];
+            [self _safeTapAtPoint:[videoBtn.superview convertPoint:videoBtn.center toView:nil]];
         }
     });
     [NSThread sleepForTimeInterval:1.5];
@@ -755,7 +755,7 @@ static const CGFloat kAvatarRatioY = 0.82;
         UIButton *settingsBtn = [self _findButtonWithAnyLabel:@[@"Settings", @"设置", @"settings"]
                                                        inView:XN_ActiveWindow()];
         if (settingsBtn) {
-            [self _simulateTapAtPoint:[settingsBtn.superview convertPoint:settingsBtn.center toView:nil]];
+            [self _safeTapAtPoint:[settingsBtn.superview convertPoint:settingsBtn.center toView:nil]];
         }
     });
     [NSThread sleepForTimeInterval:1.5];
@@ -765,8 +765,7 @@ static const CGFloat kAvatarRatioY = 0.82;
         // 需要滑到设置页底部
         CGSize screen = [UIScreen mainScreen].bounds.size;
         for (int i = 0; i < 5; i++) {
-            [self _simulateSwipeFrom:CGPointMake(screen.width/2, screen.height*0.7)
-                                  to:CGPointMake(screen.width/2, screen.height*0.3)];
+            [self _safeScrollBy:-screen.height * 0.4];
             [NSThread sleepForTimeInterval:0.3];
         }
     });
@@ -777,7 +776,7 @@ static const CGFloat kAvatarRatioY = 0.82;
         UIButton *logoutBtn = [self _findButtonWithAnyLabel:@[@"Log out", @"退出登录", @"log out", @"Log Out"]
                                                      inView:XN_ActiveWindow()];
         if (logoutBtn) {
-            [self _simulateTapAtPoint:[logoutBtn.superview convertPoint:logoutBtn.center toView:nil]];
+            [self _safeTapAtPoint:[logoutBtn.superview convertPoint:logoutBtn.center toView:nil]];
         }
     });
     [NSThread sleepForTimeInterval:1.0];
@@ -787,7 +786,7 @@ static const CGFloat kAvatarRatioY = 0.82;
         UIButton *confirmBtn = [self _findButtonWithAnyLabel:@[@"Log out", @"退出", @"Confirm", @"确认"]
                                                      inView:XN_ActiveWindow()];
         if (confirmBtn) {
-            [self _simulateTapAtPoint:[confirmBtn.superview convertPoint:confirmBtn.center toView:nil]];
+            [self _safeTapAtPoint:[confirmBtn.superview convertPoint:confirmBtn.center toView:nil]];
         }
     });
     [NSThread sleepForTimeInterval:2.0];
@@ -802,13 +801,13 @@ static const CGFloat kAvatarRatioY = 0.82;
     // 点底部 "我" tab（通常在右下角）
     CGFloat tabY = screen.height - 50;
     CGFloat profileTabX = screen.width * 0.88;
-    [self _simulateTapAtPoint:CGPointMake(profileTabX, tabY)];
+    [self _safeTapAtPoint:CGPointMake(profileTabX, tabY)];
 }
 
 /// 点右上角
 - (void)_tapTopRightCorner {
     CGSize screen = [UIScreen mainScreen].bounds.size;
-    [self _simulateTapAtPoint:CGPointMake(screen.width - 30, 60)];
+    [self _safeTapAtPoint:CGPointMake(screen.width - 30, 60)];
 }
 
 #pragma mark - 智能任务
