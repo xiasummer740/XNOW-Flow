@@ -392,7 +392,5 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
     [self _sendCommandToBackend:@"smart_browse" params:@{@"min_scrolls": @5, @"max_scrolls": @12}];
 }
-    }];
-}
 
 @end
