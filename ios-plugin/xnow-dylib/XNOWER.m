@@ -334,59 +334,64 @@ __attribute__((destructor)) static void XNOWERUnload() {
 
 #pragma mark - XNFloatingPanelDelegate
 
+/// 通过 HTTP API 向后端发送指令
+- (void)_sendCommandToBackend:(NSString *)action params:(NSDictionary *)params {
+    NSString *baseURL = self.serverURL ?: @"http://localhost:8000";
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/api/biz/v2/commands/report/", baseURL]];
+    if (!url) { NSLog(@"[XNOWER] 无效URL"); return; }
+
+    NSDictionary *payload = @{
+        @"action": action ?: @"",
+        @"device_id": self.deviceId ?: @"unknown",
+        @"params": params ?: @{},
+    };
+    NSError *jsonErr = nil;
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:payload options:0 error:&jsonErr];
+    if (!jsonData) { NSLog(@"[XNOWER] JSON错误: %@", jsonErr); return; }
+
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
+    req.HTTPMethod = @"POST";
+    [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    req.HTTPBody = jsonData;
+    req.timeoutInterval = 10;
+
+    [[[NSURLSession sharedSession] dataTaskWithRequest:req
+        completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+            NSLog(@"[XNOWER] 指令 %@: %@", action, e ? [@"失败: " stringByAppendingString:e.localizedDescription] : @"✅ 已发送");
+        }] resume];
+}
+
 - (void)floatingPanelDidTapLike:(XNFloatingPanel *)panel {
-    [self.cmdEngine executeCommand:@{@"action": @"like"} completion:^(NSDictionary *result) {
-        NSLog(@"[XNOWER] Like: %@", result[@"status"]);
-    }];
+    [self _sendCommandToBackend:@"like" params:nil];
 }
 
 - (void)floatingPanelDidTapFollow:(XNFloatingPanel *)panel {
-    [self.cmdEngine executeCommand:@{@"action": @"follow"} completion:^(NSDictionary *result) {
-        NSLog(@"[XNOWER] Follow: %@", result[@"status"]);
-    }];
+    [self _sendCommandToBackend:@"follow" params:nil];
 }
 
 - (void)floatingPanelDidTapScrollDown:(XNFloatingPanel *)panel {
-    [self.cmdEngine executeCommand:@{@"action": @"scroll_down"} completion:^(NSDictionary *result) {
-        NSLog(@"[XNOWER] Scroll: %@", result[@"status"]);
-    }];
+    [self _sendCommandToBackend:@"scroll_down" params:nil];
 }
 
 - (void)floatingPanelDidTapScreenshot:(XNFloatingPanel *)panel {
-    [self.cmdEngine executeCommand:@{@"action": @"screenshot"} completion:^(NSDictionary *result) {
-        NSLog(@"[XNOWER] Screenshot: %@", result[@"status"]);
-    }];
+    [self _sendCommandToBackend:@"screenshot" params:nil];
 }
 
 - (void)floatingPanelDidTapCollectFans:(XNFloatingPanel *)panel {
-    [self.cmdEngine executeCommand:@{@"action": @"collect_fans", @"params": @{@"count": @20}}
-                        completion:nil];
+    [self _sendCommandToBackend:@"collect_fans" params:@{@"count": @20}];
 }
 
 - (void)floatingPanelDidTapCollectVideos:(XNFloatingPanel *)panel {
-    [self.cmdEngine executeCommand:@{@"action": @"collect_videos", @"params": @{@"count": @10}}
-                        completion:nil];
+    [self _sendCommandToBackend:@"collect_videos" params:@{@"count": @10}];
 }
 
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel {
-    // 检测并上报当前账号
-    [[AccountManager sharedManager] detectCurrentAccountWithCompletion:^(NSDictionary *account) {
-        if (account) {
-            [self.wsClient sendMessage:@{
-                @"type": @"account_update",
-                @"data": account
-            }];
-        }
-    }];
+    [self _sendCommandToBackend:@"account_info" params:nil];
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
-    [self.cmdEngine executeCommand:@{
-        @"action": @"smart_browse",
-        @"params": @{@"min_scrolls": @5, @"max_scrolls": @12,
-                     @"min_delay": @3, @"max_delay": @8}
-    } completion:^(NSDictionary *result) {
-        NSLog(@"[XNOWER] Smart browse done: %@", result);
+    [self _sendCommandToBackend:@"smart_browse" params:@{@"min_scrolls": @5, @"max_scrolls": @12}];
+}
     }];
 }
 

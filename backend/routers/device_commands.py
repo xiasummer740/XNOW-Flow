@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, Any, Dict
+import logging
 
-from database import get_db
+from database import get_db, SessionLocal
 from models.device import DeviceBinding
 from models.task import Task
 from models.task_execution import TaskExecution
@@ -88,7 +89,37 @@ async def send_device_command(
         )
 
 
-@router.get("/devices/online/")
+@router.post("/commands/report/")
+async def report_command(data: Dict[str, Any]):
+    """手机端浮窗上报指令（替代 WebSocket，兼容 HTTP）"""
+    action = data.get("action", "unknown")
+    device_id = data.get("device_id", "unknown")
+    params = data.get("params", {})
+    logger.info(f"📱 Phone command [{action}] from {device_id}: {params}")
+    # 记录到 task 表
+    db = SessionLocal()
+    try:
+        task = Task(
+            type=action,
+            name=f"手机指令-{action}",
+            device=device_id,
+            status="success",
+            progress=100,
+        )
+        db.add(task)
+        db.commit()
+    except Exception as e:
+        logger.error(f"记录指令失败: {e}")
+    finally:
+        db.close()
+    return {"status": "ok", "action": action, "device_id": device_id}
+
+
+@router.post("/devices/{device_id}/account-report/")
+async def report_account(device_id: str, data: Dict[str, Any]):
+    """手机端上报当前账号信息"""
+    logger.info(f"📱 Account report from {device_id}: {data}")
+    return {"status": "ok", "device_id": device_id}
 def get_online_devices(
     current_user: User = Depends(get_current_user),
 ):
