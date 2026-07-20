@@ -337,8 +337,14 @@ __attribute__((destructor)) static void XNOWERUnload() {
 /// 通过 HTTP API 向后端发送指令
 - (void)_sendCommandToBackend:(NSString *)action params:(NSDictionary *)params {
     NSString *baseURL = self.serverURL ?: @"http://localhost:8000";
+    // ws:// -> http:// 转换（手机存的 serverURL 可能是 ws:// 开头）
+    baseURL = [baseURL stringByReplacingOccurrencesOfString:@"^ws(s)?://" withString:@"http$1://"
+                                                    options:NSRegularExpressionSearch range:NSMakeRange(0, baseURL.length)];
+    if (![baseURL hasPrefix:@"http"]) {
+        baseURL = [NSString stringWithFormat:@"http://%@", baseURL];
+    }
     NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/api/biz/v2/commands/report/", baseURL]];
-    if (!url) { NSLog(@"[XNOWER] 无效URL"); return; }
+    if (!url) { NSLog(@"[XNOWER] 无效URL: %@", baseURL); return; }
 
     NSDictionary *payload = @{
         @"action": action ?: @"",
@@ -386,7 +392,22 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel {
-    [self _sendCommandToBackend:@"account_info" params:nil];
+    // 通过 API 上报当前账号信息
+    NSString *baseURL = self.serverURL ?: @"http://localhost:8000";
+    baseURL = [baseURL stringByReplacingOccurrencesOfString:@"^ws(s)?://" withString:@"http$1://"
+                                                    options:NSRegularExpressionSearch range:NSMakeRange(0, baseURL.length)];
+    if (![baseURL hasPrefix:@"http"]) baseURL = [NSString stringWithFormat:@"http://%@", baseURL];
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/api/biz/v2/commands/report/", baseURL]];
+    if (!url) return;
+    NSDictionary *payload = @{@"action": @"account_info", @"device_id": self.deviceId ?: @"unknown"};
+    NSData *json = [NSJSONSerialization dataWithJSONObject:payload options:0 error:nil];
+    if (!json) return;
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
+    req.HTTPMethod = @"POST";
+    [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    req.HTTPBody = json;
+    req.timeoutInterval = 10;
+    [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:nil] resume];
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
