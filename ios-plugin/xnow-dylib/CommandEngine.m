@@ -226,141 +226,80 @@ static const CGFloat kAvatarRatioY = 0.82;
     }
 }
 
-#pragma mark - 真实滑动手势模拟
+#pragma mark - 滑动手势（安全版，避免私有API崩溃）
 
-/// 上滑（下一个视频）- 通过 UITouch 模拟完整 swipe 事件
-- (void)_performSwipeUp {
+/// 通过 UIScrollView setContentOffset 实现安全滑动
+- (void)_safeScrollBy:(CGFloat)deltaY {
     dispatch_sync(dispatch_get_main_queue(), ^{
-        CGSize screen = [UIScreen mainScreen].bounds.size;
-        CGFloat midX = screen.width / 2;
-        CGFloat startY = screen.height * 0.65;
-        CGFloat endY = screen.height * 0.35;
+        UIWindow *window = XN_ActiveWindow();
+        if (!window) return;
 
-        [self _simulateSwipeFrom:CGPointMake(midX, startY) to:CGPointMake(midX, endY)];
+        // 找到主要 UIScrollView（TikTok 的 feed 页）
+        __block UIScrollView *feedScroll = nil;
+        [self _findFeedScrollViewInView:window result:&feedScroll];
+        if (feedScroll) {
+            CGPoint offset = feedScroll.contentOffset;
+            offset.y = MAX(0, offset.y + deltaY);
+            [feedScroll setContentOffset:offset animated:YES];
+            NSLog(@"[XNOWER] ScrollView 滑动 %.0fpt", deltaY);
+        } else {
+            // 回退：发 UIScrollView 通知
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"XNOWER_ScrollRequest"
+                                                                object:nil
+                                                              userInfo:@{@"delta": @(deltaY)}];
+            NSLog(@"[XNOWER] 未找到 ScrollView，发送通知");
+        }
     });
+}
+
+/// 递归查找主要 UIScrollView
+- (void)_findFeedScrollViewInView:(UIView *)view result:(UIScrollView **)result {
+    if (*result) return;
+    if ([view isKindOfClass:[UIScrollView class]]) {
+        UIScrollView *sv = (UIScrollView *)view;
+        // 找比较大的 ScrollView（全屏级别），排除小的
+        if (sv.frame.size.width >= [UIScreen mainScreen].bounds.size.width * 0.8 &&
+            sv.frame.size.height >= [UIScreen mainScreen].bounds.size.height * 0.5) {
+            *result = sv;
+            return;
+        }
+    }
+    for (UIView *sub in view.subviews) {
+        [self _findFeedScrollViewInView:sub result:result];
+        if (*result) return;
+    }
+}
+
+/// 上滑（下一个视频）
+- (void)_performSwipeUp {
+    [self _safeScrollBy:-[UIScreen mainScreen].bounds.size.height * 0.6];
 }
 
 /// 下滑（上一个视频）
 - (void)_performSwipeDown {
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        CGSize screen = [UIScreen mainScreen].bounds.size;
-        CGFloat midX = screen.width / 2;
-        CGFloat startY = screen.height * 0.35;
-        CGFloat endY = screen.height * 0.65;
-
-        [self _simulateSwipeFrom:CGPointMake(midX, startY) to:CGPointMake(midX, endY)];
-    });
+    [self _safeScrollBy:[UIScreen mainScreen].bounds.size.height * 0.6];
 }
 
-/// 通过 UITouch + UIEvent 构造真实滑动事件
-- (void)_simulateSwipeFrom:(CGPoint)from to:(CGPoint)to {
+/// 安全模拟点击（通过 sendActionsForControlEvents 或直接调用）
+- (void)_safeTapAtPoint:(CGPoint)point {
     UIWindow *window = XN_ActiveWindow();
     if (!window) return;
-
-    // 找到接收事件的 view
-    UIView *targetView = [window hitTest:from withEvent:nil];
-    if (!targetView) targetView = window;
-
-    // 构建 touch 序列（touch down → move多次 → touch up）
-    // 使用 UIApplication sendEvent 发送
-    UITouch *touch = [[UITouch alloc] init];
-    [touch setValue:@(1) forKeyPath:@"tapCount"];
-    [touch setValue:@(UITouchPhaseBegan) forKeyPath:@"phase"];
-    [touch setValue:[NSValue valueWithCGPoint:from] forKeyPath:@"locationInWindow"];
-    [touch setValue:targetView forKeyPath:@"view"];
-    [touch setValue:@(0) forKeyPath:@"timestamp"];
-
-    // 构造 event
-    UIEvent *event = [self _createTouchEventWithTouch:touch phase:UITouchPhaseBegan];
-    [[UIApplication sharedApplication] sendEvent:event];
-
-    // 模拟滑动中间点
-    CGFloat steps = 8;
-    for (int i = 1; i <= steps; i++) {
-        CGFloat t = i / steps;
-        CGPoint mid = CGPointMake(
-            from.x + (to.x - from.x) * t,
-            from.y + (to.y - from.y) * t
-        );
-        [touch setValue:[NSValue valueWithCGPoint:mid] forKeyPath:@"locationInWindow"];
-        [touch setValue:@(UITouchPhaseMoved) forKeyPath:@"phase"];
-        [touch setValue:@(i * 0.02) forKeyPath:@"timestamp"];
-
-        UIEvent *moveEvent = [self _createTouchEventWithTouch:touch phase:UITouchPhaseMoved];
-        [[UIApplication sharedApplication] sendEvent:moveEvent];
-        [NSThread sleepForTimeInterval:0.015];
-    }
-
-    // Touch Up
-    [touch setValue:[NSValue valueWithCGPoint:to] forKeyPath:@"locationInWindow"];
-    [touch setValue:@(UITouchPhaseEnded) forKeyPath:@"phase"];
-    [touch setValue:@(0.2) forKeyPath:@"timestamp"];
-
-    UIEvent *endEvent = [self _createTouchEventWithTouch:touch phase:UITouchPhaseEnded];
-    [[UIApplication sharedApplication] sendEvent:endEvent];
-}
-
-/// 模拟单次点击
-- (void)_simulateTapAtPoint:(CGPoint)point {
-    UIWindow *window = XN_ActiveWindow();
-    if (!window) return;
-
     UIView *targetView = [window hitTest:point withEvent:nil];
-    if (!targetView) targetView = window;
+    if (!targetView) return;
 
-    // Touch Down
-    UITouch *touch = [[UITouch alloc] init];
-    [touch setValue:@(1) forKeyPath:@"tapCount"];
-    [touch setValue:@(UITouchPhaseBegan) forKeyPath:@"phase"];
-    [touch setValue:[NSValue valueWithCGPoint:point] forKeyPath:@"locationInWindow"];
-    [touch setValue:targetView forKeyPath:@"view"];
-    [touch setValue:@(0) forKeyPath:@"timestamp"];
-
-    UIEvent *downEvent = [self _createTouchEventWithTouch:touch phase:UITouchPhaseBegan];
-    [[UIApplication sharedApplication] sendEvent:downEvent];
-    [NSThread sleepForTimeInterval:0.05];
-
-    // Touch Up
-    [touch setValue:@(UITouchPhaseEnded) forKeyPath:@"phase"];
-    [touch setValue:@(0.1) forKeyPath:@"timestamp"];
-    UIEvent *upEvent = [self _createTouchEventWithTouch:touch phase:UITouchPhaseEnded];
-    [[UIApplication sharedApplication] sendEvent:upEvent];
-
-    // 如果是 UIControl，额外发 action（兼容某些控件）
-    if ([targetView isKindOfClass:[UIControl class]]) {
-        [(UIControl *)targetView sendActionsForControlEvents:UIControlEventTouchUpInside];
-    }
-}
-
-/// 构造 UIEvent（用于模拟触摸）
-- (UIEvent *)_createTouchEventWithTouch:(UITouch *)touch phase:(UITouchPhase)phase {
-    // 使用私有 API 构造 UIEvent
-    UIEvent *event = [self _allocEventWithTouches:@[touch]];
-    return event;
-}
-
-- (UIEvent *)_allocEventWithTouches:(NSArray *)touches {
-    // 通过 runtime 创建 UIEvent（不依赖私有头文件）
-    UIEvent *event = [[UIEvent alloc] init];
-
-    // 设置 event type 为 touches
-    [event setValue:@(UIEventTypeTouches) forKeyPath:@"type"];
-    [event setValue:@(UIEventSubtypeNone) forKeyPath:@"subtype"];
-    [event setValue:@(0) forKeyPath:@"timestamp"];
-
-    // 关联 touches（使用内部方法 _addTouch:forDelayedDelivery:）
-    SEL addTouchSel = NSSelectorFromString(@"_addTouch:forDelayedDelivery:");
-    if ([event respondsToSelector:addTouchSel]) {
-        for (UITouch *touch in touches) {
-            // 使用 performSelector 规避 ARC 警告
-            #pragma clang diagnostic push
-            #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-            [event performSelector:addTouchSel withObject:touch withObject:@(NO)];
-            #pragma clang diagnostic pop
+    @try {
+        // 对于 UIControl，直接触发 action
+        if ([targetView isKindOfClass:[UIControl class]]) {
+            [(UIControl *)targetView sendActionsForControlEvents:UIControlEventTouchUpInside];
+        } else {
+            // 对于普通 UIView，通过响应链传递
+            [targetView touchesBegan:[NSSet set] withEvent:nil];
+            [targetView touchesEnded:[NSSet set] withEvent:nil];
         }
+        NSLog(@"[XNOWER] 点击 (%.0f, %.0f) 完成", point.x, point.y);
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] 点击失败: %@", e.reason);
     }
-
-    return event;
 }
 
 #pragma mark - 点赞
@@ -372,7 +311,7 @@ static const CGFloat kAvatarRatioY = 0.82;
                                                                inView:XN_ActiveWindow()];
         if (likeView) {
             CGPoint center = [likeView.superview convertPoint:likeView.center toView:nil];
-            [self _simulateTapAtPoint:center];
+            [self _safeTapAtPoint:center];
             return;
         }
 
@@ -381,13 +320,13 @@ static const CGFloat kAvatarRatioY = 0.82;
                                                    inView:XN_ActiveWindow()];
         if (likeBtn) {
             CGPoint center = [likeBtn.superview convertPoint:likeBtn.center toView:nil];
-            [self _simulateTapAtPoint:center];
+            [self _safeTapAtPoint:center];
             return;
         }
 
-        // 3. 坐标回退：TikTok 点赞按钮在右侧中间偏下
+        // 3. 坐标回退
         CGSize screen = [UIScreen mainScreen].bounds.size;
-        [self _simulateTapAtPoint:CGPointMake(
+        [self _safeTapAtPoint:CGPointMake(
             screen.width * kLikeBtnRatioX,
             screen.height * kLikeBtnRatioY)];
     });
@@ -397,17 +336,14 @@ static const CGFloat kAvatarRatioY = 0.82;
 
 - (void)_performFollow {
     dispatch_sync(dispatch_get_main_queue(), ^{
-        // 1. 通过 accessibility
         UIButton *btn = [self _findButtonWithAnyLabel:@[@"follow", @"Follow", @"+"]
                                                inView:XN_ActiveWindow()];
         if (btn) {
-            [self _simulateTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
+            [self _safeTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
             return;
         }
-
-        // 2. 坐标回退：右侧偏上（关注按钮在点赞按钮上方）
         CGSize screen = [UIScreen mainScreen].bounds.size;
-        [self _simulateTapAtPoint:CGPointMake(
+        [self _safeTapAtPoint:CGPointMake(
             screen.width * kFollowBtnRatioX,
             screen.height * kFollowBtnRatioY)];
     });

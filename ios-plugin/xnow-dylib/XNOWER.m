@@ -369,18 +369,22 @@ __attribute__((destructor)) static void XNOWERUnload() {
 
 - (void)floatingPanelDidTapLike:(XNFloatingPanel *)panel {
     [self _sendCommandToBackend:@"like" params:nil];
+    @try { [self.cmdEngine executeCommand:@{@"action": @"like"} completion:nil]; } @catch (id e) {}
 }
 
 - (void)floatingPanelDidTapFollow:(XNFloatingPanel *)panel {
     [self _sendCommandToBackend:@"follow" params:nil];
+    @try { [self.cmdEngine executeCommand:@{@"action": @"follow"} completion:nil]; } @catch (id e) {}
 }
 
 - (void)floatingPanelDidTapScrollDown:(XNFloatingPanel *)panel {
     [self _sendCommandToBackend:@"scroll_down" params:nil];
+    @try { [self.cmdEngine executeCommand:@{@"action": @"scroll_down"} completion:nil]; } @catch (id e) {}
 }
 
 - (void)floatingPanelDidTapScreenshot:(XNFloatingPanel *)panel {
     [self _sendCommandToBackend:@"screenshot" params:nil];
+    @try { [self.cmdEngine executeCommand:@{@"action": @"screenshot"} completion:nil]; } @catch (id e) {}
 }
 
 - (void)floatingPanelDidTapCollectFans:(XNFloatingPanel *)panel {
@@ -392,22 +396,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel {
-    // 通过 API 上报当前账号信息
-    NSString *baseURL = self.serverURL ?: @"http://localhost:8000";
-    baseURL = [baseURL stringByReplacingOccurrencesOfString:@"^ws(s)?://" withString:@"http$1://"
-                                                    options:NSRegularExpressionSearch range:NSMakeRange(0, baseURL.length)];
-    if (![baseURL hasPrefix:@"http"]) baseURL = [NSString stringWithFormat:@"http://%@", baseURL];
-    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/api/biz/v2/commands/report/", baseURL]];
-    if (!url) return;
-    NSDictionary *payload = @{@"action": @"account_info", @"device_id": self.deviceId ?: @"unknown"};
-    NSData *json = [NSJSONSerialization dataWithJSONObject:payload options:0 error:nil];
-    if (!json) return;
-    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
-    req.HTTPMethod = @"POST";
-    [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-    req.HTTPBody = json;
-    req.timeoutInterval = 10;
-    [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:nil] resume];
+    [self _sendCommandToBackend:@"account_info" params:nil];
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
