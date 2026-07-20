@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
+from fastapi.responses import FileResponse
+import os, mimetypes
 
 from config import settings
 from database import engine, Base
@@ -33,16 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 提供上传文件访问
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
-
-# 提供静态文件（测试页面等）
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-os.makedirs(static_dir, exist_ok=True)
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
-# 注册路由 (these will be created in later tasks, but we import them now)
+# 注册路由
 from routers import auth, dashboard, devices, accounts, tasks, task_executions
 from routers import timed_tasks, feedback, announcements, reply_templates
 from routers import media, collected_data, execution_stats
@@ -68,3 +60,26 @@ app.include_router(device_commands.router)
 @app.get("/api/health")
 def health():
     return {"status": "ok", "version": "1.1.0"}
+
+# 提供上传文件访问
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+
+# 前端 SPA — 构建产物在 backend/static/
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+os.makedirs(static_dir, exist_ok=True)
+
+# 在所有 API 路由之后注册 SPA 兜底
+# 非 API 路径一律返回 index.html（由前端 router 处理）
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    # API 路径不由这里处理
+    if full_path.startswith("api/") or full_path.startswith("uploads/") or full_path.startswith("ws/"):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
+    file_path = os.path.join(static_dir, full_path)
+    if not os.path.exists(file_path) or os.path.isdir(file_path):
+        file_path = os.path.join(static_dir, "index.html")
+    return FileResponse(file_path)

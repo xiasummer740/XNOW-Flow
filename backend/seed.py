@@ -69,11 +69,11 @@ try:
     # 3. 账号
     if db.query(Account).count() == 0:
         accounts = [
-            Account(nickname="US_creator_01", username="us_creator_01", tk_number="tk_us_001", followers=12500, following_count=320, video_count=45, status="active", country="US"),
-            Account(nickname="JP_vlogger_02", username="jp_vlog_02", tk_number="tk_jp_002", followers=8900, following_count=180, video_count=67, status="active", country="JP"),
-            Account(nickname="UK_tech_03", username="uk_tech_03", tk_number="tk_uk_003", followers=3200, following_count=95, video_count=23, status="risk_control", country="UK"),
-            Account(nickname="BR_dance_04", username="br_dance_04", tk_number="tk_br_004", followers=25000, following_count=450, video_count=120, status="active", country="BR"),
-            Account(nickname="DE_music_05", username="de_music_05", tk_number="tk_de_005", followers=1500, following_count=60, video_count=12, status="banned", country="DE"),
+            Account(nickname="US_creator_01", username="us_creator_01", aweme_number="tk_us_001", followers=12500, following_count=320, video_count=45, status="active", country="US"),
+            Account(nickname="JP_vlogger_02", username="jp_vlog_02", aweme_number="tk_jp_002", followers=8900, following_count=180, video_count=67, status="active", country="JP"),
+            Account(nickname="UK_tech_03", username="uk_tech_03", aweme_number="tk_uk_003", followers=3200, following_count=95, video_count=23, status="risk_control", country="UK"),
+            Account(nickname="BR_dance_04", username="br_dance_04", aweme_number="tk_br_004", followers=25000, following_count=450, video_count=120, status="active", country="BR"),
+            Account(nickname="DE_music_05", username="de_music_05", aweme_number="tk_de_005", followers=1500, following_count=60, video_count=12, status="banned", country="DE"),
         ]
         for a in accounts:
             db.add(a)
