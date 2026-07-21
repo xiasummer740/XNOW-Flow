@@ -376,6 +376,9 @@ def add_dummy_codesig(path):
     """
     给 dylib 添加 LC_CODE_SIGNATURE 结构。
     签名工具（爱思助手）需要看到已有的签名命令才会重签。
+
+    注意: 如果 dylib 原本没有签名，不添加任何签名结构，
+    让签名工具从零创建（空签名占位会导致 dyld 拒载）。
     """
     with open(path, 'rb') as f:
         data = bytearray(f.read())
@@ -393,6 +396,10 @@ def add_dummy_codesig(path):
             print(f"  dylib 已有 LC_CODE_SIGNATURE，跳过")
             return
 
+    print(f"  dylib 无 LC_CODE_SIGNATURE，跳过（让签名工具从零创建）")
+    return
+
+    # 下面的代码已废弃：空签名占位（64 字节全零）会导致 dyld 拒载
     # 构造 LC_CODE_SIGNATURE command (16 字节)
     dummy_blob_size = 64  # 最小可用的 CSSuperBlob
     cur_file_end = len(data)
