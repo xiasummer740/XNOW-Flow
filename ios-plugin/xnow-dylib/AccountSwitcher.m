@@ -110,7 +110,7 @@ static AccountSwitcher *gShared = nil;
 
     dispatch_async(_switchQueue, ^{
         NSInteger total = accountIds.count;
-        NSInteger done = 0;
+        __block NSInteger done = 0;
 
         for (NSNumber *aid in accountIds) {
             __block BOOL blockFinished = NO;
