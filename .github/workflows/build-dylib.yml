@@ -69,7 +69,7 @@ jobs:
           otool -l build/xnower.dylib | grep -E "DYLD_CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE|CHAINED" | head -10 || true
           ls -la build/xnower.dylib
 
-      - name: Convert private cmds + strip + re-sign with Apple codesign
+      - name: Convert private cmds + strip (NO codesign — 避免 LC_CODE_SIGNATURE 阻塞重签名)
         run: |
           cd ios-plugin/xnow-dylib/build
           echo "=== Before ==="
@@ -78,12 +78,8 @@ jobs:
           python3 ../../scripts/convert-private-cmds.py xnower.dylib
           # Strip unnecessary symbols
           strip -S -x xnower.dylib 2>/dev/null || true
-          # Apple codesign 创建标准 LC_CODE_SIGNATURE（比 ldid -M 更规范，爱思助手可识别）
-          codesign -f -s - --generate-adhoc-signature xnower.dylib 2>/dev/null || \
-            codesign -f -s - xnower.dylib 2>/dev/null || \
-            ldid -S -M xnower.dylib 2>/dev/null || true
-          echo "=== After ==="
-          otool -l xnower.dylib | grep -E "CHAINED|EXPORTS_TRIE|DYLD_INFO|PRIVATE|SIGNATURE|CODE" | head -10 || true
+          echo "=== After (verify no CODE_SIGNATURE) ==="
+          otool -l xnower.dylib | grep -E "SIGNATURE|CODE" | head -5 || echo "✅ 无 LC_CODE_SIGNATURE"
 
       - name: Upload dylib artifact
         uses: actions/upload-artifact@v4
