@@ -49,5 +49,6 @@ class Account(Base):
     remark = Column(Text, default="")                     # 备注
     register_time = Column(BigInteger, default=0)         # 注册时间戳
     source = Column(String(50), default="auto")           # 来源
+    credentials = Column(Text, default="{}")              # 登录凭证 JSON: {password, cookies, token}
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
