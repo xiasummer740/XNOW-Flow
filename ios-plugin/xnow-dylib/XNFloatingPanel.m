@@ -362,7 +362,9 @@ static const CGFloat kMargin = 12;
 #pragma mark - 动画切换
 
 - (void)_handleTap {
-    [self _togglePanel];
+    // 展开状态只能点 ✕ 关闭，点击空白保持展开
+    if (_isExpanded) return;
+    [self _expandPanel];
 }
 
 - (void)_togglePanel {
@@ -495,6 +497,9 @@ static const CGFloat kMargin = 12;
     dispatch_async(dispatch_get_main_queue(), ^{
         self.statusDot.backgroundColor = connected ?
             XN_ACCENT_COLOR : [UIColor redColor];
+        // 折叠/展开状态同时更新两个指示点
+        UIView *qualityDot = [self.panelContainer viewWithTag:999];
+        qualityDot.backgroundColor = connected ? XN_ACCENT_COLOR : [UIColor redColor];
     });
 }
 
