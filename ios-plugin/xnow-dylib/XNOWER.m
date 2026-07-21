@@ -152,6 +152,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
                 @"type": @"account_update",
                 @"data": account,
             }];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self.floatingPanel setAccountInfo:account];
+            });
         }
     }];
 }
@@ -314,6 +317,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
     [self.floatingPanel setDeviceId:self.deviceId];
     [self.floatingPanel setServerURL:self.serverURL];
     [self.floatingPanel setConnected:self.isConnected];
+    if ([AccountManager sharedManager].currentAccount) {
+        [self.floatingPanel setAccountInfo:[AccountManager sharedManager].currentAccount];
+    }
 
     [overlayWindow addSubview:self.floatingPanel];
     overlayWindow.hidden = NO;  // 显示窗口
