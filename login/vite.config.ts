@@ -4,15 +4,6 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  build: {
-    rollupOptions: {
-      output: {
-        entryFileNames: 'assets/index.js',
-        chunkFileNames: 'assets/index.js',
-        assetFileNames: 'assets/index.[ext]',
-      },
-    },
-  },
   server: {
     proxy: {
       '/api': {

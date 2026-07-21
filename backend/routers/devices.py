@@ -170,30 +170,9 @@ def batch_dispatch_task(
     """批量下发任务到指定设备"""
     from connection_manager import manager
     from models.task import Task
-    from models.account import Account
     from datetime import datetime
-    import json
 
     devices = db.query(DeviceBinding).filter(DeviceBinding.id.in_(req.device_ids)).all()
-
-    # 批量登录时，获取账号凭证附带到指令参数
-    account_credentials = {}
-    if req.action == "batch_login" and req.params and req.params.get("account_ids"):
-        accounts = db.query(Account).filter(Account.id.in_(req.params["account_ids"])).all()
-        for acc in accounts:
-            try:
-                creds = json.loads(acc.credentials or "{}")
-                account_credentials[str(acc.id)] = {
-                    "id": acc.id,
-                    "nickname": acc.nickname,
-                    "aweme_number": acc.aweme_number,
-                    "password": creds.get("password", ""),
-                    "cookies": creds.get("cookies", ""),
-                    "token": creds.get("token", ""),
-                }
-            except (json.JSONDecodeError, TypeError):
-                pass
-
     sent_count = 0
     for d in devices:
         # Record task
@@ -209,18 +188,14 @@ def batch_dispatch_task(
         # Send via WebSocket if online
         if manager.is_online(d.name):
             import asyncio
-            payload = {
-                "type": "command",
-                "action": req.action,
-                "params": req.params or {},
-                "timestamp": datetime.utcnow().isoformat(),
-            }
-            if req.action == "batch_login" and account_credentials:
-                payload["credentials"] = account_credentials
-
             try:
                 asyncio.get_event_loop().run_until_complete(
-                    manager.send_command(d.name, payload)
+                    manager.send_command(d.name, {
+                        "type": "command",
+                        "action": req.action,
+                        "params": req.params or {},
+                        "timestamp": datetime.utcnow().isoformat(),
+                    })
                 )
                 sent_count += 1
             except:

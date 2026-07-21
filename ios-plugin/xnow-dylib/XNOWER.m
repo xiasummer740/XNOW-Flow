@@ -9,8 +9,6 @@
 #import "TikTokHooks.h"
 #import "XNFloatingPanel.h"
 #import "AccountManager.h"
-#import "AccountPool.h"
-#import "AccountSwitcher.h"
 #import "XNWindowHelper.h"
 #import <objc/runtime.h>
 #import <pthread.h>
@@ -169,53 +167,14 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)wsClient:(WsClient *)client didReceiveMessage:(NSDictionary *)message {
     NSString *type = message[@"type"];
     if ([type isEqualToString:@"command"]) {
-        NSString *action = message[@"action"] ?: @"";
-
-        if ([action isEqualToString:@"batch_login"]) {
-            // === 批量登录 ===
-            NSDictionary *params = message[@"params"] ?: @{};
-            NSArray *accountIds = params[@"account_ids"] ?: @[];
-            NSDictionary *credentials = message[@"credentials"] ?: @{};
-
-            if (accountIds.count == 0) {
-                [client sendMessage:@{@"type": @"result", @"data": @{@"action": @"batch_login", @"status": @"failed", @"message": @"未指定账号"}}];
-                return;
-            }
-
-            // 1. 把下发的凭证存到本地 AccountPool
-            for (NSString *aid in credentials) {
-                NSDictionary *creds = credentials[aid];
-                if (creds) [[AccountPool sharedPool] upsertAccount:creds];
-            }
-
-            // 2. 执行批量登录
-            [[AccountSwitcher sharedSwitcher] batchLogin:accountIds completion:^(NSInteger done, NSInteger total, BOOL final, NSDictionary *result) {
-                [client sendMessage:@{
-                    @"type": @"result",
-                    @"data": @{
-                        @"action": @"batch_login",
-                        @"status": final ? @"complete" : @"progress",
-                        @"done": @(done),
-                        @"total": @(total),
-                        @"last_result": result ?: @{},
-                    }
-                }];
+        // 执行指令
+        __weak typeof(self) weakSelf = self;
+        [self.cmdEngine executeCommand:message completion:^(NSDictionary *result) {
+            [weakSelf.wsClient sendMessage:@{
+                @"type": @"result",
+                @"data": result
             }];
-        } else {
-            // === 普通指令 ===
-            __weak typeof(self) weakSelf = self;
-            [self.cmdEngine executeCommand:message completion:^(NSDictionary *result) {
-                [weakSelf.wsClient sendMessage:@{
-                    @"type": @"result",
-                    @"data": result
-                }];
-            }];
-        }
-    } else if ([type isEqualToString:@"sync_accounts"]) {
-        // 同步账号池到本地
-        NSArray *accounts = message[@"accounts"] ?: @[];
-        [[AccountPool sharedPool] syncAccounts:accounts];
-        [client sendMessage:@{@"type": @"sync_accounts_ack", @"data": @{@"count": @(accounts.count)}}];
+        }];
     } else if ([type isEqualToString:@"ping"]) {
         // 回复 pong
         [client sendMessage:@{@"type": @"pong"}];

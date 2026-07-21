@@ -123,22 +123,6 @@ export default function AccountManagement({ token }: { token: string }) {
   const [editRemark, setEditRemark] = useState('')
   const [savingRemark, setSavingRemark] = useState(false)
 
-  /* ---- Import modal state ---- */
-  const [showImport, setShowImport] = useState(false)
-  const [importTab, setImportTab] = useState<'manual' | 'csv'>('manual')
-  const [importing, setImporting] = useState(false)
-  const [importResult, setImportResult] = useState('')
-
-  // 手动导入表单
-  const [form, setForm] = useState({
-    nickname: '', username: '', aweme_number: '', password: '', cookies: '', token: '',
-    phone: '', email: '', region: '', country: '', remark: '',
-  })
-  const resetForm = () => setForm({
-    nickname: '', username: '', aweme_number: '', password: '', cookies: '', token: '',
-    phone: '', email: '', region: '', country: '', remark: '',
-  })
-
   const headers = { Authorization: `Token ${token}`, 'Content-Type': 'application/json' }
 
   /* ---- Data fetching ---- */
@@ -311,15 +295,6 @@ export default function AccountManagement({ token }: { token: string }) {
           style={{ background: 'rgba(255,255,255,0.25)', color: 'rgba(0,0,0,0.50)' }}
         >
           🔄 刷新
-        </button>
-
-        {/* Import */}
-        <button
-          onClick={() => { resetForm(); setImportResult(''); setShowImport(true) }}
-          className="px-3 py-2 rounded-lg text-xs font-medium cursor-pointer flex items-center gap-1"
-          style={{ background: 'rgba(22,119,255,0.12)', color: '#1677FF' }}
-        >
-          📥 导入账号
         </button>
       </div>
 
@@ -643,115 +618,11 @@ export default function AccountManagement({ token }: { token: string }) {
         </div>
       )}
 
-      {/* ========== 7. Import Modal ========== */}
-      {showImport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
-          style={{ background: 'rgba(0,0,0,0.30)' }}
-          onClick={() => setShowImport(false)}>
-          <div className="xx-card rounded-xl w-full max-w-lg p-6 my-8" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-sm font-medium" style={{ color: 'rgba(0,0,0,0.65)' }}>📥 导入账号</h4>
-              <button onClick={() => setShowImport(false)} className="text-lg cursor-pointer" style={{ color: 'rgba(0,0,0,0.25)' }}>✕</button>
-            </div>
-
-            <div className="flex gap-2 mb-4">
-              {(['manual', 'csv'] as const).map(t => (
-                <button key={t} onClick={() => { setImportTab(t); setImportResult('') }}
-                  className="px-4 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
-                  style={{ background: importTab === t ? '#1677FF' : 'rgba(0,0,0,0.05)', color: importTab === t ? '#fff' : 'rgba(0,0,0,0.50)' }}>
-                  {t === 'manual' ? '手动输入' : 'CSV 批量导入'}
-                </button>
-              ))}
-            </div>
-
-            {importResult && (
-              <div className="mb-4 px-4 py-2 rounded-lg text-xs flex items-center justify-between"
-                style={{ background: importResult.includes('失败') ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.10)', color: importResult.includes('失败') ? '#dc2626' : '#16a34a' }}>
-                {importResult} <button onClick={() => setImportResult('')} className="underline cursor-pointer">✕</button>
-              </div>
-            )}
-
-            {importTab === 'manual' ? (
-              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-                <div className="grid grid-cols-2 gap-3">
-                  <SL label="昵称" v={form.nickname} s={v => setForm(p => ({...p, nickname: v}))} />
-                  <SL label="TK号" v={form.aweme_number} s={v => setForm(p => ({...p, aweme_number: v}))} />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <SL label="用户名" v={form.username} s={v => setForm(p => ({...p, username: v}))} />
-                  <SL label="手机号" v={form.phone} s={v => setForm(p => ({...p, phone: v}))} />
-                </div>
-                <div className="border-t pt-3" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
-                  <p className="text-xs mb-2 font-medium" style={{ color: 'rgba(0,0,0,0.40)' }}>登录凭证（至少填一项可自动登录）</p>
-                  <div className="space-y-2">
-                    <SL label="密码" v={form.password} s={v => setForm(p => ({...p, password: v}))} ph="登录密码" />
-                    <SL label="Cookies" v={form.cookies} s={v => setForm(p => ({...p, cookies: v}))} ph="session/cookies" />
-                    <SL label="Token" v={form.token} s={v => setForm(p => ({...p, token: v}))} ph="登录 token" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <SL label="国家" v={form.country} s={v => setForm(p => ({...p, country: v}))} ph="US" />
-                  <SL label="区域" v={form.region} s={v => setForm(p => ({...p, region: v}))} ph="NA" />
-                </div>
-                <SL label="备注" v={form.remark} s={v => setForm(p => ({...p, remark: v}))} />
-                <button onClick={async () => {
-                  setImporting(true); setImportResult('')
-                  try {
-                    const body: any = { nickname: form.nickname, aweme_number: form.aweme_number, username: form.username, phone: form.phone, country: form.country, region: form.region, remark: form.remark }
-                    if (form.password) body.password = form.password
-                    if (form.cookies) body.cookies = form.cookies
-                    if (form.token) body.token = form.token
-                    const r = await fetch('/api/biz/v2/accounts/import/', { method: 'POST', headers, body: JSON.stringify(body) })
-                    if (!r.ok) throw new Error((await r.text()).slice(0, 80))
-                    setImportResult('✅ 导入成功！'); resetForm(); fetchAccounts()
-                  } catch (e: any) { setImportResult('导入失败: ' + e.message) }
-                  finally { setImporting(false) }
-                }} disabled={importing}
-                  className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer disabled:opacity-50"
-                  style={{ background: '#1677FF', color: '#fff' }}>
-                  {importing ? '导入中...' : '确认导入'}
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-xs" style={{ color: 'rgba(0,0,0,0.40)' }}>
-                  CSV 格式：第一行为列名，支持 nickname, aweme_number, password, cookies, token, phone, country, region 等
-                </p>
-                <input type="file" accept=".csv" onChange={async e => {
-                  const file = e.target.files?.[0]; if (!file) return
-                  setImporting(true); setImportResult('')
-                  try {
-                    const fd = new FormData(); fd.append('file', file)
-                    const r = await fetch('/api/biz/v2/accounts/batch-import/', { method: 'POST', headers: { Authorization: `Token ${token}` }, body: fd })
-                    if (!r.ok) throw new Error((await r.text()).slice(0, 80))
-                    const d = await r.json(); setImportResult(`✅ 成功导入 ${d.count} 个账号`); fetchAccounts()
-                  } catch (e: any) { setImportResult('导入失败: ' + e.message) }
-                  finally { (e.target as any).value = ''; setImporting(false) }
-                }} className="block w-full text-xs" style={{ color: 'rgba(0,0,0,0.55)' }} />
-                {importing && <p className="text-xs" style={{ color: '#1677FF' }}>正在导入...</p>}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
 
-/* ---- Inline small-input component ---- */
-function SL({ label, v, s, ph }: { label: string; v: string; s: (x: string) => void; ph?: string }) {
-  return (
-    <div>
-      <label className="text-xs block mb-1" style={{ color: 'rgba(0,0,0,0.40)' }}>{label}</label>
-      <input type="text" value={v} onChange={e => s(e.target.value)}
-        className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-        style={{ background: 'rgba(255,255,255,0.40)', border: '1px solid rgba(0,0,0,0.12)' }}
-        placeholder={ph || ''} />
-    </div>
-  )
-}
-
-/* ---- Old Row sub-component for modal rows ---- */
+/* ---- Inline sub-component for modal rows ---- */
 
 function Row({ label, value }: { label: string; value: string }) {
   return (

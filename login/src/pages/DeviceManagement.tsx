@@ -68,7 +68,6 @@ const DISPATCH_ACTIONS = [
   { value: 'batch_like',        label: '批量点赞' },
   { value: 'batch_follow',      label: '批量关注' },
   { value: 'batch_comment',     label: '批量评论' },
-  { value: 'batch_login',       label: '批量登录' },
 ]
 
 const PAGE_LIMIT = 20
@@ -118,8 +117,6 @@ export default function DeviceManagement({ token }: { token: string }) {
   /* ---- Dispatch form state ---- */
   const [dispatchAction, setDispatchAction] = useState(DISPATCH_ACTIONS[0].value)
   const [dispatchParams, setDispatchParams] = useState('')
-  const [dispatchAccounts, setDispatchAccounts] = useState<number[]>([])
-  const [availableAccounts, setAvailableAccounts] = useState<any[]>([])
 
   /* ---- Submitting state ---- */
   const [submitting, setSubmitting] = useState('')
@@ -276,10 +273,6 @@ export default function DeviceManagement({ token }: { token: string }) {
       let params: any = {}
       if (dispatchParams) {
         try { params = JSON.parse(dispatchParams) } catch { params = { extra: dispatchParams } }
-      }
-      // 批量登录时附带账号 ID 列表
-      if (dispatchAction === 'batch_login' && dispatchAccounts.length > 0) {
-        params.account_ids = dispatchAccounts
       }
       const r = await fetch('/api/biz/v2/device-bindings/batch/dispatch/', {
         method: 'POST', headers,
@@ -743,7 +736,7 @@ export default function DeviceManagement({ token }: { token: string }) {
                 <label className="text-xs block mb-1" style={{ color: 'rgba(0,0,0,0.40)' }}>操作类型</label>
                 <select
                   value={dispatchAction}
-                  onChange={e => { setDispatchAction(e.target.value); setDispatchAccounts([]) }}
+                  onChange={e => setDispatchAction(e.target.value)}
                   className="w-full rounded-lg px-3 py-2 text-sm outline-none cursor-pointer"
                   style={{ background: 'rgba(255,255,255,0.40)', border: '1px solid rgba(0,0,0,0.12)', color: 'rgba(0,0,0,0.55)' }}
                 >
@@ -752,46 +745,6 @@ export default function DeviceManagement({ token }: { token: string }) {
                   ))}
                 </select>
               </div>
-
-              {dispatchAction === 'batch_login' && (
-                <div>
-                  <label className="text-xs block mb-1" style={{ color: 'rgba(0,0,0,0.40)' }}>
-                    选择下发账号（已选 {dispatchAccounts.length} 个）
-                  </label>
-                  <div className="max-h-40 overflow-y-auto rounded-lg p-2 space-y-1"
-                    style={{ background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.08)' }}>
-                    {availableAccounts.length === 0 ? (
-                      <div className="text-xs py-2 text-center" style={{ color: 'rgba(0,0,0,0.30)' }}>
-                        <button onClick={async () => {
-                          try {
-                            const r = await fetch('/api/biz/v2/accounts/?limit=100', { headers })
-                            const d = await r.json()
-                            setAvailableAccounts(d.results || [])
-                          } catch {}
-                        }} className="underline cursor-pointer" style={{ color: '#1677FF' }}>
-                          点击加载账号列表
-                        </button>
-                      </div>
-                    ) : (
-                      availableAccounts.map((acc: any) => {
-                        const sel = dispatchAccounts.includes(acc.id)
-                        return (
-                          <div key={acc.id} className="flex items-center gap-2 px-2 py-1 rounded cursor-pointer text-xs"
-                            style={{ background: sel ? 'rgba(22,119,255,0.10)' : 'transparent' }}
-                            onClick={() => setDispatchAccounts(prev =>
-                              prev.includes(acc.id) ? prev.filter(x => x !== acc.id) : [...prev, acc.id])}>
-                            <span style={{ color: sel ? '#1677FF' : 'rgba(0,0,0,0.25)' }}>{sel ? '☑' : '○'}</span>
-                            <span style={{ color: 'rgba(0,0,0,0.65)' }}>{acc.nickname || '?'}</span>
-                            <span style={{ color: 'rgba(0,0,0,0.35)' }}>#{acc.aweme_number || ''}</span>
-                            {acc.has_credentials && <span className="px-1 rounded" style={{ background: 'rgba(34,197,94,0.10)', color: '#16a34a', fontSize: 10 }}>凭证</span>}
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
-
               <div>
                 <label className="text-xs block mb-1" style={{ color: 'rgba(0,0,0,0.40)' }}>参数（可选 JSON）</label>
                 <textarea
@@ -805,11 +758,11 @@ export default function DeviceManagement({ token }: { token: string }) {
               </div>
               <button
                 onClick={handleDispatch}
-                disabled={!!submitting || (dispatchAction === 'batch_login' && dispatchAccounts.length === 0)}
+                disabled={!!submitting}
                 className="w-full py-2 rounded-lg text-sm font-medium cursor-pointer disabled:opacity-50"
                 style={{ background: '#1677FF', color: '#fff' }}
               >
-                {submitting === 'dispatch' ? '下发中...' : `确认下发 (${selectedCount} 台设备)`}
+                {submitting === 'dispatch' ? '下发中...' : '确认下发'}
               </button>
             </div>
           </div>
