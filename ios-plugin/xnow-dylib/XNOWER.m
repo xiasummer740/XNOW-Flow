@@ -66,17 +66,23 @@ __attribute__((destructor)) static void XNOWERUnload() {
                                stringForKey:kXnowConfigKeyServerURL];
         _serverURL = savedURL ?: kXnowDefaultServerURL;
 
-        // 生成或恢复设备 ID
-        NSString *savedId = [[NSUserDefaults standardUserDefaults]
-                              stringForKey:kXnowDeviceIdKey];
-        if (savedId) {
-            _deviceId = savedId;
+        // 生成或恢复设备 ID（优先使用绑定时设置的）
+        NSString *bindId = [[NSUserDefaults standardUserDefaults]
+                             stringForKey:@"XN_BindDeviceID"];
+        if (bindId.length > 0) {
+            _deviceId = bindId;
         } else {
-            NSString *vendorID = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
-            NSString *shortID = vendorID.length >= 8 ? [vendorID substringToIndex:8] :
-                                 [NSUUID UUID].UUIDString;
-            _deviceId = [NSString stringWithFormat:@"iphone_%@", shortID];
-            [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
+            NSString *savedId = [[NSUserDefaults standardUserDefaults]
+                                  stringForKey:kXnowDeviceIdKey];
+            if (savedId) {
+                _deviceId = savedId;
+            } else {
+                NSString *vendorID = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
+                NSString *shortID = vendorID.length >= 8 ? [vendorID substringToIndex:8] :
+                                     [NSUUID UUID].UUIDString;
+                _deviceId = [NSString stringWithFormat:@"iphone_%@", shortID];
+                [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
+            }
         }
 
         // 开发者模式（发布时注释掉此行）

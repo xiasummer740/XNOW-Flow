@@ -282,18 +282,20 @@ static NSArray *kCountries;
     desc.numberOfLines = 0; [sv addSubview:desc];
     y += 36;
 
-    // 设备编号
+    // 设备编号（自动填充手机 UUID）
     UILabel *dl = [[UILabel alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 14)];
-    dl.text = @"设备编号"; dl.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold]; dl.textColor = XN_TEXT;
+    dl.text = @"设备编号（自动读取）"; dl.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold]; dl.textColor = XN_TEXT;
     [sv addSubview:dl]; y += 18;
-    UITextField *dF = [self _makeInputFieldWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 36) placeholder:@"输入设备编号"];
+    NSString *vendorID = [[[UIDevice currentDevice] identifierForVendor] UUIDString] ?: @"UNKNOWN";
+    UITextField *dF = [self _makeInputFieldWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 36) placeholder:@"设备编号"];
+    dF.text = vendorID;
     dF.tag = 1003; [sv addSubview:dF]; y += 44;
 
     // APIID
     UILabel *al = [[UILabel alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 14)];
-    al.text = @"APIID"; al.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold]; al.textColor = XN_TEXT;
+    al.text = @"APIID（后台用户中心获取）"; al.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold]; al.textColor = XN_TEXT;
     [sv addSubview:al]; y += 18;
-    UITextField *aF = [self _makeInputFieldWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 36) placeholder:@"输入 APIID"];
+    UITextField *aF = [self _makeInputFieldWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 36) placeholder:@"输入后台分配的 API ID"];
     aF.tag = 1004; [sv addSubview:aF]; y += 44;
 
     UIButton *okBtn = [UIButton buttonWithType:UIButtonTypeSystem];
