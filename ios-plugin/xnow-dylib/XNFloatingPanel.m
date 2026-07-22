@@ -360,12 +360,14 @@ static NSArray *kCountries;
         [[NSUserDefaults standardUserDefaults] setObject:apiId forKey:@"XN_BindAPIID"];
         [[NSUserDefaults standardUserDefaults] synchronize];
         [self addLog:[NSString stringWithFormat:@"绑定成功 设备:%@ API:%@", devId, apiId]];
-        [self _showToast:@"绑定成功，正在连接服务器..."];
-        // 通知 XNOWER 立即生效
-        if ([self.delegate respondsToSelector:@selector(floatingPanelDidTapAccountInfo:)]) {
-            [self.delegate floatingPanelDidTapAccountInfo:self];
-        }
+        [self _showToast:@"绑定成功，连接服务器中..."];
         [self _backToMain];
+        // 延后通知 XNOWER 重连，避免 UI 切换冲突
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidTapAccountInfo:)]) {
+                [self.delegate floatingPanelDidTapAccountInfo:self];
+            }
+        });
     } else {
         [self _showToast:@"请填写设备编号和APIID"];
     }
