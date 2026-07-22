@@ -30,9 +30,14 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="账户已禁用")
 
     token = create_token(user.id)
+    # 自动生成 API ID（如果还没有）
+    if not user.api_id:
+        import uuid
+        user.api_id = uuid.uuid4().hex[:16].upper()
+        db.commit()
     return LoginResponse(
         token=token,
-        user=UserInfo(id=user.id, username=user.username, is_active=user.is_active)
+        user=UserInfo(id=user.id, username=user.username, is_active=user.is_active, api_id=user.api_id)
     )
 
 @router.post("/password/", response_model=MessageResponse)

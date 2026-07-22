@@ -9,6 +9,7 @@ class UserInfo(BaseModel):
     id: int
     username: str
     is_active: bool
+    api_id: Optional[str] = None
 
 class LoginResponse(BaseModel):
     token: str
