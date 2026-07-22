@@ -282,13 +282,11 @@ static NSArray *kCountries;
     desc.numberOfLines = 0; [sv addSubview:desc];
     y += 36;
 
-    // 设备编号（自动填充手机 UUID）
+    // 设备编号（1-20）
     UILabel *dl = [[UILabel alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 14)];
-    dl.text = @"设备编号（自动读取）"; dl.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold]; dl.textColor = XN_TEXT;
+    dl.text = @"设备编号（1-20）"; dl.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold]; dl.textColor = XN_TEXT;
     [sv addSubview:dl]; y += 18;
-    NSString *vendorID = [[[UIDevice currentDevice] identifierForVendor] UUIDString] ?: @"UNKNOWN";
-    UITextField *dF = [self _makeInputFieldWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 36) placeholder:@"设备编号"];
-    dF.text = vendorID;
+    UITextField *dF = [self _makeInputFieldWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 36) placeholder:@"输入 1-20"];
     dF.tag = 1003; [sv addSubview:dF]; y += 44;
 
     // APIID
