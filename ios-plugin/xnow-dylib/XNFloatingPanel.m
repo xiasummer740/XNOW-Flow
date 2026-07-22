@@ -437,9 +437,10 @@ static NSArray *kCountries;
     [self _ensurePanel];
     _isExpanded = YES;
 
-    // 判断显示什么
+    // 判断显示什么：开发者自动跳过激活
     BOOL activated = [[NSUserDefaults standardUserDefaults] boolForKey:@"XN_Activated"];
-    if (activated) {
+    BOOL devMode = [[NSUserDefaults standardUserDefaults] boolForKey:@"XN_DevMode"];
+    if (activated || devMode) {
         [self _showMainMenu];
     } else {
         [self _showActivationView];

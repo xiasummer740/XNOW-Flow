@@ -79,6 +79,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
             [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
         }
 
+        // 开发者模式（发布时注释掉此行）
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"XN_DevMode"];
+
         // 设置账号上报回调
         __weak typeof(self) weakSelf = self;
         [[AccountManager sharedManager] setReportCallback:^(NSDictionary *msg) {
