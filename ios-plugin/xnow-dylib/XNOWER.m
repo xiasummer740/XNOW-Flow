@@ -132,10 +132,20 @@ __attribute__((destructor)) static void XNOWERUnload() {
         [self.wsClient disconnect];
         self.wsClient = nil;
     }
-
     self.wsClient = [[WsClient alloc] init];
     self.wsClient.delegate = self;
-    [self.wsClient connectToServer:self.serverURL deviceId:self.deviceId];
+
+    // 构建完整 URL（含 API ID 查询参数）
+    NSString *baseURL = kXnowDefaultServerURL;
+    NSString *apiId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindAPIID"] ?: @"";
+    NSString *devCode = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindDeviceID"] ?: @"";
+    NSString *fullURL;
+    if (apiId.length > 0) {
+        fullURL = [NSString stringWithFormat:@"%@?api_id=%@&device_code=%@", baseURL, apiId, devCode];
+    } else {
+        fullURL = baseURL;
+    }
+    [self.wsClient connectToServer:fullURL deviceId:self.deviceId];
 }
 
 // ======== WsClientDelegate ========
@@ -479,7 +489,24 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel {
-    [self _sendCommandToBackend:@"account_info" params:nil];
+    // 绑定后重新连接 WebSocket
+    NSString *bindDevId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindDeviceID"];
+    NSString *bindApiId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindAPIID"];
+    if (bindDevId.length > 0) {
+        _deviceId = bindDevId;
+        // 断开旧连接，用新设备 ID 重连
+        [self.wsClient disconnect];
+        self.wsClient = nil;
+        self.isConnected = NO;
+        // 重新连接，API ID 作为参数
+        NSString *url = [NSString stringWithFormat:@"ws://192.129.210.52:8000/ws/%@?api_id=%@&device_code=%@",
+                        bindDevId, bindApiId ?: @"", bindDevId];
+        self.serverURL = url;
+        [self connectWebSocket];
+        [self addLog:@"已用新设备 ID 重新连接服务器"];
+    } else {
+        [self _sendCommandToBackend:@"account_info" params:nil];
+    }
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {

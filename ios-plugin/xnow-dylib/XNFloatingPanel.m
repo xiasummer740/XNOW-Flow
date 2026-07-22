@@ -353,10 +353,15 @@ static NSArray *kCountries;
         [[NSUserDefaults standardUserDefaults] setObject:apiId forKey:@"XN_BindAPIID"];
         [[NSUserDefaults standardUserDefaults] synchronize];
         [self addLog:[NSString stringWithFormat:@"绑定设备:%@ API:%@", devId, apiId]];
-        // 通知代理重新连接WebSocket
+        // 通知代理重新连接WebSocket（传递 API ID）
         if ([self.delegate respondsToSelector:@selector(floatingPanelDidTapAccountInfo:)]) {
             [self.delegate floatingPanelDidTapAccountInfo:self];
         }
+        // 构造 API URL 参数
+        NSString *wsUrl = [NSString stringWithFormat:@"%@?api_id=%@&device_code=%@",
+                          self.panelServerURL ?: @"ws://192.129.210.52:8000", apiId, devId];
+        [[NSUserDefaults standardUserDefaults] setObject:wsUrl forKey:@"XN_WS_URL"];
+        [[NSUserDefaults standardUserDefaults] synchronize];
         [self _showToast:[NSString stringWithFormat:@"绑定成功 设备:%@", devId]];
     } else {
         [self _showToast:@"请填写设备编号和APIID"];

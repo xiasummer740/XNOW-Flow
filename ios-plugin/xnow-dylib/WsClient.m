@@ -42,8 +42,16 @@ static const int kHeartbeatInterval = 30;  // seconds
 }
 
 - (void)_connectInternal {
-    // WebSocket URL: ws://server:port/ws/{deviceId}
-    NSString *wsPath = [NSString stringWithFormat:@"%@/ws/%@", self.serverURL, self.deviceId];
+    // WebSocket URL: ws://server:port/ws/{deviceId}?api_id=xxx
+    // 如果 serverURL 已有查询参数，先提取
+    NSString *baseURL = self.serverURL;
+    NSString *query = @"";
+    NSRange qRange = [baseURL rangeOfString:@"?"];
+    if (qRange.location != NSNotFound) {
+        query = [baseURL substringFromIndex:qRange.location];
+        baseURL = [baseURL substringToIndex:qRange.location];
+    }
+    NSString *wsPath = [NSString stringWithFormat:@"%@/ws/%@%@", baseURL, self.deviceId, query];
 
     // 支持 http→ws / https→wss 自动转换
     NSString *finalURL = wsPath;

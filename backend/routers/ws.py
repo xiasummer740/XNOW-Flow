@@ -61,13 +61,15 @@ def _upsert_account(device_id: str, account_data: dict):
 
 
 @router.websocket("/ws/{device_id}")
-async def device_websocket(device_id: str, ws: WebSocket):
+async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", device_code: str = ""):
     """设备 WebSocket 连接端点
 
     设备（iOS 插件）通过这个端点连接到后端。
     连接后保持长连接，接收指令并回传状态。
+    api_id: 用户 API 标识
+    device_code: 设备编号（1-20）
     """
-    await manager.connect(device_id, ws)
+    await manager.connect(device_id, ws, api_id=api_id, device_code=device_code)
     try:
         while True:
             # 等待设备发来的消息（状态更新、执行结果等）

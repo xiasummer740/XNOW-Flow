@@ -15,16 +15,18 @@ class ConnectionManager:
         self._connections: Dict[str, WebSocket] = {}  # device_id -> websocket
         self._device_info: Dict[str, dict] = {}  # device_id -> metadata
 
-    async def connect(self, device_id: str, websocket: WebSocket):
+    async def connect(self, device_id: str, websocket: WebSocket, api_id: str = "", device_code: str = ""):
         await websocket.accept()
         self._connections[device_id] = websocket
         self._device_info[device_id] = {
             "connected_at": datetime.utcnow().isoformat(),
             "ip": websocket.client.host if websocket.client else "unknown",
+            "api_id": api_id,
+            "device_code": device_code,
         }
-        # Update DB: set device online
-        self._update_device_status(device_id, online=True, status="online")
-        logger.info(f"Device {device_id} connected (total: {len(self._connections)})")
+        # Update DB: set device online + store api_id
+        self._update_device_status(device_id, online=True, status="online", api_id=api_id)
+        logger.info(f"Device {device_id} connected (total: {len(self._connections)}, api_id={api_id})")
 
     async def disconnect(self, device_id: str):
         if device_id in self._connections:
@@ -77,7 +79,7 @@ class ConnectionManager:
     def get_connection_count(self) -> int:
         return len(self._connections)
 
-    def _update_device_status(self, device_id: str, online: bool, status: str):
+    def _update_device_status(self, device_id: str, online: bool, status: str, api_id: str = ""):
         """更新数据库中设备的在线状态，设备不存在时自动注册"""
         try:
             db = SessionLocal()
@@ -87,6 +89,8 @@ class ConnectionManager:
             if device:
                 device.online = online
                 device.status = status
+                if api_id:
+                    device.api_id = api_id
                 if online:
                     device.last_online = datetime.utcnow()
             elif online:
@@ -97,11 +101,12 @@ class ConnectionManager:
                     status=status,
                     online=True,
                     account_count=0,
+                    api_id=api_id,
                     last_online=datetime.utcnow(),
                     app_version="—",
                 )
                 db.add(device)
-                logger.info(f"Device {device_id} auto-registered to database")
+                logger.info(f"Device {device_id} auto-registered to database (api_id={api_id})")
             db.commit()
             db.close()
         except Exception as e:
