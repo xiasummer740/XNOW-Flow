@@ -489,18 +489,23 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel {
-    // 绑定后重新连接 WebSocket（延后执行，避免 UI 阻塞导致闪退）
+    // 绑定后自动重连 WebSocket（无需关闭重启）
     dispatch_async(self.workerQueue, ^{
         NSString *bindDevId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindDeviceID"];
+        NSString *bindApiId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindAPIID"];
         if (bindDevId.length > 0) {
+            [self addLog:[NSString stringWithFormat:@"绑定成功，正在连接服务器(设备%@)...", bindDevId]];
             self->_deviceId = bindDevId;
             [self.wsClient disconnect];
             self.wsClient = nil;
             self->_isConnected = NO;
-            [NSThread sleepForTimeInterval:0.5];
+            [NSThread sleepForTimeInterval:1.5]; // 等旧连接完全关闭
             dispatch_async(dispatch_get_main_queue(), ^{
+                // 先用老方式连一次，让后端注册设备
+                NSString *oldUrl = self.serverURL;
+                self.serverURL = kXnowDefaultServerURL;
                 [self connectWebSocket];
-                [self addLog:@"已用新设备 ID 重新连接服务器"];
+                [self addLog:[NSString stringWithFormat:@"✅ 已连接服务器(设备%@ API:%@)", bindDevId, bindApiId]];
             });
         }
     });
