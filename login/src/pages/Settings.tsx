@@ -40,6 +40,11 @@ export default function Settings({ token, user }: { token: string; user?: any })
             <label className="text-xs text-gray-400 block mb-1">当前账号</label>
             <p className="text-sm text-gray-700">{user?.username || '—'}</p>
           </div>
+          <div className="mb-5 p-3 rounded-lg" style={{ background: 'rgba(108,92,231,0.08)' }}>
+            <label className="text-xs text-gray-400 block mb-1">API ID（绑定手机用）</label>
+            <p className="text-sm font-mono font-bold" style={{ color: '#6c5ce7' }}>{user?.api_id || '—'}</p>
+            <p className="text-xs mt-1" style={{ color: 'rgba(0,0,0,0.35)' }}>每台手机绑定时填入此 API ID 即可关联到您的账号</p>
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
