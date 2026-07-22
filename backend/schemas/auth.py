@@ -15,6 +15,10 @@ class LoginResponse(BaseModel):
     token: str
     user: UserInfo
 
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
 class PasswordChangeRequest(BaseModel):
     old_password: str
     new_password: str

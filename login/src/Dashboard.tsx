@@ -11,6 +11,7 @@ import MediaManagement from './pages/MediaManagement'
 import CollectedData from './pages/CollectedData'
 import Announcements from './pages/Announcements'
 import Feedback from './pages/Feedback'
+import UserManagement from './pages/UserManagement'
 import ReplyConfig from './pages/ReplyConfig'
 import UsageGuide from './pages/UsageGuide'
 import Placeholder from './pages/Placeholder'
@@ -29,7 +30,8 @@ const menuData = [
     { icon: '📢', label: '公告中心' }, { icon: '💬', label: '反馈中心' },
   ]},
   { group: '系统', items: [
-    { icon: '⚙️', label: '回复配置' }, { icon: '🔧', label: '设置中心' },
+    { icon: '👥', label: '用户管理' }, { icon: '⚙️', label: '回复配置' },
+    { icon: '🔧', label: '设置中心' },
   ]},
   { group: '帮助', items: [{ icon: '📖', label: '使用教程' }] },
 ]
@@ -185,6 +187,7 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
                 case '账号管理': return <AccountManagement token={token} />
                 case '批量任务': return <TaskList token={token} />
                 case '任务日志': return <TaskLog token={token} />
+                case '用户管理': return <UserManagement token={token} />
                 case '设置中心': return <Settings token={token} user={user} />
                 case '定时任务': return <TimedTask token={token} />
                 case '执行统计': return <ExecutionStats token={token} />
