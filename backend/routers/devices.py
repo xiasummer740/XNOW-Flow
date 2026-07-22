@@ -33,6 +33,10 @@ def list_devices(
 ):
     query = db.query(DeviceBinding)
 
+    # 普通用户只能看自己的设备
+    if current_user.role != "admin" and current_user.api_id:
+        query = query.filter(DeviceBinding.api_id == current_user.api_id)
+
     # Search by device_id (machine code), name, mobile_no
     if search:
         query = query.filter(

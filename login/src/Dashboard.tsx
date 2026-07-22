@@ -16,25 +16,28 @@ import ReplyConfig from './pages/ReplyConfig'
 import UsageGuide from './pages/UsageGuide'
 import Placeholder from './pages/Placeholder'
 
-const menuData = [
-  { group: '概览', items: [{ icon: '📊', label: '数据概览', active: true }] },
-  { group: '任务', items: [
-    { icon: '📋', label: '批量任务' }, { icon: '⏰', label: '定时任务' },
-    { icon: '📈', label: '执行统计' }, { icon: '📝', label: '任务日志' },
-  ]},
-  { group: '设备账号', items: [
-    { icon: '💻', label: '设备管理' }, { icon: '👤', label: '账号管理' },
-  ]},
-  { group: '内容', items: [
-    { icon: '📦', label: '素材管理' }, { icon: '📡', label: '采集数据' },
-    { icon: '📢', label: '公告中心' }, { icon: '💬', label: '反馈中心' },
-  ]},
-  { group: '系统', items: [
-    { icon: '👥', label: '用户管理' }, { icon: '⚙️', label: '回复配置' },
-    { icon: '🔧', label: '设置中心' },
-  ]},
-  { group: '帮助', items: [{ icon: '📖', label: '使用教程' }] },
-]
+const getMenuData = (role?: string) => {
+  const isAdmin = role === 'admin'
+  return [
+    { group: '概览', items: [{ icon: '📊', label: '数据概览', active: true }] },
+    { group: '任务', items: [
+      { icon: '📋', label: '批量任务' }, { icon: '⏰', label: '定时任务' },
+      { icon: '📈', label: '执行统计' }, { icon: '📝', label: '任务日志' },
+    ]},
+    { group: '设备账号', items: [
+      { icon: '💻', label: '设备管理' }, { icon: '👤', label: '账号管理' },
+    ]},
+    { group: '内容', items: [
+      { icon: '📦', label: '素材管理' }, { icon: '📡', label: '采集数据' },
+      { icon: '📢', label: '公告中心' }, { icon: '💬', label: '反馈中心' },
+    ]},
+    ...(isAdmin ? [{ group: '系统', items: [
+      { icon: '👥', label: '用户管理' }, { icon: '⚙️', label: '回复配置' },
+      { icon: '🔧', label: '设置中心' },
+    ]}] : []),
+    { group: '帮助', items: [{ icon: '📖', label: '使用教程' }] },
+  ]
+}
 
 interface DashboardData {
   device_stats: { total: number; online: number; offline: number; idle: number; executing: number; locked: number }
@@ -112,7 +115,7 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
           <button onClick={() => setMobileMenuOpen(false)} className="ml-auto md:hidden cursor-pointer text-sm" style={{color:'rgba(0,0,0,0.35)'}}>✕</button>
         </div>
         <nav className="flex-1 overflow-y-auto py-2">
-          {menuData.map((group) => (
+          {getMenuData(user?.role).map((group: { group: string; items: { icon: string; label: string }[] }) => (
             <div key={group.group}>
               {!sidebarCollapsed && (
                 <div className="px-4 py-1.5 text-[10px] uppercase tracking-wider" style={{ color: 'rgba(0,0,0,0.30)' }}>{group.group}</div>

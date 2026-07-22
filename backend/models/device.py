@@ -32,7 +32,7 @@ class DeviceBinding(Base):
     group_name = Column(String(100), default="未分组")  # 所属分组
     tags = Column(Text, default="[]")                   # JSON tags
     # Meta
-    api_id = Column(Integer, default=0)                  # API ID
+    api_id = Column(String(20), default="")               # API ID（关联用户）
     last_seen = Column(DateTime(timezone=True))          # 最后在线时间
     last_online = Column(DateTime(timezone=True))        # 向后兼容
     created_at = Column(DateTime(timezone=True), server_default=func.now())

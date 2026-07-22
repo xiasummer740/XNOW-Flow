@@ -8,6 +8,7 @@ class LoginRequest(BaseModel):
 class UserInfo(BaseModel):
     id: int
     username: str
+    role: Optional[str] = "user"
     is_active: bool
     api_id: Optional[str] = None
 

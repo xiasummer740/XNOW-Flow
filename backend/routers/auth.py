@@ -41,9 +41,12 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     if not user.api_id:
         user.api_id = gen_api_id(db)
         db.commit()
+    if not user.role:
+        user.role = "admin" if user.username == "admin" else "user"
+        db.commit()
     return LoginResponse(
         token=token,
-        user=UserInfo(id=user.id, username=user.username, is_active=user.is_active, api_id=user.api_id)
+        user=UserInfo(id=user.id, username=user.username, role=user.role, is_active=user.is_active, api_id=user.api_id)
     )
 
 @router.post("/password/", response_model=MessageResponse)
@@ -71,13 +74,13 @@ def register(req: RegisterRequest, db: Session = Depends(get_db),
     if db.query(User).filter(User.username == req.username).first():
         raise HTTPException(status_code=400, detail="用户名已存在")
     api_id = gen_api_id(db)
-    user = User(username=req.username, password_hash=hash_password(req.password), api_id=api_id)
+    user = User(username=req.username, password_hash=hash_password(req.password), role="user", api_id=api_id)
     db.add(user)
     db.commit()
     db.refresh(user)
     return LoginResponse(
         token=create_token(user.id),
-        user=UserInfo(id=user.id, username=user.username, is_active=user.is_active, api_id=user.api_id)
+        user=UserInfo(id=user.id, username=user.username, role="user", is_active=user.is_active, api_id=user.api_id)
     )
 
 
@@ -88,5 +91,5 @@ def list_users(db: Session = Depends(get_db),
     if current_user.username != "admin":
         raise HTTPException(status_code=403, detail="仅管理员可查看")
     users = db.query(User).all()
-    results = [UserInfo(id=u.id, username=u.username, is_active=u.is_active, api_id=u.api_id) for u in users]
+    results = [UserInfo(id=u.id, username=u.username, role=u.role, is_active=u.is_active, api_id=u.api_id) for u in users]
     return PaginatedResponse(count=len(results), results=results)
