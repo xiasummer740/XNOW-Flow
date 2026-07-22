@@ -39,7 +39,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
     token = create_token(user.id)
     if not user.api_id:
-        user.api_id = gen_api_id(db)
+        user.api_id = "1" if user.username == "admin" else gen_api_id(db)
         db.commit()
     if not user.role:
         user.role = "admin" if user.username == "admin" else "user"
@@ -73,6 +73,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db),
         raise HTTPException(status_code=403, detail="仅管理员可创建用户")
     if db.query(User).filter(User.username == req.username).first():
         raise HTTPException(status_code=400, detail="用户名已存在")
+    if req.username == "admin":
+        raise HTTPException(status_code=400, detail="不能创建 admin 账号")
     api_id = gen_api_id(db)
     user = User(username=req.username, password_hash=hash_password(req.password), role="user", api_id=api_id)
     db.add(user)

@@ -163,7 +163,7 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
               <span className="hidden md:inline">在线</span> {d?.online || 0}
             </span>
             <span className="hidden md:inline" style={{ color: 'rgba(0,0,0,0.15)' }}>|</span>
-            <span className="hidden md:inline">API ID: {user?.id || '—'}</span>
+            <span className="hidden md:inline">API ID: {user?.api_id || '—'}</span>
             <span className="hidden md:inline" style={{ color: 'rgba(0,0,0,0.15)' }}>|</span>
             <span className="hidden md:inline text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>设备: {d?.online || 0} / {d?.total || 0}</span>
             <div className="flex items-center gap-1 md:gap-2 ml-1 md:ml-2 pl-2 md:pl-4 border-l" style={{ borderColor: 'rgba(0,0,0,0.10)' }}>
