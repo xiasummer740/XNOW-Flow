@@ -1,42 +1,48 @@
 // XNFloatingPanel.h
-// XNOW 控制浮窗 - 美观的半透明操作面板
+// XNOW 控制浮窗 v2 — 三标签设计：账号 + 自动任务 + 手动操作
 
 #import <UIKit/UIKit.h>
 
 @class XNFloatingPanel;
 
 @protocol XNFloatingPanelDelegate <NSObject>
+@optional
+// 手动操作
 - (void)floatingPanelDidTapLike:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapFollow:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapScrollDown:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapScreenshot:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapCollectFans:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapCollectVideos:(XNFloatingPanel *)panel;
-@optional
-/// 账号管理
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel;
+// 自动任务开关
+- (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoLike:(BOOL)on;
+- (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoFollow:(BOOL)on;
+- (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoComment:(BOOL)on;
+- (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoBrowse:(BOOL)on;
+// 参数变更
+- (void)floatingPanel:(XNFloatingPanel *)panel didChangeAutoLikeCount:(int)count delay:(int)delay;
+- (void)floatingPanel:(XNFloatingPanel *)panel didChangeAutoFollowCount:(int)count delay:(int)delay;
+- (void)floatingPanel:(XNFloatingPanel *)panel didChangeAutoCommentCount:(int)count delay:(int)delay text:(NSString *)text;
+- (void)floatingPanel:(XNFloatingPanel *)panel didChangeAutoBrowseMinScrolls:(int)min maxScrolls:(int)max minDelay:(int)minDelay maxDelay:(int)maxDelay;
+// 切换账号
+- (void)floatingPanel:(XNFloatingPanel *)panel didSelectAccountId:(NSInteger)accountId;
+- (void)floatingPanel:(XNFloatingPanel *)panel didRequestAccountList;
 @end
 
 @interface XNFloatingPanel : UIView
 
 @property (nonatomic, weak) id<XNFloatingPanelDelegate> delegate;
 
-/// 设置连接状态显示
 - (void)setConnected:(BOOL)connected;
-/// 设置设备 ID
 - (void)setDeviceId:(NSString *)deviceId;
-/// 设置服务器地址
 - (void)setServerURL:(NSString *)serverURL;
-
-/// 设置当前账号信息（昵称、头像URL、粉丝数）
 - (void)setAccountInfo:(NSDictionary *)account;
-/// 设置连接质量
 - (void)setConnectionQuality:(NSString *)quality;
+- (void)setAccountList:(NSArray<NSDictionary *> *)accounts;
 
-/// 显示在指定窗口
 - (void)showInWindow:(UIWindow *)window;
-/// 隐藏
 - (void)dismiss;
 
 @end

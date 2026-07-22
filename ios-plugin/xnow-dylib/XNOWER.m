@@ -218,6 +218,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
         // 同步账号池到本地
         NSArray *accounts = message[@"accounts"] ?: @[];
         [[AccountPool sharedPool] syncAccounts:accounts];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.floatingPanel setAccountList:accounts];
+        });
         [client sendMessage:@{@"type": @"sync_accounts_ack", @"data": @{@"count": @(accounts.count)}}];
     } else if ([type isEqualToString:@"ping"]) {
         // 回复 pong
@@ -448,6 +451,66 @@ __attribute__((destructor)) static void XNOWERUnload() {
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
     [self _sendCommandToBackend:@"smart_browse" params:@{@"min_scrolls": @5, @"max_scrolls": @12}];
+}
+
+#pragma mark - 自动任务开关
+
+- (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoLike:(BOOL)on {
+    [self _sendCommandToBackend:on ? @"auto_like_start" : @"auto_like_stop" params:@{@"enabled": @(on)}];
+}
+
+- (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoFollow:(BOOL)on {
+    [self _sendCommandToBackend:on ? @"auto_follow_start" : @"auto_follow_stop" params:@{@"enabled": @(on)}];
+}
+
+- (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoComment:(BOOL)on {
+    [self _sendCommandToBackend:on ? @"auto_comment_start" : @"auto_comment_stop" params:@{@"enabled": @(on)}];
+}
+
+- (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoBrowse:(BOOL)on {
+    [self _sendCommandToBackend:on ? @"auto_browse_start" : @"auto_browse_stop" params:@{@"enabled": @(on)}];
+}
+
+#pragma mark - 自动任务参数
+
+- (void)floatingPanel:(XNFloatingPanel *)panel didChangeAutoLikeCount:(int)count delay:(int)delay {
+    [self _sendCommandToBackend:@"auto_like_config" params:@{@"count": @(count), @"delay": @(delay)}];
+}
+
+- (void)floatingPanel:(XNFloatingPanel *)panel didChangeAutoFollowCount:(int)count delay:(int)delay {
+    [self _sendCommandToBackend:@"auto_follow_config" params:@{@"count": @(count), @"delay": @(delay)}];
+}
+
+- (void)floatingPanel:(XNFloatingPanel *)panel didChangeAutoCommentCount:(int)count delay:(int)delay text:(NSString *)text {
+    [self _sendCommandToBackend:@"auto_comment_config" params:@{@"count": @(count), @"delay": @(delay), @"text": text ?: @""}];
+}
+
+- (void)floatingPanel:(XNFloatingPanel *)panel didChangeAutoBrowseMinScrolls:(int)min maxScrolls:(int)max minDelay:(int)minDelay maxDelay:(int)maxDelay {
+    [self _sendCommandToBackend:@"auto_browse_config" params:@{@"min_scrolls": @(min), @"max_scrolls": @(max), @"min_delay": @(minDelay), @"max_delay": @(maxDelay)}];
+}
+
+#pragma mark - 切换账号
+
+- (void)floatingPanel:(XNFloatingPanel *)panel didSelectAccountId:(NSInteger)accountId {
+    [[AccountSwitcher sharedSwitcher] switchToAccount:accountId completion:^(BOOL success, NSDictionary *result) {
+        NSLog(@"[XNOWER] 切换账号 %ld: %@", (long)accountId, success ? @"成功" : @"失败");
+        if (self.wsClient) {
+            [self.wsClient sendMessage:@{@"type": @"account_switch_result", @"data": @{
+                @"account_id": @(accountId), @"success": @(success), @"result": result ?: @{},
+            }}];
+        }
+    }];
+}
+
+- (void)floatingPanel:(XNFloatingPanel *)panel didRequestAccountList {
+    // 从本地 AccountPool 获取并展示
+    NSArray *accounts = [[AccountPool sharedPool] allAccounts];
+    [self.floatingPanel setAccountList:accounts];
+
+    // 同时从服务器同步最新账号列表
+    if (self.wsClient) {
+        [self.wsClient sendMessage:@{@"type": @"request_accounts"}];
+    }
 }
 
 @end
