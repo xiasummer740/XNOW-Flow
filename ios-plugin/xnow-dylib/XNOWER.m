@@ -489,32 +489,16 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel {
-    // 绑定后立即生效
-    NSString *bindDevId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindDeviceID"];
-    NSString *bindApiId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindAPIID"];
-    if (bindDevId.length == 0) return;
-
-    // 先安全断开旧连接，避免 NSURLSession 释放时崩溃
-    if (self.wsClient) {
-        [self.wsClient disconnect];
-        self.wsClient = nil;
+    // 绑定信息已存储，通过当前 WebSocket 上报给后端
+    if (self.wsClient && self.isConnected) {
+        NSString *bindDevId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindDeviceID"] ?: @"";
+        NSString *bindApiId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindAPIID"] ?: @"";
+        [self.wsClient sendMessage:@{
+            @"type": @"bind_info",
+            @"data": @{@"device_code": bindDevId, @"api_id": bindApiId}
+        }];
+        [self addLog:[NSString stringWithFormat:@"已上报绑定信息(设备%@ API:%@)", bindDevId, bindApiId]];
     }
-
-    _deviceId = bindDevId;
-    _isConnected = NO;
-
-    // 创建新连接
-    WsClient *newClient = [[WsClient alloc] init];
-    newClient.delegate = self;
-    NSString *url = [NSString stringWithFormat:@"%@?api_id=%@&device_code=%@",
-                     kXnowDefaultServerURL, bindApiId ?: @"", bindDevId];
-    [newClient connectToServer:url deviceId:bindDevId];
-    self.wsClient = newClient;
-
-    // 延迟一点再显示日志，避免 UI 竞争
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-        [self addLog:[NSString stringWithFormat:@"已连接服务器(设备%@)", bindDevId]];
-    });
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {

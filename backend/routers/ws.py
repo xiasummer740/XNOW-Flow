@@ -104,6 +104,28 @@ async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", devi
                     for acc_data in accounts:
                         _upsert_account(device_id, acc_data)
 
+                elif msg_type == "bind_info":
+                    # 设备绑定信息上报
+                    bind_data = msg.get("data", {})
+                    device_code = bind_data.get("device_code", "")
+                    api_id = bind_data.get("api_id", "")
+                    logger.info(f"Device {device_id} bound: code={device_code}, api_id={api_id}")
+                    # 更新设备记录
+                    db = SessionLocal()
+                    try:
+                        dev = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
+                        if dev:
+                            dev.api_id = api_id
+                            if device_code:
+                                dev.name = device_code
+                            db.commit()
+                            logger.info(f"Device {device_id} updated with api_id={api_id}")
+                    except Exception as e:
+                        logger.error(f"bind_info error: {e}")
+                    finally:
+                        db.close()
+                    await ws.send_json({"type": "bind_info_ack", "data": {"status": "ok"}})
+
                 elif msg_type == "ping":
                     # 心跳
                     await ws.send_json({"type": "pong"})
