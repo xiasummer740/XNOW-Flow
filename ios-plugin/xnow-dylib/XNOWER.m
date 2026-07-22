@@ -502,7 +502,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     }];
 }
 
-- (void)floatingPanel:(XNFloatingPanel *)panel didRequestAccountList {
+- (void)floatingPanelDidRequestAccountList:(XNFloatingPanel *)panel {
     // 从本地 AccountPool 获取并展示
     NSArray *accounts = [[AccountPool sharedPool] allAccounts];
     [self.floatingPanel setAccountList:accounts];

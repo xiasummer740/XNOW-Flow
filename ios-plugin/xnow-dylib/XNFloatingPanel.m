@@ -633,7 +633,7 @@ static const CGFloat kMargin = 10;
 
 - (void)_tapSwitchAccount {
     [self _switchToTab:2];
-    [self.delegate floatingPanel:self didRequestAccountList];
+    [self.delegate floatingPanelDidRequestAccountList:self];
 }
 
 #pragma mark - 动画切换

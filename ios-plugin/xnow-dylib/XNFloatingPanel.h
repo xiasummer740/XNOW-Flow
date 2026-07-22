@@ -28,7 +28,7 @@
 - (void)floatingPanel:(XNFloatingPanel *)panel didChangeAutoBrowseMinScrolls:(int)min maxScrolls:(int)max minDelay:(int)minDelay maxDelay:(int)maxDelay;
 // 切换账号
 - (void)floatingPanel:(XNFloatingPanel *)panel didSelectAccountId:(NSInteger)accountId;
-- (void)floatingPanel:(XNFloatingPanel *)panel didRequestAccountList;
+- (void)floatingPanelDidRequestAccountList:(XNFloatingPanel *)panel;
 @end
 
 @interface XNFloatingPanel : UIView
