@@ -100,6 +100,7 @@ static NSArray *kCountries;
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(_handlePan:)];
     [self addGestureRecognizer:pan];
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(_handleTap)];
+    tap.cancelsTouchesInView = NO; // 不拦截表格点击
     [self addGestureRecognizer:tap];
     [self _buildBadge];
 }
@@ -517,8 +518,14 @@ static NSArray *kCountries;
 
     _panelContainer.alpha = 1; _panelContainer.transform = CGAffineTransformMakeScale(0.3, 0.3);
     CGFloat ow = self.frame.size.width, oh = self.frame.size.height;
-    self.frame = self.superview ?
-        CGRectMake(self.frame.origin.x-(kExpandedWidth-ow)/2, self.frame.origin.y-(kExpandedHeight-oh)/2+20, kExpandedWidth, kExpandedHeight) : self.frame;
+    // 展开时向左移动，确保面板完全在屏幕内
+    CGFloat ex = self.frame.origin.x - (kExpandedWidth - ow) + 8; // 右对齐+右边距8
+    if (ex < 8) ex = 8; // 但不要超出左边
+    CGFloat ey = self.frame.origin.y - (kExpandedHeight - oh)/2 + 20;
+    if (ey < 40) ey = 40;
+    CGFloat mh = [UIScreen mainScreen].bounds.size.height;
+    if (ey + kExpandedHeight > mh - 20) ey = mh - kExpandedHeight - 20;
+    self.frame = self.superview ? CGRectMake(ex, ey, kExpandedWidth, kExpandedHeight) : self.frame;
     _badgeButton.alpha = 0;
     [UIView animateWithDuration:0.4 delay:0 usingSpringWithDamping:0.7 initialSpringVelocity:0.8
                         options:UIViewAnimationOptionCurveEaseOut animations:^{
