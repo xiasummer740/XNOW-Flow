@@ -497,7 +497,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
         // 断开旧连接，用新设备 ID 重连
         [self.wsClient disconnect];
         self.wsClient = nil;
-        self.isConnected = NO;
+        _isConnected = NO;
         // 重新连接，API ID 作为参数
         NSString *url = [NSString stringWithFormat:@"ws://192.129.210.52:8000/ws/%@?api_id=%@&device_code=%@",
                         bindDevId, bindApiId ?: @"", bindDevId];
