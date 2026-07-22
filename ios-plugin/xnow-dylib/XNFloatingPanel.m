@@ -276,8 +276,13 @@ static NSArray *kCountries;
 
     CGFloat y = 16;
 
+    // 检查是否已绑定
+    NSString *savedDev = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindDeviceID"];
+    NSString *savedApi = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindAPIID"];
+    BOOL alreadyBound = (savedDev.length > 0 && savedApi.length > 0);
+
     UILabel *desc = [[UILabel alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 30)];
-    desc.text = @"请输入设备编号和 APIID 绑定云控后台";
+    desc.text = alreadyBound ? @"已绑定，可修改设备编号和 APIID" : @"请输入设备编号和 APIID 绑定云控后台";
     desc.font = [UIFont systemFontOfSize:11]; desc.textColor = XN_DIM;
     desc.numberOfLines = 0; [sv addSubview:desc];
     y += 36;
@@ -287,6 +292,7 @@ static NSArray *kCountries;
     dl.text = @"设备编号（1-20）"; dl.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold]; dl.textColor = XN_TEXT;
     [sv addSubview:dl]; y += 18;
     UITextField *dF = [self _makeInputFieldWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 36) placeholder:@"输入 1-20"];
+    if (alreadyBound) dF.text = savedDev;
     dF.tag = 1003; [sv addSubview:dF]; y += 44;
 
     // APIID
@@ -294,6 +300,7 @@ static NSArray *kCountries;
     al.text = @"APIID（后台用户中心获取）"; al.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold]; al.textColor = XN_TEXT;
     [sv addSubview:al]; y += 18;
     UITextField *aF = [self _makeInputFieldWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 36) placeholder:@"输入后台分配的 API ID"];
+    if (alreadyBound) aF.text = savedApi;
     aF.tag = 1004; [sv addSubview:aF]; y += 44;
 
     UIButton *okBtn = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -489,10 +496,11 @@ static NSArray *kCountries;
     }
     if ([action isEqualToString:@"toggle_log"]) {
         // 切换日志显示
-        if (self.logView) {
-            self.logView.hidden = !self.logView.hidden;
-            [self addLog:self.logView.hidden ? @"日志已隐藏" : @"日志已显示"];
+        if (!self.logView && self.superview) {
+            [self _createLogWindow];
         }
+        self.logView.hidden = !self.logView.hidden;
+        [self addLog:self.logView.hidden ? @"日志已隐藏" : @"日志已显示"];
         return;
     }
     // 其他: 采粉/采视频等
@@ -532,6 +540,12 @@ static NSArray *kCountries;
         [self _showMainMenu];
     } else {
         [self _showActivationView];
+    }
+
+    // 自动开启日志窗口
+    [self addLog:@"XNOWER 已启动"];
+    if (!self.logView && self.superview) {
+        [self _createLogWindow];
     }
 
     _panelContainer.alpha = 1; _panelContainer.transform = CGAffineTransformMakeScale(0.3, 0.3);
