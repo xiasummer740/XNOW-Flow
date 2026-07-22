@@ -43,6 +43,9 @@
 - (void)setAccountList:(NSArray<NSDictionary *> *)accounts;
 
 - (void)showInWindow:(UIWindow *)window;
+- (void)show;
 - (void)dismiss;
+- (void)addLog:(NSString *)message;
+- (BOOL)isVisible;
 
 @end

@@ -710,6 +710,15 @@ def main():
             delta = len(result) - len(main_data)
             print(f"  ✅ 写入完成: {len(result):,} bytes ({delta:+,d} bytes)")
 
+        # Step 4b: 复制 logo 到 app 目录（如果有）
+        logo_src = os.path.join(os.path.dirname(args.ipa), "logo.png")
+        if os.path.exists(logo_src):
+            app_dir = os.path.join(tmpdir, "Payload", app_name)
+            shutil.copy2(logo_src, os.path.join(app_dir, "logo.png"))
+            print(f"  ✅ logo.png 已复制 ({os.path.getsize(logo_src)} bytes)")
+        else:
+            print(f"  ℹ️  logo.png 不存在（{logo_src}），跳过")
+
         # Step 5: 打包 IPA
         print()
         print("[5/5] 打包 IPA...")

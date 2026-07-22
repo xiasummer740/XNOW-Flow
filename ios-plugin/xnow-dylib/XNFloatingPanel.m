@@ -42,6 +42,10 @@ static NSArray *kCountries;
 // 激活/绑定输入
 @property (nonatomic, strong) UITextField *inputField;
 @property (nonatomic, strong) UIButton *confirmBtn;
+// 日志窗口
+@property (nonatomic, strong) UIView *logView;
+@property (nonatomic, strong) UITextView *logTextView;
+@property (nonatomic, strong) NSMutableArray *logLines;
 // 数据
 @property (nonatomic, assign) BOOL isConnected;
 @property (nonatomic, copy) NSString *panelDeviceId, *panelServerURL, *selectedCountry;
@@ -58,12 +62,17 @@ static NSArray *kCountries;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
-    self = [super initWithFrame:CGRectMake(16, 120, kCollapsedSize, kCollapsedSize)];
+    // 默认右侧居中
+    CGFloat rightX = [UIScreen mainScreen].bounds.size.width - kCollapsedSize - 12;
+    CGFloat centerY = ([UIScreen mainScreen].bounds.size.height - kCollapsedSize) / 2;
+    self = [super initWithFrame:CGRectMake(rightX, centerY, kCollapsedSize, kCollapsedSize)];
     if (self) {
         _isExpanded = NO; _isConnected = NO;
         _selectedCountry = @"日本";
+        _logLines = [NSMutableArray array];
         [self _buildMainMenu];
         [self _setupViews];
+        [self _setupLogView];
     }
     return self;
 }
@@ -100,10 +109,22 @@ static NSArray *kCountries;
 - (void)_buildBadge {
     _badgeButton = [UIButton buttonWithType:UIButtonTypeCustom];
     _badgeButton.frame = CGRectMake(0, 0, kCollapsedSize, kCollapsedSize);
-    _badgeButton.backgroundColor = XN_BRAND; _badgeButton.layer.cornerRadius = kCollapsedSize/2;
-    _badgeButton.clipsToBounds = YES; _badgeButton.titleLabel.font = [UIFont boldSystemFontOfSize:20];
-    [_badgeButton setTitle:@"X" forState:UIControlStateNormal];
-    [_badgeButton setTitleColor:XN_TEXT forState:UIControlStateNormal];
+    _badgeButton.backgroundColor = UIColor.clearColor;
+    _badgeButton.layer.cornerRadius = kCollapsedSize/2;
+    _badgeButton.clipsToBounds = YES;
+    // Logo 图片
+    NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
+    NSString *logoPath = [bundlePath stringByAppendingPathComponent:@"logo.png"];
+    UIImage *logoImg = [UIImage imageWithContentsOfFile:logoPath];
+    if (logoImg) {
+        [_badgeButton setImage:logoImg forState:UIControlStateNormal];
+        _badgeButton.imageView.contentMode = UIViewContentModeScaleAspectFill;
+    } else {
+        _badgeButton.backgroundColor = XN_BRAND;
+        [_badgeButton setTitle:@"X" forState:UIControlStateNormal];
+        [_badgeButton setTitleColor:XN_TEXT forState:UIControlStateNormal];
+        _badgeButton.titleLabel.font = [UIFont boldSystemFontOfSize:20];
+    }
     [_badgeButton addTarget:self action:@selector(_handleTap) forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:_badgeButton];
     _statusDot = [[UIView alloc] initWithFrame:CGRectMake(kCollapsedSize-14, kCollapsedSize-14, 12, 12)];
@@ -358,7 +379,8 @@ static NSArray *kCountries;
 - (UITableViewCell *)tableView:(UITableView *)tv cellForRowAtIndexPath:(NSIndexPath *)ip {
     UITableViewCell *cell = [tv dequeueReusableCellWithIdentifier:@"cell" forIndexPath:ip];
     cell.backgroundColor = UIColor.clearColor; cell.textLabel.textColor = XN_TEXT;
-    cell.textLabel.font = [UIFont systemFontOfSize:13];
+    cell.textLabel.font = [UIFont systemFontOfSize:14];
+    cell.textLabel.textAlignment = NSTextAlignmentCenter;
     cell.selectionStyle = UITableViewCellSelectionStyleGray;
     cell.accessoryView = nil; cell.accessoryType = UITableViewCellAccessoryNone;
 
@@ -413,15 +435,62 @@ static NSArray *kCountries;
         _viewMode = 3; _currentSubMenu = @"account_mgmt"; _backBtn.hidden = NO;
         _titleLabel.text = @"账号管理"; [_menuTable reloadData]; return;
     }
-    if ([action isEqualToString:@"bind_server"]) {
-        [self _showBindForm]; return;
-    }
+    if ([action isEqualToString:@"bind_server"]) { [self _showBindForm]; return; }
     if ([action isEqualToString:@"copy_device_id"]) {
         [UIPasteboard generalPasteboard].string = _panelDeviceId ?: @"";
-        [self _showToast:[NSString stringWithFormat:@"已复制: %@", _panelDeviceId?:@""]]; return;
+        [self _showToast:[NSString stringWithFormat:@"已复制: %@", _panelDeviceId?:@""]];
+        [self addLog:[NSString stringWithFormat:@"已复制设备码: %@", _panelDeviceId?:@""]];
+        return;
+    }
+    // 映射到 CommandEngine 动作
+    if ([action isEqualToString:@"clear_data"]) {
+        [self addLog:@"清理数据中..."];
+        [self.delegate floatingPanelDidTapScrollDown:self];
+        return;
     }
     if ([action isEqualToString:@"disconnect"]) {
-        [self.delegate floatingPanelDidTapScrollDown:self]; return;
+        [self addLog:@"断开服务器连接"];
+        [self.delegate floatingPanelDidTapScrollDown:self];
+        return;
+    }
+    if ([action isEqualToString:@"collect_likes"]) {
+        [self addLog:@"开始采集点赞..."];
+        [self.delegate floatingPanelDidTapCollectFans:self];
+        return;
+    }
+    if ([action isEqualToString:@"nurture"]) {
+        [self addLog:@"启动养号任务..."];
+        [self.delegate floatingPanelDidTapSmartBrowse:self];
+        return;
+    }
+    if ([action isEqualToString:@"dl_video"]) {
+        [self addLog:@"下载无水印视频..."];
+        [self.delegate floatingPanelDidTapSmartBrowse:self];
+        return;
+    }
+    if ([action isEqualToString:@"toggle_log"]) {
+        // 切换日志显示
+        if (self.logView) {
+            self.logView.hidden = !self.logView.hidden;
+            [self addLog:self.logView.hidden ? @"日志已隐藏" : @"日志已显示"];
+        }
+        return;
+    }
+    // 其他: 采粉/采视频等
+    if ([action isEqualToString:@"collect_comment_users"] || [action isEqualToString:@"collect_all_fans"] || [action isEqualToString:@"collect_live_fans"]) {
+        [self addLog:[NSString stringWithFormat:@"开始%@...", action]];
+        [self.delegate floatingPanelDidTapCollectFans:self];
+        return;
+    }
+    if ([action isEqualToString:@"auto_comment"]) {
+        [self addLog:@"启动自动评论点赞..."];
+        [self.delegate floatingPanelDidTapSmartBrowse:self];
+        return;
+    }
+    // 翻译功能预留
+    if ([action isEqualToString:@"toggle_translate"] || [action isEqualToString:@"set_translate_lang"]) {
+        [self addLog:[NSString stringWithFormat:@"翻译功能待实现"]];
+        return;
     }
     [self _showToast:[NSString stringWithFormat:@"执行: %@", action]];
 }
@@ -501,6 +570,81 @@ static NSArray *kCountries;
 - (void)setServerURL:(NSString *)serverURL { _panelServerURL = serverURL; }
 - (void)setAccountInfo:(NSDictionary *)account {}
 - (void)setConnectionQuality:(NSString *)quality {}
+#pragma mark - 日志窗口
+
+- (void)_setupLogView {
+    CGFloat logW = 240, logH = 120;
+    CGFloat logX = 8;
+    // 注意：日志窗口在 showInWindow 时添加到窗口，不添加到这里
+}
+
+- (void)addLog:(NSString *)message {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSString *ts = @"";
+        NSDateFormatter *df = [[NSDateFormatter alloc] init];
+        df.dateFormat = @"HH:mm:ss";
+        ts = [df stringFromDate:[NSDate date]];
+        NSString *line = [NSString stringWithFormat:@"[%@] %@", ts, message];
+        [self.logLines addObject:line];
+        if (self.logLines.count > 20) {
+            [self.logLines removeObjectAtIndex:0];
+        }
+        // 更新日志视图
+        if (self.logTextView) {
+            self.logTextView.text = [self.logLines componentsJoinedByString:@"\n"];
+            [self.logTextView scrollRangeToVisible:NSMakeRange(self.logTextView.text.length, 0)];
+        }
+        // 如果没有日志窗口，创建一个透明浮窗
+        if (!self.logView && self.superview) {
+            [self _createLogWindow];
+        }
+    });
+}
+
+- (void)_createLogWindow {
+    CGFloat logW = 220, logH = 140;
+    self.logView = [[UIView alloc] initWithFrame:CGRectMake(8, 60, logW, logH)];
+    self.logView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.35];
+    self.logView.layer.cornerRadius = 8;
+    self.logView.userInteractionEnabled = NO;
+    [self.superview addSubview:self.logView];
+
+    self.logTextView = [[UITextView alloc] initWithFrame:CGRectMake(4, 4, logW-8, logH-8)];
+    self.logTextView.backgroundColor = UIColor.clearColor;
+    self.logTextView.textColor = [UIColor colorWithWhite:1 alpha:0.7];
+    self.logTextView.font = [UIFont systemFontOfSize:9];
+    self.logTextView.editable = NO;
+    self.logTextView.scrollEnabled = YES;
+    self.logTextView.userInteractionEnabled = NO;
+    self.logTextView.text = @"";
+    [self.logView addSubview:self.logTextView];
+}
+
+#pragma mark - 显示/隐藏
+
+- (void)show {
+    // 重新添加到窗口
+    UIWindow *keyWin = nil;
+    if (@available(iOS 13, *)) {
+        for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
+            if ([s isKindOfClass:UIWindowScene.class]) {
+                UIWindowScene *ws = (UIWindowScene *)s;
+                keyWin = ws.keyWindow ?: ws.windows.firstObject;
+                if (keyWin) break;
+            }
+        }
+    }
+    if (!keyWin) keyWin = UIApplication.sharedApplication.keyWindow;
+    if (keyWin) {
+        [keyWin addSubview:self];
+        [self showInWindow:keyWin];
+    }
+}
+
+- (BOOL)isVisible {
+    return self.superview != nil && self.alpha > 0;
+}
+
 - (void)setAccountList:(NSArray<NSDictionary *> *)accounts {
     if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"account_mgmt"]) {
         dispatch_async(dispatch_get_main_queue(), ^{ [self->_menuTable reloadData]; });

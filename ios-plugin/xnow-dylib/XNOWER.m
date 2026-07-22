@@ -94,16 +94,22 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)start {
     NSLog(@"[XNOWER] 🚀 start() 已执行 — dylib 加载成功");
 
-    // 诊断条：2秒后显示
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [self _showDiagnosticBar];
-    });
-
-    // 浮窗：4秒后显示（仅 UI 面板，不启动后台服务）
+    // 浮窗：4秒后显示
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         [self showFloatingPanel];
+    });
+}
+
+/// 添加操作日志（显示在左上角透明日志窗口）
+- (void)addLog:(NSString *)format, ... {
+    va_list args;
+    va_start(args, format);
+    NSString *msg = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
+    NSLog(@"[XNOWER][Log] %@", msg);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.floatingPanel addLog:msg];
     });
 }
 
@@ -379,10 +385,28 @@ __attribute__((destructor)) static void XNOWERUnload() {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.floatingPanel dismiss];
         self.floatingPanel = nil;
-        self.overlayWindow.hidden = YES;
-        self.overlayWindow = nil;
+        // 保留 overlayWindow 用于监听摇一摇
+        if (self.overlayWindow) {
+            self.overlayWindow.hidden = NO;
+            self.overlayWindow.windowLevel = UIWindowLevelStatusBar + 101;
+            self.overlayWindow.backgroundColor = [UIColor clearColor];
+            self.overlayWindow.userInteractionEnabled = NO;
+            // 加一个透明视图接收摇一摇事件
+            UIView *shakeView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 1, 1)];
+            shakeView.backgroundColor = UIColor.clearColor;
+            [self.overlayWindow addSubview:shakeView];
+            [shakeView becomeFirstResponder];
+        }
         self.floatingPanelVisible = NO;
     });
+}
+
+/// 摇一摇恢复显示浮窗
+- (void)motionBegan:(UIEventSubtype)motion withEvent:(UIEvent *)event {
+    if (motion == UIEventSubtypeMotionShake) {
+        NSLog(@"[XNOWER] 摇一摇 → 恢复浮窗");
+        [self showFloatingPanel];
+    }
 }
 
 #pragma mark - XNFloatingPanelDelegate
