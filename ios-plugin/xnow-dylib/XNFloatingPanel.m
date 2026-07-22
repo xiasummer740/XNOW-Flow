@@ -360,7 +360,11 @@ static NSArray *kCountries;
         [[NSUserDefaults standardUserDefaults] setObject:apiId forKey:@"XN_BindAPIID"];
         [[NSUserDefaults standardUserDefaults] synchronize];
         [self addLog:[NSString stringWithFormat:@"绑定成功 设备:%@ API:%@", devId, apiId]];
-        [self _showToast:@"绑定成功，重启 TikTok 生效"];
+        [self _showToast:@"绑定成功，正在连接服务器..."];
+        // 通知 XNOWER 立即生效
+        if ([self.delegate respondsToSelector:@selector(floatingPanelDidTapAccountInfo:)]) {
+            [self.delegate floatingPanelDidTapAccountInfo:self];
+        }
         [self _backToMain];
     } else {
         [self _showToast:@"请填写设备编号和APIID"];

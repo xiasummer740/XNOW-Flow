@@ -489,8 +489,24 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel {
-    // 绑定信息已存储，下次启动 TikTok 自动连接
-    [self addLog:@"绑定信息已保存，重启 TikTok 后生效"];
+    // 绑定后立即生效：用新设备 ID 创建新连接
+    NSString *bindDevId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindDeviceID"];
+    NSString *bindApiId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindAPIID"];
+    if (bindDevId.length == 0) return;
+
+    _deviceId = bindDevId;
+    _isConnected = NO;
+
+    // 直接创建新 WsClient（旧连接自动释放，不触发回调）
+    WsClient *newClient = [[WsClient alloc] init];
+    newClient.delegate = self;
+    NSString *url = [NSString stringWithFormat:@"%@?api_id=%@&device_code=%@",
+                     kXnowDefaultServerURL, bindApiId ?: @"", bindDevId];
+    [newClient connectToServer:url deviceId:bindDevId];
+
+    // 替换引用（旧 WsClient 无强引用自动释放）
+    self.wsClient = newClient;
+    [self addLog:[NSString stringWithFormat:@"已连接服务器(设备%@)", bindDevId]];
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
