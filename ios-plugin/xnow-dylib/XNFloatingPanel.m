@@ -56,16 +56,24 @@ static NSArray *kCountries;
 @implementation XNFloatingPanel
 
 + (void)initialize {
-    kCountries = @[@"日本", @"美国", @"韩国", @"越南", @"泰国", @"新加坡",
-                   @"迪拜", @"马来西亚", @"巴西", @"印度尼西亚", @"澳大利亚",
-                   @"意大利", @"墨西哥", @"丹麦", @"台湾", @"英国", @"菲律宾"];
+    kCountries = @[@"美国", @"日本", @"英国", @"韩国", @"越南", @"泰国",
+                   @"新加坡", @"迪拜", @"马来西亚", @"巴西", @"印度尼西亚",
+                   @"澳大利亚", @"意大利", @"墨西哥", @"丹麦", @"台湾", @"菲律宾",
+                   @"德国", @"法国", @"西班牙", @"荷兰", @"瑞士", @"瑞典",
+                   @"挪威", @"芬兰", @"比利时", @"奥地利", @"爱尔兰", @"葡萄牙",
+                   @"希腊", @"土耳其", @"沙特", @"卡塔尔", @"阿曼", @"科威特",
+                   @"印度", @"巴基斯坦", @"孟加拉", @"斯里兰卡", @"尼泊尔",
+                   @"加拿大", @"墨西哥", @"阿根廷", @"智利", @"哥伦比亚",
+                   @"秘鲁", @"南非", @"埃及", @"尼日利亚", @"肯尼亚",
+                   @"俄罗斯", @"乌克兰", @"波兰", @"捷克", @"匈牙利",
+                   @"罗马尼亚", @"保加利亚", @"克罗地亚", @"塞尔维亚"];
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
-    // 默认右侧居中
+    // 默认右上角（状态栏下方两指位置）
     CGFloat rightX = [UIScreen mainScreen].bounds.size.width - kCollapsedSize - 12;
-    CGFloat centerY = ([UIScreen mainScreen].bounds.size.height - kCollapsedSize) / 2;
-    self = [super initWithFrame:CGRectMake(rightX, centerY, kCollapsedSize, kCollapsedSize)];
+    CGFloat topY = 120;
+    self = [super initWithFrame:CGRectMake(rightX, topY, kCollapsedSize, kCollapsedSize)];
     if (self) {
         _isExpanded = NO; _isConnected = NO;
         _selectedCountry = @"日本";
@@ -344,7 +352,12 @@ static NSArray *kCountries;
         [[NSUserDefaults standardUserDefaults] setObject:devId forKey:@"XN_BindDeviceID"];
         [[NSUserDefaults standardUserDefaults] setObject:apiId forKey:@"XN_BindAPIID"];
         [[NSUserDefaults standardUserDefaults] synchronize];
-        [self _showToast:[NSString stringWithFormat:@"绑定成功 设备:%@ API:%@", devId, apiId]];
+        [self addLog:[NSString stringWithFormat:@"绑定设备:%@ API:%@", devId, apiId]];
+        // 通知代理重新连接WebSocket
+        if ([self.delegate respondsToSelector:@selector(floatingPanelDidTapAccountInfo:)]) {
+            [self.delegate floatingPanelDidTapAccountInfo:self];
+        }
+        [self _showToast:[NSString stringWithFormat:@"绑定成功 设备:%@", devId]];
     } else {
         [self _showToast:@"请填写设备编号和APIID"];
     }
