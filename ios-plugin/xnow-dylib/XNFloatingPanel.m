@@ -444,7 +444,39 @@ static NSArray *kCountries;
         _selectedCountry = kCountries[ip.row];
         [_menuTable reloadData];
         [self _showToast:[NSString stringWithFormat:@"国家已切换: %@", _selectedCountry]];
+    } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"account_mgmt"]) {
+        NSArray *accounts = [[AccountPool sharedPool] allAccounts];
+        if (ip.row >= accounts.count) return;
+        NSDictionary *acc = accounts[ip.row];
+        [self _promptSwitchAccount:acc];
     }
+}
+
+/// 弹出账号操作菜单 — 确认切换到所选账号
+- (void)_promptSwitchAccount:(NSDictionary *)acc {
+    NSString *nickname = acc[@"nickname"] ?: @"未知";
+    NSInteger accId = [acc[@"id"] integerValue];
+    NSString *msg = [NSString stringWithFormat:@"切换到账号：%@", nickname];
+
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:@"切换账号" message:msg
+        preferredStyle:UIAlertControllerStyleActionSheet];
+
+    [alert addAction:[UIAlertAction actionWithTitle:@"切换到此账号"
+        style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            if ([self.delegate respondsToSelector:@selector(floatingPanel:didSelectAccountId:)]) {
+                [self.delegate floatingPanel:self didSelectAccountId:accId];
+            }
+            [self _showToast:[NSString stringWithFormat:@"正在切换到 %@…", nickname]];
+            [self addLog:[NSString stringWithFormat:@"切换账号 → %@ (ID:%ld)", nickname, (long)accId]];
+        }]];
+
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+
+    // 从顶层 VC 弹出
+    UIViewController *topVC = UIApplication.sharedApplication.keyWindow.rootViewController;
+    while (topVC.presentedViewController) topVC = topVC.presentedViewController;
+    [topVC presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)_handleMenuAction:(NSString *)action {
@@ -455,7 +487,12 @@ static NSArray *kCountries;
     }
     if ([action isEqualToString:@"account_mgmt"]) {
         _viewMode = 3; _currentSubMenu = @"account_mgmt"; _backBtn.hidden = NO;
-        _titleLabel.text = @"账号管理"; [_menuTable reloadData]; return;
+        _titleLabel.text = @"账号管理"; [_menuTable reloadData];
+        // 请求后端下发账号列表
+        if ([self.delegate respondsToSelector:@selector(floatingPanelDidRequestAccountList:)]) {
+            [self.delegate floatingPanelDidRequestAccountList:self];
+        }
+        return;
     }
     if ([action isEqualToString:@"bind_server"]) { [self _showBindForm]; return; }
     if ([action isEqualToString:@"copy_device_id"]) {
