@@ -100,13 +100,13 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)start {
     NSLog(@"[XNOWER] 🚀 start() 已执行 — dylib 加载成功");
 
-    // 连接 WebSocket 服务器（如果已绑定则带 API ID 参数）
-    [self connectWebSocket];
-
     // 浮窗：4秒后显示
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         [self showFloatingPanel];
+
+        // 浮窗显示后再连接 WebSocket（避免启动时并发问题）
+        [self connectWebSocket];
     });
 }
 
