@@ -80,12 +80,6 @@ def list_devices(
     results = []
     for d in devices:
         resp = DeviceResponse.model_validate(d)
-        # Parse tags JSON
-        if d.tags:
-            try:
-                resp.tags = json.loads(d.tags)
-            except:
-                resp.tags = []
         results.append(resp)
 
     return {"count": total, "next": None, "previous": None, "results": results}

@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List, Any
 from datetime import datetime
+import json
 
 class DeviceResponse(BaseModel):
     id: int
@@ -22,13 +23,23 @@ class DeviceResponse(BaseModel):
     current_account_id: Optional[int] = 0
     group_name: Optional[str] = "未分组"
     tags: Optional[List[str]] = []
-    api_id: Optional[int] = 0
+    api_id: Optional[str] = ""
     last_seen: Optional[datetime] = None
     last_online: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def parse_tags(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        return v or []
 
 class DeviceGroupResponse(BaseModel):
     id: int
