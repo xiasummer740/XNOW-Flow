@@ -83,7 +83,9 @@ static const int kBaseReconnectDelay = 2;
 
 - (void)disconnect {
     self.intentionalDisconnect = YES;
-    [self _closeStreams];
+    dispatch_async(_socketQueue, ^{
+        [self _closeStreams];
+    });
 }
 
 - (void)sendMessage:(NSDictionary *)message {
@@ -303,7 +305,10 @@ static const int kBaseReconnectDelay = 2;
 - (void)stream:(NSStream *)aStream handleEvent:(NSStreamEvent)event {
     switch (event) {
         case NSStreamEventOpenCompleted:
-            if (aStream == self.outputStream) {
+            break;
+
+        case NSStreamEventHasSpaceAvailable:
+            if (aStream == self.outputStream && !self.wsUpgraded) {
                 NSLog(@"[WsClient] TCP connected, sending WS upgrade...");
                 [self _sendUpgradeRequest];
             }
