@@ -15,6 +15,7 @@
 - (void)floatingPanelDidTapCollectFans:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapCollectVideos:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel;
+- (void)floatingPanelDidTapConnectServer:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel;
 // 自动任务开关
 - (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoLike:(BOOL)on;

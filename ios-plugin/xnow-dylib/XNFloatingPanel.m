@@ -88,6 +88,7 @@ static NSArray *kCountries;
 - (void)_buildMainMenu {
     _mainMenu = @[
         @{@"icon": @"🌐", @"label": @"绑定云控后台", @"action": @"bind_server"},
+        @{@"icon": @"🔗", @"label": @"连接到服务器", @"action": @"connect_server"},
         @{@"icon": @"👤", @"label": @"账号管理", @"action": @"account_mgmt"},
         @{@"icon": @"🎬", @"label": @"下载无水印视频", @"action": @"dl_video"},
         @{@"icon": @"🌍", @"label": @"设置国家", @"action": @"set_country"},
@@ -495,6 +496,13 @@ static NSArray *kCountries;
         return;
     }
     if ([action isEqualToString:@"bind_server"]) { [self _showBindForm]; return; }
+    if ([action isEqualToString:@"connect_server"]) {
+        [self addLog:@"正在连接服务器…"];
+        if ([self.delegate respondsToSelector:@selector(floatingPanelDidTapConnectServer:)]) {
+            [self.delegate floatingPanelDidTapConnectServer:self];
+        }
+        return;
+    }
     if ([action isEqualToString:@"copy_device_id"]) {
         [UIPasteboard generalPasteboard].string = _panelDeviceId ?: @"";
         [self _showToast:[NSString stringWithFormat:@"已复制: %@", _panelDeviceId?:@""]];

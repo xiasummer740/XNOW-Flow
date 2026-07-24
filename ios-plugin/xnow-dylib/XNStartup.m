@@ -26,10 +26,10 @@
         NSLog(@"[XNOWER] ⚠️ pthread 创建失败");
     }
 
-    // 路径2: CFRunLoopTimer — 如果主 runloop 已经在运行，3秒后触发
+    // 路径2: CFRunLoopTimer — 如果主 runloop 已经在运行，7秒后触发
     CFRunLoopTimerRef timer = CFRunLoopTimerCreate(
         kCFAllocatorDefault,
-        CFAbsoluteTimeGetCurrent() + 3.0,
+        CFAbsoluteTimeGetCurrent() + 7.0,
         0, 0, 0,
         xnow_startup_callback,
         NULL
@@ -45,7 +45,7 @@
 
 /// 路径1: 后台线程 → 等 UIApplicationMain 完成 → CFRunLoopPerformBlock
 static void *xnow_startup_thread(void *arg) {
-    sleep(2);  // 等 UIKit 就绪
+    sleep(5);  // 等 UIKit 就绪（保持5秒以上，BH TikTok 太早出现浮窗可能触发检测）
 
     CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
         NSLog(@"[XNOWER] ⏰ pthread → start() 触发");

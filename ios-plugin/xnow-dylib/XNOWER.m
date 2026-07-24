@@ -100,15 +100,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)start {
     NSLog(@"[XNOWER] 🚀 start() 已执行 — dylib 加载成功");
 
-    // 立刻显示浮窗
+    // 立刻显示浮窗（不自动连 WS — 避免 BH TikTok 检测）
+    // 用户可在浮窗菜单中手动点击"连接到服务器"
     [self showFloatingPanel];
-
-    // 30 秒后自动连接 WebSocket（绕过 BH TikTok 启动期检测窗口）
-    // 如用户已提前绑定，则连上后自动上报 bind_info
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(30.0 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [self connectWebSocket];
-    });
 }
 
 /// 添加操作日志（显示在左上角透明日志窗口）
@@ -517,6 +511,12 @@ __attribute__((destructor)) static void XNOWERUnload() {
     } else {
         [self addLog:@"绑定信息已保存（服务器未连接，稍后自动上报）"];
     }
+}
+
+- (void)floatingPanelDidTapConnectServer:(XNFloatingPanel *)panel {
+    // 用户手动点击"连接到服务器"
+    [self connectWebSocket];
+    [self addLog:@"正在连接服务器…"];
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
