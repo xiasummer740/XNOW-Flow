@@ -1,22 +1,19 @@
 // WsClient.m
-// XNOW WebSocket 客户端 — 基于 CFStream（绕过 BH TikTok 对 NSURLSession 的 hook）
-// 原 NSURLSessionWebSocketTask 版本触发 TikTok 退出检测，改用底层 C 接口
+// XNOW WebSocket 客户端 — 基于 CFSocketConnectToAddress（纯 C 接口，最底层）
+// 完全不碰 NSURLSession 或 CFStream，避免 BH TikTok hook
 
 #import "WsClient.h"
-#import <CFNetwork/CFNetwork.h>
-#import <Security/SecureTransport.h>
+#import <sys/socket.h>
+#import <netinet/in.h>
+#import <arpa/inet.h>
+#import <CFNetwork/CFSocket.h>
 
-@interface WsClient () <NSStreamDelegate>
-@property (nonatomic, strong) NSInputStream *inputStream;
-@property (nonatomic, strong) NSOutputStream *outputStream;
-@property (nonatomic, copy) NSString *serverHost;
-@property (nonatomic, assign) int serverPort;
-@property (nonatomic, copy) NSString *serverPath;
+@interface WsClient ()
 @property (nonatomic, copy) NSString *deviceId;
 @property (nonatomic, assign) BOOL intentionalDisconnect;
 @property (nonatomic, strong) dispatch_queue_t socketQueue;
+@property (nonatomic, assign) CFSocketRef socketRef;
 @property (nonatomic, strong) NSMutableData *readBuffer;
-// WebSocket 帧解析
 @property (nonatomic, assign) BOOL wsUpgraded;
 @end
 
@@ -32,8 +29,13 @@ static const int kBaseReconnectDelay = 2;
         _readBuffer = [NSMutableData data];
         _intentionalDisconnect = NO;
         _wsUpgraded = NO;
+        _socketRef = NULL;
     }
     return self;
+}
+
+- (void)dealloc {
+    [self _closeSocket];
 }
 
 #pragma mark - Public
@@ -42,171 +44,237 @@ static const int kBaseReconnectDelay = 2;
     self.deviceId = deviceId;
     self.intentionalDisconnect = NO;
     self.wsUpgraded = NO;
-    self.serverHost = @"192.129.210.52";
-    self.serverPort = 8000;
 
-    // 解析 URL 提取 host/port/path/query
-    NSString *base = serverURL;
+    // 构建 WebSocket 请求路径
     NSString *query = @"";
+    NSString *base = serverURL;
     NSRange qr = [base rangeOfString:@"?"];
     if (qr.location != NSNotFound) {
         query = [base substringFromIndex:qr.location];
         base = [base substringToIndex:qr.location];
     }
-    // 去掉 ws:// 前缀
     if ([base hasPrefix:@"ws://"]) base = [base substringFromIndex:5];
-    if ([base hasPrefix:@"wss://"]) base = [base substringFromIndex:6];
-    // 去掉路径部分
     NSRange sr = [base rangeOfString:@"/"];
-    if (sr.location != NSNotFound) {
-        self.serverPath = [base substringFromIndex:sr.location];
-        base = [base substringToIndex:sr.location];
-    } else {
-        self.serverPath = @"/";
-    }
-    // host:port
+    if (sr.location != NSNotFound) base = [base substringToIndex:sr.location];
+
+    NSString *host = base;
+    int port = 8000;
     NSRange cr = [base rangeOfString:@":"];
     if (cr.location != NSNotFound) {
-        self.serverHost = [base substringToIndex:cr.location];
-        self.serverPort = [[base substringFromIndex:cr.location + 1] intValue];
-    } else {
-        self.serverHost = base;
-        self.serverPort = 8000;
+        host = [base substringToIndex:cr.location];
+        port = [[base substringFromIndex:cr.location + 1] intValue];
     }
-    // 构建 WS 路径 (含 deviceId 和 query)
-    self.serverPath = [NSString stringWithFormat:@"/ws/%@%@", deviceId, query];
 
+    __weak typeof(self) weakSelf = self;
     dispatch_async(_socketQueue, ^{
-        [self _connectInternal];
+        // POSIX socket connection
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) { [weakSelf _notifyError:@"socket创建失败"]; return; }
+
+        struct sockaddr_in addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_len = sizeof(addr);
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(port);
+
+        if (inet_pton(AF_INET, [host UTF8String], &addr.sin_addr) != 1) {
+            // DNS解析
+            struct hostent *he = gethostbyname([host UTF8String]);
+            if (!he) { close(sock); [weakSelf _notifyError:@"DNS解析失败"]; return; }
+            memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
+        }
+
+        // 设置超时
+        struct timeval tv = {10, 0};
+        setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+        if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+            close(sock);
+            [weakSelf _notifyError:@"连接失败"];
+            return;
+        }
+
+        NSLog(@"[WsClient] TCP connected to %s:%d", [host UTF8String], port);
+
+        // 发送 WebSocket 升级请求
+        NSMutableData *keyData = [NSMutableData dataWithLength:16];
+        arc4random_buf((void *)keyData.bytes, 16);
+        NSString *wsKey = [keyData base64EncodedStringWithOptions:0];
+        NSString *path = [NSString stringWithFormat:@"/ws/%@%@", deviceId, query];
+
+        NSString *request = [NSString stringWithFormat:
+            @"GET %@ HTTP/1.1\r\n"
+            @"Host: %@:%d\r\n"
+            @"Upgrade: websocket\r\n"
+            @"Connection: Upgrade\r\n"
+            @"Sec-WebSocket-Key: %@\r\n"
+            @"Sec-WebSocket-Version: 13\r\n"
+            @"\r\n",
+            path, host, port, wsKey];
+
+        const char *reqC = [request UTF8String];
+        size_t toSend = strlen(reqC);
+        size_t sent = 0;
+        while (sent < toSend) {
+            ssize_t n = write(sock, reqC + sent, toSend - sent);
+            if (n <= 0) { close(sock); [weakSelf _notifyError:@"发送失败"]; return; }
+            sent += n;
+        }
+        NSLog(@"[WsClient] WS upgrade request sent");
+
+        // 读取 HTTP 响应
+        NSMutableData *respData = [NSMutableData data];
+        char buf[4096];
+        BOOL headerComplete = NO;
+        while (!headerComplete) {
+            ssize_t n = read(sock, buf, sizeof(buf));
+            if (n <= 0) { close(sock); [weakSelf _notifyError:@"读取响应失败"]; return; }
+            [respData appendBytes:buf length:n];
+            NSString *resp = [[NSString alloc] initWithData:respData encoding:NSUTF8StringEncoding];
+            if ([resp containsString:@"\r\n\r\n"]) {
+                headerComplete = YES;
+            }
+        }
+
+        // 检查升级结果
+        NSString *response = [[NSString alloc] initWithData:respData encoding:NSUTF8StringEncoding];
+        if (![response containsString:@" 101 "]) {
+            close(sock);
+            [weakSelf _notifyError:@"WS升级失败"];
+            return;
+        }
+        NSLog(@"[WsClient] WS upgrade successful!");
+
+        // 升级成功！进入 WebSocket 帧循环
+        weakSelf.wsUpgraded = YES;
+        _isConnected = YES;
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf.delegate wsClientDidConnect:weakSelf];
+        });
+
+        // 创建 CFSocket 监视读取
+        CFSocketContext ctx = {0, (__bridge void *)weakSelf, NULL, NULL, NULL};
+        CFSocketRef cfSock = CFSocketCreateWithNative(NULL, sock, kCFSocketReadCallBack, _socketCallback, &ctx);
+        if (cfSock) {
+            [weakSelf _closeSocket];
+            weakSelf.socketRef = cfSock;
+            CFRunLoopSourceRef source = CFSocketCreateRunLoopSource(NULL, cfSock, 0);
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopDefaultMode);
+            CFRelease(source);
+            CFRunLoopRun(); // 运行 runloop 接收数据
+        }
+
+        // Runloop 结束（disconnect或socket关闭）
+        close(sock);
+        weakSelf.socketRef = NULL;
+        weakSelf.wsUpgraded = NO;
+        _isConnected = NO;
     });
+}
+
+/// CFSocket 回调 — 收到数据
+static void _socketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef address, const void *data, void *info) {
+    WsClient *self = (__bridge WsClient *)info;
+    if (!self || type != kCFSocketReadCallBack) return;
+
+    CFSocketNativeHandle sock = CFSocketGetNative(s);
+    char buf[8192];
+    ssize_t n = read(sock, buf, sizeof(buf));
+
+    if (n <= 0) {
+        // 连接关闭或错误
+        [self _notifyError:@"连接断开"];
+        CFSocketInvalidate(s);
+        CFRunLoopStop(CFRunLoopGetCurrent());
+        return;
+    }
+
+    // 解析 WebSocket 帧
+    if (n < 2) return;
+    const uint8_t *b = (const uint8_t *)buf;
+    uint8_t opcode = b[0] & 0x0F;
+
+    if (opcode == 0x8) { // Close
+        [self _notifyError:@"WS关闭"];
+        CFSocketInvalidate(s);
+        CFRunLoopStop(CFRunLoopGetCurrent());
+        return;
+    }
+    if (opcode == 0x9) { // Ping → Pong
+        uint8_t pong[2] = {0x8A, 0x00};
+        write(sock, pong, 2);
+        return;
+    }
+    if (opcode == 0xA) return; // Pong
+
+    if (opcode != 0x1) return; // 只处理文本帧
+
+    // 解析 payload 长度
+    NSUInteger offset = 2;
+    uint64_t payloadLen = b[1] & 0x7F;
+    BOOL masked = (b[1] & 0x80) != 0;
+    if (payloadLen == 126) {
+        if (n < 4) return;
+        payloadLen = CFSwapInt16BigToHost(*(uint16_t *)(b + 2));
+        offset = 4;
+    } else if (payloadLen == 127) {
+        if (n < 10) return;
+        payloadLen = CFSwapInt64BigToHost(*(uint64_t *)(b + 2));
+        offset = 10;
+    }
+    if (masked) offset += 4;
+    if (offset + payloadLen > (NSUInteger)n) return;
+
+    NSData *payload = [NSData dataWithBytes:b + offset length:(NSUInteger)payloadLen];
+
+    // 解析 JSON
+    NSError *jsonErr = nil;
+    NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:payload options:0 error:&jsonErr];
+    if (dict) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.delegate wsClient:self didReceiveMessage:dict];
+        });
+    }
 }
 
 - (void)disconnect {
     self.intentionalDisconnect = YES;
     dispatch_async(_socketQueue, ^{
-        [self _closeStreams];
+        [self _closeSocket];
+        CFRunLoopStop(CFRunLoopGetCurrent());
     });
 }
 
+- (void)_closeSocket {
+    if (_socketRef) {
+        CFSocketInvalidate(_socketRef);
+        CFRelease(_socketRef);
+        _socketRef = NULL;
+    }
+}
+
+/// 发送 WebSocket 文本帧（带 mask）
 - (void)sendMessage:(NSDictionary *)message {
-    if (!_isConnected || !self.wsUpgraded) return;
+    if (!_isConnected || !self.wsUpgraded || !_socketRef) return;
     NSError *err = nil;
     NSData *json = [NSJSONSerialization dataWithJSONObject:message options:0 error:&err];
     if (!json) return;
-    [self _sendWSFrame:json];
-}
 
-- (void)sendString:(NSString *)string {
-    if (!_isConnected || !self.wsUpgraded) return;
-    [self _sendWSFrame:[string dataUsingEncoding:NSUTF8StringEncoding]];
-}
-
-#pragma mark - TCP Connection (CFStream)
-
-- (void)_connectInternal {
-    [self _closeStreams];
-    self.wsUpgraded = NO;
-
-    CFReadStreamRef readStream = NULL;
-    CFWriteStreamRef writeStream = NULL;
-
-    CFStreamCreatePairWithSocketToHost(NULL,
-        (__bridge CFStringRef)self.serverHost,
-        (UInt32)self.serverPort,
-        &readStream, &writeStream);
-
-    if (!readStream || !writeStream) {
-        [self _notifyError:@"创建 CFStream 失败"];
-        return;
-    }
-
-    self.inputStream = (__bridge_transfer NSInputStream *)readStream;
-    self.outputStream = (__bridge_transfer NSOutputStream *)writeStream;
-    self.inputStream.delegate = self;
-    self.outputStream.delegate = self;
-
-    [self.inputStream scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-    [self.outputStream scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-    [self.inputStream open];
-    [self.outputStream open];
-
-    // 保持 runloop 运行以接收流事件（在 socketQueue 线程上）
-    CFRunLoopRun();
-}
-
-- (void)_closeStreams {
-    self.wsUpgraded = NO;
-    _isConnected = NO;
-    if (self.inputStream) {
-        self.inputStream.delegate = nil;
-        [self.inputStream removeFromRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-        [self.inputStream close];
-        self.inputStream = nil;
-    }
-    if (self.outputStream) {
-        self.outputStream.delegate = nil;
-        [self.outputStream removeFromRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-        [self.outputStream close];
-        self.outputStream = nil;
-    }
-    // 停止 runloop（_connectInternal 中调了 CFRunLoopRun()）
-    CFRunLoopStop(CFRunLoopGetCurrent());
-}
-
-#pragma mark - WebSocket Upgrade
-
-- (void)_sendUpgradeRequest {
-    // 生成 WebSocket key
-    NSMutableData *keyData = [NSMutableData dataWithLength:16];
-    arc4random_buf((void *)keyData.bytes, 16);
-    NSString *wsKey = [keyData base64EncodedStringWithOptions:0];
-
-    NSString *request = [NSString stringWithFormat:
-        @"GET %@ HTTP/1.1\r\n"
-        @"Host: %@:%d\r\n"
-        @"Upgrade: websocket\r\n"
-        @"Connection: Upgrade\r\n"
-        @"Sec-WebSocket-Key: %@\r\n"
-        @"Sec-WebSocket-Version: 13\r\n"
-        @"\r\n",
-        self.serverPath, self.serverHost, self.serverPort, wsKey];
-
-    NSData *requestData = [request dataUsingEncoding:NSUTF8StringEncoding];
-    [self.outputStream write:requestData.bytes maxLength:requestData.length];
-    NSLog(@"[WsClient] WS upgrade request sent");
-}
-
-- (void)_handleUpgradeResponse:(NSData *)data {
-    NSString *response = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    if ([response containsString:@" 101 "]) {
-        self.wsUpgraded = YES;
-        _isConnected = YES;
-        NSLog(@"[WsClient] WS upgrade successful");
-        [self.readBuffer setLength:0];
-
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self.delegate wsClientDidConnect:self];
-        });
-    } else {
-        NSLog(@"[WsClient] WS upgrade failed: %@", [response substringToIndex:MIN(100, response.length)]);
-        [self _notifyError:@"WS upgrade 失败"];
-    }
-}
-
-#pragma mark - WebSocket Frames
-
-- (void)_sendWSFrame:(NSData *)payload {
-    // 构造 WebSocket 数据帧 (opcode=0x2 = binary, MASK=1)
+    CFSocketNativeHandle sock = CFSocketGetNative(_socketRef);
     NSMutableData *frame = [NSMutableData data];
-    uint8_t header = 0x82; // FIN + opcode binary
+
+    // FIN + opcode text
+    uint8_t header = 0x81;
     [frame appendBytes:&header length:1];
 
-    NSUInteger len = payload.length;
+    NSUInteger len = json.length;
     uint8_t maskKey[4];
     arc4random_buf(maskKey, 4);
 
     if (len < 126) {
-        uint8_t b = 0x80 | (uint8_t)len; // MASK + len
+        uint8_t b = 0x80 | (uint8_t)len;
         [frame appendBytes:&b length:1];
     } else if (len < 65536) {
         uint8_t b = 0x80 | 126;
@@ -219,145 +287,19 @@ static const int kBaseReconnectDelay = 2;
         uint64_t n = CFSwapInt64HostToBig(len);
         [frame appendBytes:&n length:8];
     }
-
     [frame appendBytes:maskKey length:4];
-    // Mask payload
-    uint8_t *payloadBytes = (uint8_t *)payload.bytes;
+
+    const uint8_t *payload = json.bytes;
     for (NSUInteger i = 0; i < len; i++) {
-        uint8_t masked = payloadBytes[i] ^ maskKey[i % 4];
+        uint8_t masked = payload[i] ^ maskKey[i % 4];
         [frame appendBytes:&masked length:1];
     }
 
-    [self.outputStream write:frame.bytes maxLength:frame.length];
+    write(sock, frame.bytes, frame.length);
 }
 
-- (void)_handleWSFrame:(NSData *)data {
-    // 简化解析：只处理文本帧 (opcode=1, FIN=1, unmasked)
-    // 完整 WS 解析器需处理分片、ping/pong 等
-    if (data.length < 2) return;
-    const uint8_t *bytes = data.bytes;
-    uint8_t opcode = bytes[0] & 0x0F;
-    BOOL fin = (bytes[0] & 0x80) != 0;
-    BOOL masked = (bytes[1] & 0x80) != 0;
-
-    if (opcode == 0x8) {
-        // Close frame
-        [self _notifyError:@"WS关闭帧"];
-        return;
-    }
-    if (opcode == 0x9) {
-        // Ping → send pong
-        [self _sendPong];
-        return;
-    }
-    if (opcode == 0xA) {
-        // Pong — ignore
-        return;
-    }
-    if (opcode != 0x1) {
-        // 不处理二进制帧等其他类型
-        return;
-    }
-
-    NSUInteger offset = 2;
-    uint64_t payloadLen = bytes[1] & 0x7F;
-    if (payloadLen == 126) {
-        if (data.length < 4) return;
-        payloadLen = CFSwapInt16BigToHost(*(uint16_t *)(bytes + 2));
-        offset = 4;
-    } else if (payloadLen == 127) {
-        if (data.length < 10) return;
-        payloadLen = CFSwapInt64BigToHost(*(uint64_t *)(bytes + 2));
-        offset = 10;
-    }
-
-    if (masked) offset += 4;
-    if (offset + payloadLen > data.length) return;
-
-    NSData *payload = [data subdataWithRange:NSMakeRange(offset, (NSUInteger)payloadLen)];
-    // 如果 masked，需要 unmask
-    if (masked) {
-        const uint8_t *maskKey = bytes + offset - 4;
-        uint8_t *unmasked = malloc(payloadLen);
-        for (NSUInteger i = 0; i < payloadLen; i++) {
-            unmasked[i] = ((const uint8_t *)payload.bytes)[i] ^ maskKey[i % 4];
-        }
-        payload = [NSData dataWithBytesNoCopy:unmasked length:(NSUInteger)payloadLen freeWhenDone:YES];
-    }
-
-    // 解析 JSON
-    NSError *jsonErr = nil;
-    NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:payload options:0 error:&jsonErr];
-    if (dict && !jsonErr) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self.delegate wsClient:self didReceiveMessage:dict];
-        });
-    }
-}
-
-- (void)_sendPong {
-    uint8_t pong[2] = {0x8A, 0x00}; // FIN + opcode=0xA (pong)
-    [self.outputStream write:pong maxLength:2];
-}
-
-#pragma mark - NSStreamDelegate
-
-- (void)stream:(NSStream *)aStream handleEvent:(NSStreamEvent)event {
-    switch (event) {
-        case NSStreamEventOpenCompleted:
-            break;
-
-        case NSStreamEventHasSpaceAvailable:
-            if (aStream == self.outputStream && !self.wsUpgraded) {
-                NSLog(@"[WsClient] TCP connected, sending WS upgrade...");
-                [self _sendUpgradeRequest];
-            }
-            break;
-
-        case NSStreamEventHasBytesAvailable:
-            if (aStream == self.inputStream) {
-                [self _readFromStream];
-            }
-            break;
-
-        case NSStreamEventErrorOccurred: {
-            NSError *err = [aStream streamError];
-            NSLog(@"[WsClient] Stream error: %@", err.localizedDescription);
-            [self _notifyError:err.localizedDescription ?: @"流错误"];
-            break;
-        }
-
-        case NSStreamEventEndEncountered:
-            NSLog(@"[WsClient] Stream ended");
-            if (!self.intentionalDisconnect) {
-                [self _notifyError:@"连接断开"];
-            }
-            break;
-
-        default:
-            break;
-    }
-}
-
-- (void)_readFromStream {
-    uint8_t buffer[4096];
-    NSInteger len = [self.inputStream read:buffer maxLength:sizeof(buffer)];
-    if (len <= 0) return;
-
-    [self.readBuffer appendBytes:buffer length:(NSUInteger)len];
-
-    if (!self.wsUpgraded) {
-        // 检查是否收到完整的 HTTP 响应头
-        NSString *resp = [[NSString alloc] initWithData:self.readBuffer encoding:NSUTF8StringEncoding];
-        if ([resp containsString:@"\r\n\r\n"]) {
-            [self _handleUpgradeResponse:self.readBuffer];
-        }
-        return;
-    }
-
-    // WebSocket 帧数据
-    [self _handleWSFrame:self.readBuffer];
-    [self.readBuffer setLength:0];
+- (void)sendString:(NSString *)string {
+    [self sendMessage:@{@"text": string}];
 }
 
 #pragma mark - Error & Reconnect
@@ -365,37 +307,28 @@ static const int kBaseReconnectDelay = 2;
 - (void)_notifyError:(NSString *)desc {
     _isConnected = NO;
     self.wsUpgraded = NO;
+    [self _closeSocket];
 
     NSError *error = [NSError errorWithDomain:@"XNOWER" code:-1
         userInfo:@{NSLocalizedDescriptionKey: desc ?: @"未知错误"}];
-
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.delegate wsClientDidDisconnect:self error:error];
     });
 
     if (!self.intentionalDisconnect) {
-        [self _scheduleReconnect];
+        static int retryCount = 0;
+        retryCount++;
+        if (retryCount > kMaxReconnectAttempts) return;
+        int delay = MIN(kBaseReconnectDelay * (1 << (retryCount - 1)), 60);
+        delay += arc4random_uniform(5);
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
+                       dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            if (!self.intentionalDisconnect) {
+                retryCount = 0;
+                [self connectToServer:[NSString stringWithFormat:@"ws://%@:%d", self->_serverHost ?: @"192.129.210.52", 8000] deviceId:self.deviceId ?: @""];
+            }
+        });
     }
-}
-
-- (void)_scheduleReconnect {
-    // 指数退避
-    static int retryCount = 0;
-    retryCount++;
-    if (retryCount > kMaxReconnectAttempts) return;
-
-    int delay = MIN(kBaseReconnectDelay * (1 << (retryCount - 1)), 60);
-    int jitter = arc4random_uniform(5);
-    delay += jitter;
-
-    NSLog(@"[WsClient] Reconnect in %ds (attempt %d)", delay, retryCount);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
-                   dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        if (!self.intentionalDisconnect) {
-            retryCount = 0;
-            [self _connectInternal];
-        }
-    });
 }
 
 @end
