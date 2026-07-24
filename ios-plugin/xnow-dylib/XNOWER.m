@@ -100,9 +100,15 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)start {
     NSLog(@"[XNOWER] 🚀 start() 已执行 — dylib 加载成功");
 
-    // 立刻显示浮窗（不自动连 WS — BH TikTok 检测到外部连接会 exit()
-    // WS 在用户点击"绑定云控后台"后自动连接）
+    // 立刻显示浮窗
     [self showFloatingPanel];
+
+    // 30 秒后自动连接 WebSocket（绕过 BH TikTok 启动期检测窗口）
+    // 如用户已提前绑定，则连上后自动上报 bind_info
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(30.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [self connectWebSocket];
+    });
 }
 
 /// 添加操作日志（显示在左上角透明日志窗口）
@@ -498,12 +504,19 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel {
-    // 延迟连接 WebSocket，避免在浮窗视图切换（_backToMain）过程中并发问题
-    [self addLog:@"正在连接服务器…"];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [self connectWebSocket];
-    });
+    // 绑定信息已存储，通过当前 WebSocket 上报给后端
+    //（注意：绝不在此处创建/断开 WsClient — 之前的绑定闪退修复已证明这是雷区）
+    if (self.wsClient && self.isConnected) {
+        NSString *bindDevId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindDeviceID"] ?: @"";
+        NSString *bindApiId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindAPIID"] ?: @"";
+        [self.wsClient sendMessage:@{
+            @"type": @"bind_info",
+            @"data": @{@"device_code": bindDevId, @"api_id": bindApiId}
+        }];
+        [self addLog:[NSString stringWithFormat:@"已上报绑定信息(设备%@ API:%@)", bindDevId, bindApiId]];
+    } else {
+        [self addLog:@"绑定信息已保存（服务器未连接，稍后自动上报）"];
+    }
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
