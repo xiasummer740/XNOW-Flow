@@ -498,9 +498,12 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel {
-    // 绑定信息已存储 — 首先连接 WebSocket（若已连接则先断开重建）
-    [self connectWebSocket];
-    [self addLog:@"正在连接服务器（绑定后自动上报信息）…"];
+    // 延迟连接 WebSocket，避免在浮窗视图切换（_backToMain）过程中并发问题
+    [self addLog:@"正在连接服务器…"];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [self connectWebSocket];
+    });
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
