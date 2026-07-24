@@ -17,7 +17,7 @@
 + (void)load {
     NSLog(@"[XNOWER] +load 执行 — 启动双层启动机制");
 
-    // 路径1: pthread 线程，5秒后用 CFRunLoopPerformBlock 投递到主线程
+    // 路径1: pthread 线程，2秒后用 CFRunLoopPerformBlock 投递到主线程
     static pthread_t thread;
     if (pthread_create(&thread, NULL, xnow_startup_thread, NULL) == 0) {
         pthread_detach(thread);
@@ -26,10 +26,10 @@
         NSLog(@"[XNOWER] ⚠️ pthread 创建失败");
     }
 
-    // 路径2: CFRunLoopTimer — 如果主 runloop 已经在运行，7秒后触发
+    // 路径2: CFRunLoopTimer — 如果主 runloop 已经在运行，3秒后触发
     CFRunLoopTimerRef timer = CFRunLoopTimerCreate(
         kCFAllocatorDefault,
-        CFAbsoluteTimeGetCurrent() + 7.0,
+        CFAbsoluteTimeGetCurrent() + 3.0,
         0, 0, 0,
         xnow_startup_callback,
         NULL
@@ -45,7 +45,7 @@
 
 /// 路径1: 后台线程 → 等 UIApplicationMain 完成 → CFRunLoopPerformBlock
 static void *xnow_startup_thread(void *arg) {
-    sleep(5);  // 等 UIKit 就绪（保持5秒以上，BH TikTok 太早出现浮窗可能触发检测）
+    sleep(2);  // 等 UIKit 就绪
 
     CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
         NSLog(@"[XNOWER] ⏰ pthread → start() 触发");

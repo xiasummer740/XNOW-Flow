@@ -147,6 +147,8 @@ static const int kBaseReconnectDelay = 2;
         [self.outputStream close];
         self.outputStream = nil;
     }
+    // 停止 runloop（_connectInternal 中调了 CFRunLoopRun()）
+    CFRunLoopStop(CFRunLoopGetCurrent());
 }
 
 #pragma mark - WebSocket Upgrade
