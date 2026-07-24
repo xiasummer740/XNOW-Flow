@@ -26,10 +26,10 @@
         NSLog(@"[XNOWER] ⚠️ pthread 创建失败");
     }
 
-    // 路径2: CFRunLoopTimer — 如果主 runloop 已经在运行，7秒后触发
+    // 路径2: CFRunLoopTimer — 如果主 runloop 已经在运行，3秒后触发
     CFRunLoopTimerRef timer = CFRunLoopTimerCreate(
         kCFAllocatorDefault,
-        CFAbsoluteTimeGetCurrent() + 7.0,
+        CFAbsoluteTimeGetCurrent() + 3.0,
         0, 0, 0,
         xnow_startup_callback,
         NULL
@@ -45,7 +45,7 @@
 
 /// 路径1: 后台线程 → 等 UIApplicationMain 完成 → CFRunLoopPerformBlock
 static void *xnow_startup_thread(void *arg) {
-    sleep(5);  // 等 UIKit 就绪
+    sleep(2);  // 等 UIKit 就绪
 
     CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
         NSLog(@"[XNOWER] ⏰ pthread → start() 触发");
@@ -56,7 +56,7 @@ static void *xnow_startup_thread(void *arg) {
     return NULL;
 }
 
-/// 路径2: CFRunLoopTimer 回调
+/// 路径2: CFRunLoopTimer 回调（备用，若主 runloop 已运行则先触发）
 static void xnow_startup_callback(CFRunLoopTimerRef timer, void *info) {
     NSLog(@"[XNOWER] ⏰ CFRunLoopTimer → start() 触发");
     [[XNOWER sharedInstance] start];

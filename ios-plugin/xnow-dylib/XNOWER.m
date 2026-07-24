@@ -100,14 +100,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)start {
     NSLog(@"[XNOWER] 🚀 start() 已执行 — dylib 加载成功");
 
-    // 浮窗：4秒后显示
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [self showFloatingPanel];
-
-        // 浮窗显示后再连接 WebSocket（避免启动时并发问题）
-        [self connectWebSocket];
-    });
+    // 立刻显示浮窗（不自动连 WS — BH TikTok 检测到外部连接会 exit()
+    // WS 在用户点击"绑定云控后台"后自动连接）
+    [self showFloatingPanel];
 }
 
 /// 添加操作日志（显示在左上角透明日志窗口）
@@ -172,6 +167,17 @@ __attribute__((destructor)) static void XNOWERUnload() {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.floatingPanel setConnected:YES];
     });
+
+    // 连接后自动上报已保存的绑定信息
+    NSString *bindDevId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindDeviceID"] ?: @"";
+    NSString *bindApiId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindAPIID"] ?: @"";
+    if (bindDevId.length > 0 && bindApiId.length > 0) {
+        [client sendMessage:@{
+            @"type": @"bind_info",
+            @"data": @{@"device_code": bindDevId, @"api_id": bindApiId}
+        }];
+        [self addLog:[NSString stringWithFormat:@"已上报绑定信息(设备%@ API:%@)", bindDevId, bindApiId]];
+    }
 
     // 连接后立即检测并上报当前账号
     [[AccountManager sharedManager] detectCurrentAccountWithCompletion:^(NSDictionary *account) {
@@ -492,16 +498,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel {
-    // 绑定信息已存储，通过当前 WebSocket 上报给后端
-    if (self.wsClient && self.isConnected) {
-        NSString *bindDevId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindDeviceID"] ?: @"";
-        NSString *bindApiId = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindAPIID"] ?: @"";
-        [self.wsClient sendMessage:@{
-            @"type": @"bind_info",
-            @"data": @{@"device_code": bindDevId, @"api_id": bindApiId}
-        }];
-        [self addLog:[NSString stringWithFormat:@"已上报绑定信息(设备%@ API:%@)", bindDevId, bindApiId]];
-    }
+    // 绑定信息已存储 — 首先连接 WebSocket（若已连接则先断开重建）
+    [self connectWebSocket];
+    [self addLog:@"正在连接服务器（绑定后自动上报信息）…"];
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
