@@ -47,15 +47,7 @@ async def send_device_command(
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
 
-    # 检查设备是否在线（WebSocket）
-    if not manager.is_online(device_id):
-        return CommandResponse(
-            success=False,
-            message="设备不在线，无法下发指令",
-            device_online=False,
-        )
-
-    # 通过 WebSocket 下发指令
+    # 构建指令载荷
     payload = {
         "type": "command",
         "action": command.action,
@@ -63,30 +55,26 @@ async def send_device_command(
         "timestamp": datetime.utcnow().isoformat(),
     }
 
-    sent = await manager.send_command(device_id, payload)
-    if sent:
-        # 记录任务
-        task = Task(
-            type=command.action,
-            name=f"远程指令-{command.action}",
-            device=device_id,
-            status="running",
-            progress=50,
-        )
-        db.add(task)
-        db.commit()
+    # 尝试发送（WebSocket 直发 → HTTP 轮询队列）
+    success, via_ws = await manager.send_or_enqueue_command(device_id, payload)
 
-        return CommandResponse(
-            success=True,
-            message=f"指令已下发: {command.action}",
-            device_online=True,
-        )
-    else:
-        return CommandResponse(
-            success=False,
-            message="指令发送失败",
-            device_online=False,
-        )
+    # 记录任务
+    task = Task(
+        type=command.action,
+        name=f"远程指令-{command.action}",
+        device=device_id,
+        status="running",
+        progress=50,
+    )
+    db.add(task)
+    db.commit()
+
+    via = "WebSocket" if via_ws else "HTTP轮询队列"
+    return CommandResponse(
+        success=True,
+        message=f"指令已下发({via}): {command.action}",
+        device_online=True,
+    )
 
 
 @router.post("/commands/report/")

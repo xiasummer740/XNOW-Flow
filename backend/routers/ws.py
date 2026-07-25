@@ -1,7 +1,7 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request
 import json
 import logging
+from datetime import datetime
 
 from connection_manager import manager
 from database import SessionLocal
@@ -60,6 +60,100 @@ def _upsert_account(device_id: str, account_data: dict):
         db.close()
 
 
+def _handle_device_message(device_id: str, msg: dict):
+    """处理设备上报的消息（WebSocket 和 HTTP 轮询共用）"""
+    msg_type = msg.get("type", "unknown")
+
+    if msg_type == "status":
+        status_data = msg.get("data", {})
+        logger.info(f"Device {device_id} status received via HTTP")
+
+        # 如果包含 api_id，更新设备
+        api_id = status_data.get("api_id", "")
+        device_code = status_data.get("device_code", "")
+        if api_id:
+            _mark_device_online(device_id, api_id, device_code)
+
+        current_account = status_data.get("current_account")
+        if current_account:
+            _upsert_account(device_id, current_account)
+
+    elif msg_type == "result":
+        logger.info(f"Device {device_id} result: {msg.get('data', {})}")
+
+    elif msg_type == "account_update":
+        account_data = msg.get("data", {})
+        logger.info(f"Device {device_id} account update: {account_data.get('nickname', '')}")
+        _upsert_account(device_id, account_data)
+
+    elif msg_type == "account_list":
+        accounts = msg.get("data", [])
+        for acc_data in accounts:
+            _upsert_account(device_id, acc_data)
+
+    elif msg_type == "bind_info":
+        bind_data = msg.get("data", {})
+        device_code = bind_data.get("device_code", "")
+        api_id = bind_data.get("api_id", "")
+        logger.info(f"Device {device_id} bound: code={device_code}, api_id={api_id}")
+        _mark_device_online(device_id, api_id, device_code)
+
+        # 更新设备记录
+        db = SessionLocal()
+        try:
+            dev = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
+            if dev:
+                dev.api_id = api_id
+                if device_code:
+                    dev.name = device_code
+                db.commit()
+                logger.info(f"Device {device_id} updated with api_id={api_id}")
+        except Exception as e:
+            logger.error(f"bind_info error: {e}")
+        finally:
+            db.close()
+
+    elif msg_type == "ping":
+        pass  # HTTP 轮询的 ping 不需要回复
+
+    else:
+        logger.info(f"Device {device_id} unknown message type: {msg_type}")
+
+
+def _mark_device_online(device_id: str, api_id: str = "", device_code: str = ""):
+    """标记设备在线（用于 HTTP 轮询设备）"""
+    try:
+        db = SessionLocal()
+        device = db.query(DeviceBinding).filter(
+            DeviceBinding.name == device_id
+        ).first()
+        if device:
+            device.online = True
+            device.status = "online"
+            device.online = True
+            if api_id:
+                device.api_id = api_id
+            device.last_online = datetime.utcnow()
+        else:
+            device = DeviceBinding(
+                name=device_id,
+                device_name=device_id,
+                status="online",
+                online=True,
+                account_count=0,
+                api_id=api_id,
+                last_online=datetime.utcnow(),
+                app_version="—",
+            )
+            db.add(device)
+            logger.info(f"Device {device_id} auto-registered via HTTP poll")
+        db.commit()
+        db.close()
+    except Exception as e:
+        logger.error(f"_mark_device_online error: {e}")
+
+
+# ========== WebSocket 端点（向后兼容） ==========
 @router.websocket("/ws/{device_id}")
 async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", device_code: str = ""):
     """设备 WebSocket 连接端点
@@ -142,3 +236,72 @@ async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", devi
         logger.error(f"WebSocket error for {device_id}: {e}")
     finally:
         await manager.disconnect(device_id)
+
+
+# ========== HTTP 轮询端点（避开 BH TikTok 长连接检测） ==========
+
+@router.post("/ws/{device_id}")
+async def device_http_post(device_id: str, request: Request):
+    """设备通过 HTTP POST 上报数据
+
+    替代 WebSocket 的消息通道，每次请求短连接。
+    设备定时 POST 上报状态/账号/结果，同时带回积压指令。
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return {"status": "error", "message": "Invalid JSON"}
+
+    msg_type = body.get("type", "unknown")
+
+    # 处理消息（与 WebSocket 共用处理函数）
+    _handle_device_message(device_id, body)
+
+    # 标记设备最近活跃（更新 last_online）
+    api_id = body.get("data", {}).get("api_id", "") if isinstance(body.get("data"), dict) else ""
+    _mark_device_online(device_id, api_id)
+
+    # 返回 pending 指令（如果有）
+    pending = manager.dequeue_commands(device_id)
+    response = {"status": "ok"}
+
+    if msg_type == "bind_info":
+        response["ack"] = {"type": "bind_info_ack", "data": {"status": "ok"}}
+
+    if msg_type == "ping":
+        response["pong"] = True
+
+    if pending:
+        # 如果有多条，一次只返回第一条，剩余的留在队列中
+        # 但实际上 dequeue_commands 已经清空了队列
+        # 所以额外的命令需要重新入队
+        command = pending[0]
+        if len(pending) > 1:
+            for extra in pending[1:]:
+                manager.enqueue_command(device_id, extra)
+        response["command"] = command
+        logger.info(f"Sent command to {device_id} via POST response: {command.get('action', 'unknown')}")
+
+    return response
+
+
+@router.get("/ws/{device_id}/poll")
+async def device_http_poll(device_id: str):
+    """设备轮询获取积压指令
+
+    设备定时（每 5 秒）GET 此端点，获取服务端下发的指令。
+    无指令时返回 204 No Content。
+    """
+    pending = manager.dequeue_commands(device_id)
+    if not pending:
+        from fastapi.responses import Response
+        return Response(status_code=204)
+
+    # 一条一条返回，第一条直接返回，其余的重新入队
+    command = pending[0]
+    if len(pending) > 1:
+        for extra in pending[1:]:
+            manager.enqueue_command(device_id, extra)
+
+    logger.info(f"Device {device_id} polled command: {command.get('action', 'unknown')}")
+    return command

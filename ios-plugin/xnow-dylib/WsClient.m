@@ -19,6 +19,9 @@
 @property (nonatomic, assign) BOOL pollingActive;
 // 缓存待发送的消息
 @property (nonatomic, strong) NSMutableArray *pendingMessages;
+// URL 查询参数（api_id, device_code）
+@property (nonatomic, copy) NSString *apiId;
+@property (nonatomic, copy) NSString *deviceCode;
 @end
 
 @implementation WsClient
@@ -39,12 +42,29 @@
     _isConnected = YES;     // 标记为"已连接"以允许sendMessage
     self.intentionalDisconnect = NO;
 
-    // 解析 host:port
+    // 解析 host:port 和查询参数
     NSString *base = serverURL;
     if ([base hasPrefix:@"ws://"]) base = [base substringFromIndex:5];
     if ([base hasPrefix:@"wss://"]) base = [base substringFromIndex:6];
-    NSRange sr = [base rangeOfString:@"/"];
-    if (sr.location != NSNotFound) base = [base substringToIndex:sr.location];
+    // 分离查询参数
+    NSRange qmr = [base rangeOfString:@"?"];
+    if (qmr.location != NSNotFound) {
+        NSString *query = [base substringFromIndex:qmr.location + 1];
+        base = [base substringToIndex:qmr.location];
+        // 解析 key=value 参数
+        for (NSString *pair in [query componentsSeparatedByString:@"&"]) {
+            NSArray *kv = [pair componentsSeparatedByString:@"="];
+            if (kv.count == 2) {
+                NSString *key = [kv[0] stringByRemovingPercentEncoding];
+                NSString *val = [kv[1] stringByRemovingPercentEncoding];
+                if ([key isEqualToString:@"api_id"]) {
+                    self.apiId = val ?: @"";
+                } else if ([key isEqualToString:@"device_code"]) {
+                    self.deviceCode = val ?: @"";
+                }
+            }
+        }
+    }
     NSRange cr = [base rangeOfString:@":"];
     if (cr.location != NSNotFound) {
         _serverHost = [base substringToIndex:cr.location];
@@ -56,10 +76,11 @@
 
     dispatch_async(_pollQueue, ^{
         // 先上报状态
-        [self _sendToServer:@{
-            @"type": @"status",
-            @"data": @{@"device_id": deviceId ?: @"", @"connected": @YES}
-        }];
+        // 初始状态：带上 api_id / device_code 让后端识别
+        NSMutableDictionary *initData = [@{@"device_id": deviceId ?: @"", @"connected": @YES} mutableCopy];
+        if (self.apiId.length > 0) initData[@"api_id"] = self.apiId;
+        if (self.deviceCode.length > 0) initData[@"device_code"] = self.deviceCode;
+        [self _sendToServer:@{@"type": @"status", @"data": initData}];
 
         // 标记已连接，通知 delegate
         self.pollingActive = YES;
