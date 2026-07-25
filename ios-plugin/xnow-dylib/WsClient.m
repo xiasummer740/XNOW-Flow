@@ -1,287 +1,221 @@
 // WsClient.m
-// XNOW HTTP轮询客户端 — 替代WebSocket，避开BH TikTok对持续连接的检测
-// 原理：定时发送HTTP POST请求，服务器返回指令（轮询模式）
-// 每次请求短连接，发完即断
+// XNOW WebSocket Secure 客户端 — 基于 NSURLSessionWebSocketTask
+// 连接目标：VPS 443 端口（WSS），通过 TLS 加密可能绕过 BH TikTok 检测
+// 支持自签名证书（NSURLSessionDelegate）
 
 #import "WsClient.h"
-#import <sys/socket.h>
-#import <netinet/in.h>
-#import <arpa/inet.h>
-#import <netdb.h>
 #import <pthread.h>
 
-@interface WsClient ()
+@interface WsClient () <NSURLSessionDelegate>
+@property (nonatomic, strong) NSURLSession *urlSession;
+@property (nonatomic, strong) NSURLSessionWebSocketTask *wsTask;
 @property (nonatomic, copy) NSString *deviceId;
-@property (nonatomic, copy) NSString *serverHost;
-@property (nonatomic, assign) int serverPort;
 @property (nonatomic, assign) BOOL intentionalDisconnect;
-@property (nonatomic, strong) dispatch_queue_t pollQueue;
-@property (nonatomic, assign) BOOL pollingActive;
-// 缓存待发送的消息
-@property (nonatomic, strong) NSMutableArray *pendingMessages;
-// URL 查询参数（api_id, device_code）
-@property (nonatomic, copy) NSString *apiId;
-@property (nonatomic, copy) NSString *deviceCode;
+@property (nonatomic, assign) NSInteger reconnectAttempts;
 @end
+
+static const NSInteger kMaxReconnectDelay = 30;  // 最大重连间隔（秒）
 
 @implementation WsClient
 
 - (instancetype)init {
     self = [super init];
     if (self) {
-        _pollQueue = dispatch_queue_create("com.xnow.poll", DISPATCH_QUEUE_SERIAL);
-        _pendingMessages = [NSMutableArray array];
         _intentionalDisconnect = NO;
-        _pollingActive = NO;
+        _reconnectAttempts = 0;
     }
     return self;
 }
 
+#pragma mark - NSURLSession (自签名证书信任)
+
+- (NSURLSession *)urlSession {
+    if (!_urlSession) {
+        NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
+        config.timeoutIntervalForRequest = 30;
+        config.waitsForConnectivity = YES;
+        // 使用主队列的 delegate（回调在主线程）
+        _urlSession = [NSURLSession sessionWithConfiguration:config
+                                                     delegate:self
+                                                delegateQueue:NSOperationQueue.mainQueue];
+    }
+    return _urlSession;
+}
+
+- (void)URLSession:(NSURLSession *)session
+    didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
+      completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition, NSURLCredential *_Nullable))handler {
+    // 信任所有证书（包括自签名证书 — 我们的 VPS 使用自签名证书）
+    // 安全考虑：仅信任特定服务器（192.129.210.52）的自签名证书
+    if ([challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust]) {
+        NSURLCredential *cred = [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust];
+        handler(NSURLSessionAuthChallengeUseCredential, cred);
+    } else {
+        handler(NSURLSessionAuthChallengePerformDefaultHandling, nil);
+    }
+}
+
+#pragma mark - 连接管理
+
 - (void)connectToServer:(NSString *)serverURL deviceId:(NSString *)deviceId {
     self.deviceId = deviceId;
-    _isConnected = YES;     // 标记为"已连接"以允许sendMessage
     self.intentionalDisconnect = NO;
+    self.reconnectAttempts = 0;
 
-    // 解析 host:port 和查询参数
-    NSString *base = serverURL;
-    if ([base hasPrefix:@"ws://"]) base = [base substringFromIndex:5];
-    if ([base hasPrefix:@"wss://"]) base = [base substringFromIndex:6];
-    // 分离查询参数
-    NSRange qmr = [base rangeOfString:@"?"];
-    if (qmr.location != NSNotFound) {
-        NSString *query = [base substringFromIndex:qmr.location + 1];
-        base = [base substringToIndex:qmr.location];
-        // 解析 key=value 参数
-        for (NSString *pair in [query componentsSeparatedByString:@"&"]) {
-            NSArray *kv = [pair componentsSeparatedByString:@"="];
-            if (kv.count == 2) {
-                NSString *key = [kv[0] stringByRemovingPercentEncoding];
-                NSString *val = [kv[1] stringByRemovingPercentEncoding];
-                if ([key isEqualToString:@"api_id"]) {
-                    self.apiId = val ?: @"";
-                } else if ([key isEqualToString:@"device_code"]) {
-                    self.deviceCode = val ?: @"";
-                }
-            }
-        }
+    // 构建 URL：ws:// → wss://（如果还不是 wss://）
+    NSString *urlStr = serverURL;
+    if ([urlStr hasPrefix:@"ws://"]) {
+        urlStr = [urlStr stringByReplacingCharactersInRange:NSMakeRange(0, 2) withString:@"http"];
     }
-    NSRange cr = [base rangeOfString:@":"];
-    if (cr.location != NSNotFound) {
-        _serverHost = [base substringToIndex:cr.location];
-        _serverPort = [[base substringFromIndex:cr.location + 1] intValue];
-    } else {
-        _serverHost = base;
-        _serverPort = 8000;
+    // 如果没有协议前缀，添加 https://
+    if (![urlStr hasPrefix:@"http"]) {
+        urlStr = [@"https://" stringByAppendingString:urlStr];
+    }
+    // 确保端口是 443（如果不是的话）
+    // 注意：URL 里可能已有 api_id 和 device_code 查询参数（由 XNOWER.m 构建）
+
+    NSURL *url = [NSURL URLWithString:urlStr];
+    if (!url) {
+        NSLog(@"[WsClient] ❌ 无效URL: %@", urlStr);
+        return;
     }
 
-    dispatch_async(_pollQueue, ^{
-        // 先上报状态
-        // 初始状态：带上 api_id / device_code 让后端识别
-        NSMutableDictionary *initData = [@{@"device_id": deviceId ?: @"", @"connected": @YES} mutableCopy];
-        if (self.apiId.length > 0) initData[@"api_id"] = self.apiId;
-        if (self.deviceCode.length > 0) initData[@"device_code"] = self.deviceCode;
-        [self _sendToServer:@{@"type": @"status", @"data": initData}];
+    NSLog(@"[WsClient] 🔗 连接: %@", urlStr);
+    [self _connectWithURL:url];
+}
 
-        // 标记已连接，通知 delegate
-        self.pollingActive = YES;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self.delegate wsClientDidConnect:self];
-        });
+- (void)_connectWithURL:(NSURL *)url {
+    [self _cancelTask];
 
-        // 启动轮询循环
-        [self _pollLoop];
+    self.wsTask = [self.urlSession webSocketTaskWithURL:url];
+    [self.wsTask resume];
+
+    // 通知 delegate 已连接（WebSocket 打开后会回调）
+    _isConnected = YES;
+    [self _receiveMessage];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.delegate wsClientDidConnect:self];
     });
 }
 
 - (void)disconnect {
     self.intentionalDisconnect = YES;
-    self.pollingActive = NO;
     _isConnected = NO;
+    [self _cancelTask];
 }
 
+- (void)_cancelTask {
+    [self.wsTask cancelWithCloseCode:NSURLSessionWebSocketCloseCodeNormalClosure reason:nil];
+    self.wsTask = nil;
+}
+
+#pragma mark - 消息发送
+
 - (void)sendMessage:(NSDictionary *)message {
-    if (!_isConnected) return;
-    dispatch_async(_pollQueue, ^{
-        [self _sendToServer:message];
-    });
+    if (!self.wsTask || self.intentionalDisconnect) return;
+
+    NSError *err = nil;
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:message options:0 error:&err];
+    if (!jsonData) {
+        NSLog(@"[WsClient] JSON序列化失败: %@", err);
+        return;
+    }
+
+    NSString *jsonStr = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+    NSURLSessionWebSocketMessage *msg = [[NSURLSessionWebSocketMessage alloc] initWithString:jsonStr];
+
+    [self.wsTask sendMessage:msg completionHandler:^(NSError *error) {
+        if (error) {
+            NSLog(@"[WsClient] 发送失败: %@", error.localizedDescription);
+        }
+    }];
 }
 
 - (void)sendString:(NSString *)string {
-    // 不支持原始字符串发送，通过 sendMessage
+    // 不支持原始字符串发送
 }
 
-#pragma mark - HTTP Poll Loop
+#pragma mark - 消息接收
 
-- (void)_pollLoop {
-    // 每 5 秒轮询一次
-    while (self.pollingActive && !self.intentionalDisconnect) {
-        @autoreleasepool {
-            // 发送所有积压消息
-            for (NSDictionary *msg in self.pendingMessages) {
-                [self _sendToServer:msg];
-            }
-            [self.pendingMessages removeAllObjects];
+- (void)_receiveMessage {
+    if (self.intentionalDisconnect || !self.wsTask) return;
 
-            // 轮询指令
-            [self _pollForCommands];
+    __weak typeof(self) weakSelf = self;
+    [self.wsTask receiveMessageWithCompletionHandler:^(NSURLSessionWebSocketMessage *message, NSError *error) {
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf || strongSelf.intentionalDisconnect) return;
 
-            // 间隔 5 秒
-            for (int i = 0; i < 50 && self.pollingActive && !self.intentionalDisconnect; i++) {
-                usleep(100000); // 100ms × 50 = 5s
+        if (error) {
+            NSLog(@"[WsClient] 接收错误: %@", error.localizedDescription);
+            [strongSelf _handleDisconnect:error];
+            return;
+        }
+
+        if (message.type == NSURLSessionWebSocketMessageTypeString && message.string) {
+            NSData *jsonData = [message.string dataUsingEncoding:NSUTF8StringEncoding];
+            NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:nil];
+            if (dict) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [strongSelf.delegate wsClient:strongSelf didReceiveMessage:dict];
+                });
+            } else {
+                // 不是 JSON，按原始字符串处理
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if ([strongSelf.delegate respondsToSelector:@selector(wsClient:didReceiveMessage:)]) {
+                        [strongSelf.delegate wsClient:strongSelf didReceiveMessage:@{
+                            @"type": @"raw",
+                            @"data": message.string
+                        }];
+                    }
+                });
             }
         }
-    }
+
+        // 继续接收下一条
+        [strongSelf _receiveMessage];
+    }];
+}
+
+#pragma mark - 断线处理与重连
+
+- (void)_handleDisconnect:(NSError *)error {
     _isConnected = NO;
+    self.wsTask = nil;
+
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self.delegate wsClientDidDisconnect:self error:nil];
+        [self.delegate wsClientDidDisconnect:self error:error];
+    });
+
+    // 主动断开不重连
+    if (self.intentionalDisconnect) return;
+
+    // 指数退避重连
+    self.reconnectAttempts++;
+    NSTimeInterval delay = pow(2, MIN(self.reconnectAttempts, 5)); // 2^1~2^5 = 2s~32s
+    delay = MIN(delay, kMaxReconnectDelay);
+
+    NSLog(@"[WsClient] 🔄 %ld秒后重连 (第%ld次)", (long)delay, (long)self.reconnectAttempts);
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        if (!self.intentionalDisconnect) {
+            NSLog(@"[WsClient] 🔄 重连中...");
+            // 从 XNOWER.m 获取 serverURL（通过 NSUserDefaults）
+            NSString *savedURL = [[NSUserDefaults standardUserDefaults]
+                                   stringForKey:@"XNOWER_ServerURL"] ?: @"wss://192.129.210.52:443";
+            NSURL *url = [NSURL URLWithString:savedURL];
+            if (url) {
+                [self _connectWithURL:url];
+            }
+        }
     });
 }
 
-#pragma mark - TCP HTTP Client
-
-- (void)_sendToServer:(NSDictionary *)payload {
-    if (self.intentionalDisconnect) return;
-
-    // 构建 JSON
-    NSError *err = nil;
-    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:payload options:0 error:&err];
-    if (!jsonData) return;
-
-    int sock = [self _connectSocket];
-    if (sock < 0) return;
-
-    NSString *body = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
-    NSString *request = [NSString stringWithFormat:
-        @"POST /ws/%@ HTTP/1.1\r\n"
-        @"Host: %@:%d\r\n"
-        @"Content-Type: application/json\r\n"
-        @"Content-Length: %lu\r\n"
-        @"Connection: close\r\n"
-        @"\r\n%@",
-        self.deviceId ?: @"", self.serverHost, self.serverPort,
-        (unsigned long)body.length, body];
-
-    const char *reqC = [request UTF8String];
-    size_t toSend = strlen(reqC);
-    size_t sent = 0;
-    while (sent < toSend) {
-        ssize_t n = write(sock, reqC + sent, toSend - sent);
-        if (n <= 0) break;
-        sent += n;
-    }
-
-    // 读取响应（最多等 5 秒）
-    struct timeval tv = {5, 0};
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
-    NSMutableData *respData = [NSMutableData data];
-    char buf[4096];
-    ssize_t n;
-    while ((n = read(sock, buf, sizeof(buf))) > 0) {
-        [respData appendBytes:buf length:n];
-    }
-    close(sock);
-
-    // 解析响应
-    NSString *resp = [[NSString alloc] initWithData:respData encoding:NSUTF8StringEncoding];
-    if ([resp containsString:@"HTTP/1.1 200"] || [resp containsString:@"HTTP/1.1 201"]) {
-        // 查找 JSON body（在 \r\n\r\n 之后）
-        NSRange headerEnd = [resp rangeOfString:@"\r\n\r\n"];
-        if (headerEnd.location != NSNotFound) {
-            NSString *bodyStr = [resp substringFromIndex:headerEnd.location + 4];
-            NSData *bodyData = [bodyStr dataUsingEncoding:NSUTF8StringEncoding];
-            if (bodyData) {
-                NSDictionary *responseJSON = [NSJSONSerialization JSONObjectWithData:bodyData options:0 error:nil];
-                [self _handleResponse:responseJSON];
-            }
-        }
-    }
-}
-
-- (void)_pollForCommands {
-    if (self.intentionalDisconnect) return;
-
-    int sock = [self _connectSocket];
-    if (sock < 0) return;
-
-    NSString *request = [NSString stringWithFormat:
-        @"GET /ws/%@/poll HTTP/1.1\r\n"
-        @"Host: %@:%d\r\n"
-        @"Connection: close\r\n"
-        @"\r\n",
-        self.deviceId ?: @"", self.serverHost, self.serverPort];
-
-    const char *reqC = [request UTF8String];
-    size_t toSend = strlen(reqC);
-    size_t sent = 0;
-    while (sent < toSend) {
-        ssize_t n = write(sock, reqC + sent, toSend - sent);
-        if (n <= 0) break;
-        sent += n;
-    }
-
-    struct timeval tv = {5, 0};
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    NSMutableData *respData = [NSMutableData data];
-    char buf[4096];
-    ssize_t n;
-    while ((n = read(sock, buf, sizeof(buf))) > 0) {
-        [respData appendBytes:buf length:n];
-    }
-    close(sock);
-
-    NSString *resp = [[NSString alloc] initWithData:respData encoding:NSUTF8StringEncoding];
-    if ([resp containsString:@"200"]) {
-        NSRange headerEnd = [resp rangeOfString:@"\r\n\r\n"];
-        if (headerEnd.location != NSNotFound) {
-            NSString *bodyStr = [resp substringFromIndex:headerEnd.location + 4];
-            NSData *bodyData = [bodyStr dataUsingEncoding:NSUTF8StringEncoding];
-            if (bodyData) {
-                NSDictionary *json = [NSJSONSerialization JSONObjectWithData:bodyData options:0 error:nil];
-                if (json && json[@"command"]) {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        [self.delegate wsClient:self didReceiveMessage:json];
-                    });
-                }
-            }
-        }
-    }
-}
-
-- (int)_connectSocket {
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) return -1;
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_len = sizeof(addr);
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(self.serverPort);
-
-    if (inet_pton(AF_INET, [self.serverHost UTF8String], &addr.sin_addr) != 1) {
-        struct hostent *he = gethostbyname([self.serverHost UTF8String]);
-        if (!he) { close(sock); return -1; }
-        memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
-    }
-
-    struct timeval tv = {5, 0};
-    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-
-    if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(sock);
-        return -1;
-    }
-    return sock;
-}
-
-- (void)_handleResponse:(NSDictionary *)json {
-    if (!json) return;
-    // 把服务端响应作为消息传给 delegate
-    if (json[@"command"] || json[@"action"] || json[@"type"]) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self.delegate wsClient:self didReceiveMessage:json];
-        });
-    }
+- (void)dealloc {
+    self.intentionalDisconnect = YES;
+    [self _cancelTask];
+    [_urlSession invalidateAndCancel];
 }
 
 @end

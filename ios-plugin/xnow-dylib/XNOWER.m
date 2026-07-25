@@ -16,7 +16,7 @@
 #import <pthread.h>
 
 // ======== 默认配置 ========
-NSString *const kXnowDefaultServerURL = @"ws://192.129.210.52:8000";
+NSString *const kXnowDefaultServerURL = @"wss://192.129.210.52:443";
 NSString *const kXnowConfigKeyServerURL = @"XNOWER_ServerURL";
 NSString *const kXnowConfigKeyEnabled = @"XNOWER_Enabled";
 static NSString *const kXnowDeviceIdKey = @"XNOWER_DeviceID";

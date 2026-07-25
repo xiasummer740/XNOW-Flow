@@ -1,5 +1,6 @@
 // WsClient.h
-// XNOW WebSocket 客户端 - 基于 NSURLSessionWebSocketTask
+// XNOW WebSocket 客户端 — 基于 NSURLSessionWebSocketTask
+// 连接 VPS 443 端口（WSS），支持自签名证书
 // 零外部依赖，适配 iOS 13+
 
 #import <Foundation/Foundation.h>
