@@ -10,6 +10,7 @@
 #import <netdb.h>
 #import <arpa/inet.h>
 #import <Security/Security.h>
+#import <Security/SecureTransport.h>
 
 // ====== 绕过 fishhook — 从系统库加载原始函数 ======
 typedef int (*sys_socket_t)(int, int, int);
@@ -56,7 +57,7 @@ static OSStatus tls_recv(SSLConnectionRef conn, void *data, size_t *len) {
     int fd = (int)(intptr_t)conn;
     ssize_t n = real_recv(fd, data, *len, 0);
     if (n > 0) { *len = n; return errSecSuccess; }
-    if (n == 0) { *len = 0; return errSSLClosed; }
+    if (n == 0) { *len = 0; return errSSLClosedGraceful; }
     *len = 0;
     return errSecIO;
 }
