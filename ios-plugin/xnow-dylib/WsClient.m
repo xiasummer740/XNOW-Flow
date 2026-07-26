@@ -62,6 +62,7 @@ static OSStatus tls_write_func(SSLConnectionRef c, const void *d, size_t *l) {
 @interface WsClient () {
     int _sockFd;
     SSLContextRef _sslCtx;
+    dispatch_queue_t _netQueue; // 串行队列，所有网络操作在此进行
 }
 @property (copy)   NSString *deviceId;
 @property (copy)   NSString *host;
@@ -78,6 +79,7 @@ static OSStatus tls_write_func(SSLConnectionRef c, const void *d, size_t *l) {
         _intentionalDisconnect = NO;
         _host = @"yunkong.taikon.top";
         _port = 443;
+        _netQueue = dispatch_queue_create("com.xnow.wsclient", DISPATCH_QUEUE_SERIAL);
     }
     return self;
 }
@@ -251,53 +253,68 @@ static OSStatus tls_write_func(SSLConnectionRef c, const void *d, size_t *l) {
 
     NSLog(@"[WsClient] 🚀 %@:%d id=%@", self.host, self.port, deviceId);
 
-    // 连接测试
-    NSData *r = [self _httpCall:@"GET" path:@"/health" body:nil];
-    if (!r) {
-        NSLog(@"[WsClient] ❌ 连接失败");
-        _isConnected = NO;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self.delegate wsClientDidDisconnect:self error:[NSError errorWithDomain:@"WsClient" code:-1 userInfo:@{NSLocalizedDescriptionKey:@"连接失败"}]];
-        });
-        return;
-    }
+    // ★ 所有网络操作在后台串行队列执行，不阻塞主线程
+    __weak typeof(self) ws = self;
+    dispatch_async(_netQueue, ^{
+        typeof(self) strongSelf = ws;
+        if (!strongSelf || strongSelf.intentionalDisconnect) return;
 
-    NSLog(@"[WsClient] ✅ 连接成功");
-    _isConnected = YES;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self.delegate wsClientDidConnect:self];
+        NSData *r = [strongSelf _httpCall:@"GET" path:@"/health" body:nil];
+        if (!r) {
+            NSLog(@"[WsClient] ❌ 连接失败");
+            strongSelf->_isConnected = NO;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [ws.delegate wsClientDidDisconnect:ws error:[NSError errorWithDomain:@"WsClient" code:-1 userInfo:@{NSLocalizedDescriptionKey:@"连接失败"}]];
+            });
+            return;
+        }
+
+        NSLog(@"[WsClient] ✅ 连接成功");
+        strongSelf->_isConnected = YES;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [ws.delegate wsClientDidConnect:ws];
+        });
+        [strongSelf sendMessage:@{@"type": @"status", @"data": @{@"device_id": deviceId ?: @"", @"status": @"online"}}];
+        [strongSelf _startPolling];
     });
-    [self sendMessage:@{@"type": @"status", @"data": @{@"device_id": deviceId ?: @"", @"status": @"online"}}];
-    [self _startPolling];
 }
 
 - (void)disconnect {
     self.intentionalDisconnect = YES;
     _isConnected = NO;
     [self _stopPolling];
-    [self _cleanup];
+    dispatch_async(_netQueue, ^{
+        [self _cleanup];
+    });
 }
 
 - (void)sendMessage:(NSDictionary *)msg {
     if (!msg || self.intentionalDisconnect || !_isConnected) return;
-    NSData *json = [NSJSONSerialization dataWithJSONObject:msg options:0 error:nil];
-    if (!json) return;
-    NSString *path = [NSString stringWithFormat:@"/ws/%@", self.deviceId ?: @"unknown"];
-    NSData *r = [self _httpCall:@"POST" path:path body:json];
-    if (!r) {
-        _isConnected = NO;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self.delegate wsClientDidDisconnect:self error:[NSError errorWithDomain:@"WsClient" code:-2 userInfo:@{NSLocalizedDescriptionKey:@"通信中断"}]];
-        });
-        return;
-    }
-    NSDictionary *d = [NSJSONSerialization JSONObjectWithData:r options:0 error:nil];
-    if ([d isKindOfClass:[NSDictionary class]]) {
-        if (d[@"command"])
-            dispatch_async(dispatch_get_main_queue(), ^{ [self.delegate wsClient:self didReceiveMessage:d[@"command"]]; });
-        else if (d[@"ack"])
-            dispatch_async(dispatch_get_main_queue(), ^{ [self.delegate wsClient:self didReceiveMessage:d[@"ack"]]; });
-    }
+
+    __weak typeof(self) ws = self;
+    dispatch_async(_netQueue, ^{
+        typeof(self) s = ws;
+        if (!s || s.intentionalDisconnect) return;
+
+        NSData *json = [NSJSONSerialization dataWithJSONObject:msg options:0 error:nil];
+        if (!json) return;
+        NSString *path = [NSString stringWithFormat:@"/ws/%@", s.deviceId ?: @"unknown"];
+        NSData *r = [s _httpCall:@"POST" path:path body:json];
+        if (!r) {
+            s->_isConnected = NO;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [ws.delegate wsClientDidDisconnect:ws error:[NSError errorWithDomain:@"WsClient" code:-2 userInfo:@{NSLocalizedDescriptionKey:@"通信中断"}]];
+            });
+            return;
+        }
+        NSDictionary *d = [NSJSONSerialization JSONObjectWithData:r options:0 error:nil];
+        if ([d isKindOfClass:[NSDictionary class]]) {
+            if (d[@"command"])
+                dispatch_async(dispatch_get_main_queue(), ^{ [ws.delegate wsClient:ws didReceiveMessage:d[@"command"]]; });
+            else if (d[@"ack"])
+                dispatch_async(dispatch_get_main_queue(), ^{ [ws.delegate wsClient:ws didReceiveMessage:d[@"ack"]]; });
+        }
+    });
 }
 
 - (void)sendString:(NSString *)string {}
@@ -320,11 +337,16 @@ static OSStatus tls_write_func(SSLConnectionRef c, const void *d, size_t *l) {
 
 - (void)_pollTick {
     if (self.intentionalDisconnect || !self.isConnected) return;
-    NSData *r = [self _httpCall:@"GET" path:[NSString stringWithFormat:@"/ws/%@/poll", self.deviceId ?: @"unknown"] body:nil];
-    if (!r) return;
-    id obj = [NSJSONSerialization JSONObjectWithData:r options:0 error:nil];
-    if ([obj isKindOfClass:[NSDictionary class]] && (((NSDictionary *)obj)[@"action"] || ((NSDictionary *)obj)[@"type"]))
-        dispatch_async(dispatch_get_main_queue(), ^{ [self.delegate wsClient:self didReceiveMessage:obj]; });
+    __weak typeof(self) ws = self;
+    dispatch_async(_netQueue, ^{
+        typeof(self) s = ws;
+        if (!s || s.intentionalDisconnect || !s.isConnected) return;
+        NSData *r = [s _httpCall:@"GET" path:[NSString stringWithFormat:@"/ws/%@/poll", s.deviceId ?: @"unknown"] body:nil];
+        if (!r) return;
+        id obj = [NSJSONSerialization JSONObjectWithData:r options:0 error:nil];
+        if ([obj isKindOfClass:[NSDictionary class]] && (((NSDictionary *)obj)[@"action"] || ((NSDictionary *)obj)[@"type"]))
+            dispatch_async(dispatch_get_main_queue(), ^{ [ws.delegate wsClient:ws didReceiveMessage:obj]; });
+    });
 }
 
 - (void)dealloc {
