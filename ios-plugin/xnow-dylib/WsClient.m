@@ -112,7 +112,7 @@ static void ensure_raw_funcs(void) {
         return NO;
     }
 
-    // 配置 TLS（信任自签名和过期证书，兼容各种场景）
+    // 配置 TLS
     NSDictionary *sslSettings = @{
         (__bridge id)kCFStreamSSLLevel: (__bridge id)kCFStreamSocketSecurityLevelNegotiatedSSL,
         (__bridge id)kCFStreamSSLPeerName: host,
@@ -120,7 +120,12 @@ static void ensure_raw_funcs(void) {
     CFReadStreamSetProperty(_readStream, kCFStreamPropertySSLSettings, (__bridge CFTypeRef)sslSettings);
     CFWriteStreamSetProperty(_writeStream, kCFStreamPropertySSLSettings, (__bridge CFTypeRef)sslSettings);
 
-    // 打开流（触发 TLS 握手）
+    // ★ 关键：CFStream TLS 需要 run loop 驱动握手
+    // 调度到主线程 run loop
+    CFReadStreamScheduleWithRunLoop(_readStream, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
+    CFWriteStreamScheduleWithRunLoop(_writeStream, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
+
+    // 打开流
     Boolean rOk = CFReadStreamOpen(_readStream);
     Boolean wOk = CFWriteStreamOpen(_writeStream);
     if (!rOk || !wOk) {
@@ -129,25 +134,25 @@ static void ensure_raw_funcs(void) {
         return NO;
     }
 
-    // 等待 TLS 握手完成（最多 10 秒）
-    for (int i = 0; i < 100; i++) {
-        CFStreamStatus rStatus = CFReadStreamGetStatus(_readStream);
-        CFStreamStatus wStatus = CFWriteStreamGetStatus(_writeStream);
-        if (rStatus == kCFStreamStatusOpen || rStatus == kCFStreamStatusReading ||
-            wStatus == kCFStreamStatusOpen || wStatus == kCFStreamStatusWriting) {
-            break;
+    // 跑 run loop 驱动 TLS 握手（最多 10 秒）
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode, timeout, false);
+
+    // 检查 TLS 握手结果
+    CFStreamStatus rStatus = CFReadStreamGetStatus(_readStream);
+    CFStreamStatus wStatus = CFWriteStreamGetStatus(_writeStream);
+    if (rStatus == kCFStreamStatusError || wStatus == kCFStreamStatusError ||
+        rStatus == kCFStreamStatusClosed || wStatus == kCFStreamStatusClosed) {
+        CFErrorRef error = CFReadStreamCopyError(_readStream);
+        if (error) {
+            NSLog(@"[WsClient] ❌ TLS 握手失败: %@", error);
+            CFRelease(error);
+        } else {
+            NSLog(@"[WsClient] ❌ TLS 握手失败 (r=%d w=%d)", rStatus, wStatus);
         }
-        if (rStatus == kCFStreamStatusError || wStatus == kCFStreamStatusError) {
-            CFErrorRef error = CFReadStreamCopyError(_readStream);
-            if (error) {
-                NSLog(@"[WsClient] ❌ TLS 握手失败: %@", error);
-                CFRelease(error);
-            }
-            [self _cleanupStreams];
-            return NO;
-        }
-        usleep(100000); // 100ms
+        [self _cleanupStreams];
+        return NO;
     }
+    NSLog(@"[WsClient] 🔒 TLS 握手成功 (r=%d w=%d, %@:%d)", rStatus, wStatus, host, port);
 
     _sockFd = fd;
     NSLog(@"[WsClient] 🔒 TLS 握手成功 (%@:%d)", host, port);
@@ -156,11 +161,13 @@ static void ensure_raw_funcs(void) {
 
 - (void)_cleanupStreams {
     if (_readStream) {
+        CFReadStreamUnscheduleFromRunLoop(_readStream, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
         CFReadStreamClose(_readStream);
         CFRelease(_readStream);
         _readStream = NULL;
     }
     if (_writeStream) {
+        CFWriteStreamUnscheduleFromRunLoop(_writeStream, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
         CFWriteStreamClose(_writeStream);
         CFRelease(_writeStream);
         _writeStream = NULL;
@@ -348,6 +355,14 @@ static void ensure_raw_funcs(void) {
 - (void)sendMessage:(NSDictionary *)message {
     if (!message || self.intentionalDisconnect) return;
 
+    // 确保在主线程（CFStream TLS 需要主 run loop）
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self sendMessage:message];
+        });
+        return;
+    }
+
     NSError *err = nil;
     NSData *jsonData = [NSJSONSerialization dataWithJSONObject:message options:0 error:&err];
     if (!jsonData) {
@@ -396,11 +411,12 @@ static void ensure_raw_funcs(void) {
 - (void)_startPolling {
     [self _stopPolling];
 
+    // 轮询必须在主线程（CFStream TLS 需要主 run loop）
     dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
-        dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0));
+        dispatch_get_main_queue());
     dispatch_source_set_timer(timer,
         dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC),
-        5 * NSEC_PER_SEC, 1 * NSEC_PER_SEC);
+        8 * NSEC_PER_SEC, 2 * NSEC_PER_SEC);
 
     __weak typeof(self) weakSelf = self;
     dispatch_source_set_event_handler(timer, ^{
