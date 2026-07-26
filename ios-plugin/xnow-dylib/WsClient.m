@@ -62,17 +62,16 @@ static const NSInteger kMaxReconnectDelay = 30;  // 最大重连间隔（秒）
     self.intentionalDisconnect = NO;
     self.reconnectAttempts = 0;
 
-    // 构建 URL：ws:// → wss://（如果还不是 wss://）
+    // 构建 URL：直接使用 wss:// 或 ws:// 协议
+    // 传入的 serverURL 格式示例：
+    //   @"wss://yunkong.taikon.top"
+    //   @"wss://yunkong.taikon.top?api_id=xxx&device_code=xxx"
     NSString *urlStr = serverURL;
-    if ([urlStr hasPrefix:@"ws://"]) {
-        urlStr = [urlStr stringByReplacingCharactersInRange:NSMakeRange(0, 2) withString:@"http"];
+    // 如果没有任何协议前缀，默认 wss://
+    if (![urlStr hasPrefix:@"ws://"] && ![urlStr hasPrefix:@"wss://"] &&
+        ![urlStr hasPrefix:@"http://"] && ![urlStr hasPrefix:@"https://"]) {
+        urlStr = [@"wss://" stringByAppendingString:urlStr];
     }
-    // 如果没有协议前缀，添加 https://
-    if (![urlStr hasPrefix:@"http"]) {
-        urlStr = [@"https://" stringByAppendingString:urlStr];
-    }
-    // 确保端口是 443（如果不是的话）
-    // 注意：URL 里可能已有 api_id 和 device_code 查询参数（由 XNOWER.m 构建）
 
     NSURL *url = [NSURL URLWithString:urlStr];
     if (!url) {
@@ -203,7 +202,7 @@ static const NSInteger kMaxReconnectDelay = 30;  // 最大重连间隔（秒）
             NSLog(@"[WsClient] 🔄 重连中...");
             // 从 XNOWER.m 获取 serverURL（通过 NSUserDefaults）
             NSString *savedURL = [[NSUserDefaults standardUserDefaults]
-                                   stringForKey:@"XNOWER_ServerURL"] ?: @"wss://192.129.210.52:443";
+                                   stringForKey:@"XNOWER_ServerURL"] ?: @"wss://yunkong.taikon.top";
             NSURL *url = [NSURL URLWithString:savedURL];
             if (url) {
                 [self _connectWithURL:url];
