@@ -89,9 +89,15 @@ static OSStatus tls_write_func(SSLConnectionRef c, const void *d, size_t *l) {
     load_raw();
     [self _cleanup];
 
-    // DNS
+    // DNS (如果 gethostbyname 也被 BH hook，用硬编码 IP 兜底)
     struct hostent *he = gethostbyname([self.host UTF8String]);
-    if (!he || !he->h_addr_list[0]) return NO;
+    uint32_t fallback_ip = 0;
+    if (!he || !he->h_addr_list[0]) {
+        // gethostbyname 返回空，可能是被 BH hook 了，用硬编码 Cloudflare IP
+        NSLog(@"[WsClient] ⚠️ DNS 失败，用硬编码 IP");
+        // yunkong.taikon.top → 172.67.194.202 (Cloudflare)
+        fallback_ip = inet_addr("172.67.194.202");
+    }
 
     // Socket
     int fd = real_socket(AF_INET, SOCK_STREAM, 0);
@@ -107,7 +113,11 @@ static OSStatus tls_write_func(SSLConnectionRef c, const void *d, size_t *l) {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port   = htons(self.port);
-    memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
+    if (fallback_ip != 0) {
+        addr.sin_addr.s_addr = fallback_ip;
+    } else {
+        memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
+    }
     if (real_connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         real_close(fd);
         return NO;
