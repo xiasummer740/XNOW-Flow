@@ -56,7 +56,7 @@ static OSStatus tls_recv(SSLConnectionRef conn, void *data, size_t *len) {
     int fd = (int)(intptr_t)conn;
     ssize_t n = real_recv(fd, data, *len, 0);
     if (n > 0) { *len = n; return errSecSuccess; }
-    if (n == 0) { *len = 0; return errSecClosed; }
+    if (n == 0) { *len = 0; return errSSLClosed; }
     *len = 0;
     return errSecIO;
 }
@@ -171,12 +171,12 @@ static OSStatus tls_recv(SSLConnectionRef conn, void *data, size_t *len) {
 }
 
 // 通过 TLS 读取数据（返回实际读取的字节数）
-- (SSIZE_T)_tlsRead:(void *)buf maxLen:(size_t)maxLen {
+- (NSInteger)_tlsRead:(void *)buf maxLen:(size_t)maxLen {
     if (!_sslCtx) return -1;
     size_t got = 0;
     OSStatus s = SSLRead(_sslCtx, buf, maxLen, &got);
-    if (s == errSecSuccess || s == errSSLWouldBlock) return (SSIZE_T)got;
-    if (s == errSSLClosedGraceful || got > 0) return (SSIZE_T)got;
+    if (s == errSecSuccess || s == errSSLWouldBlock) return (NSInteger)got;
+    if (s == errSSLClosedGraceful || got > 0) return (NSInteger)got;
     return -1;
 }
 
@@ -219,7 +219,7 @@ static OSStatus tls_recv(SSLConnectionRef conn, void *data, size_t *len) {
     NSMutableData *resp = [NSMutableData data];
     uint8_t buf[4096];
     while (1) {
-        SSIZE_T n = [self _tlsRead:buf maxLen:sizeof(buf)];
+        NSInteger n = [self _tlsRead:buf maxLen:sizeof(buf)];
         if (n <= 0) break;
         [resp appendBytes:buf length:n];
     }
