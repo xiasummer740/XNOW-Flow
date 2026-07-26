@@ -1,24 +1,28 @@
 // WsClient.m
 // XNOW 原始 TCP + TLS 客户端
-// 使用 dlsym 加载原始 connect() 绕过 BH fishhook，然后 CFStream 做 TLS
-// 通信方式：HTTP 短连接轮询（每次请求新建 TCP 连接，POST/GET 后关闭）
-// 连接目标：wss://yunkong.taikon.top（Cloudflare Tunnel，绕过 BH IP 检测）
+// 使用 dlsym 加载原始 connect/send/recv 绕过 BH fishhook
+// TLS: Secure Transport API (SSLCreateContext) — 全同步，无 run loop 依赖
+// 通信：HTTP 短连接轮询（Cloudflare Tunnel → wss://yunkong.taikon.top）
 
 #import "WsClient.h"
 #import <dlfcn.h>
 #import <sys/socket.h>
 #import <netdb.h>
 #import <arpa/inet.h>
-#import <CFNetwork/CFHTTPMessage.h>
+#import <Security/Security.h>
 
-// ====== 绕过 fishhook 的原始系统函数 ======
+// ====== 绕过 fishhook — 从系统库加载原始函数 ======
 typedef int (*sys_socket_t)(int, int, int);
 typedef int (*sys_connect_t)(int, const struct sockaddr *, socklen_t);
 typedef int (*sys_close_t)(int);
+typedef ssize_t (*sys_send_t)(int, const void *, size_t, int);
+typedef ssize_t (*sys_recv_t)(int, void *, size_t, int);
 
 static sys_socket_t real_socket = NULL;
 static sys_connect_t real_connect = NULL;
-static sys_close_t  real_close  = NULL;
+static sys_close_t   real_close   = NULL;
+static sys_send_t    real_send    = NULL;
+static sys_recv_t    real_recv    = NULL;
 
 static void ensure_raw_funcs(void) {
     static dispatch_once_t onceToken;
@@ -27,13 +31,34 @@ static void ensure_raw_funcs(void) {
         if (lib) {
             real_socket = (sys_socket_t)dlsym(lib, "socket");
             real_connect = (sys_connect_t)dlsym(lib, "connect");
-            real_close  = (sys_close_t)dlsym(lib, "close");
+            real_close   = (sys_close_t)dlsym(lib, "close");
+            real_send    = (sys_send_t)dlsym(lib, "send");
+            real_recv    = (sys_recv_t)dlsym(lib, "recv");
         }
-        // 安全 fallback（如果 dlsym 返回相同的已 hook 地址，那也是 try 了）
         if (!real_socket) real_socket = socket;
         if (!real_connect) real_connect = connect;
-        if (!real_close)  real_close  = close;
+        if (!real_close)   real_close   = close;
+        if (!real_send)    real_send    = (sys_send_t)send;
+        if (!real_recv)    real_recv    = (sys_recv_t)recv;
     });
+}
+
+// ====== Secure Transport I/O 回调（通过 real_send/real_recv） ======
+static OSStatus tls_send(SSLConnectionRef conn, const void *data, size_t *len) {
+    int fd = (int)(intptr_t)conn;
+    ssize_t n = real_send(fd, data, *len, 0);
+    if (n > 0) { *len = n; return errSecSuccess; }
+    *len = 0;
+    return errSecIO;
+}
+
+static OSStatus tls_recv(SSLConnectionRef conn, void *data, size_t *len) {
+    int fd = (int)(intptr_t)conn;
+    ssize_t n = real_recv(fd, data, *len, 0);
+    if (n > 0) { *len = n; return errSecSuccess; }
+    if (n == 0) { *len = 0; return errSecClosed; }
+    *len = 0;
+    return errSecIO;
 }
 
 // ====== 接口定义 ======
@@ -43,9 +68,8 @@ static void ensure_raw_funcs(void) {
 @property (nonatomic, assign) int       port;
 @property (nonatomic, assign) BOOL      intentionalDisconnect;
 @property (nonatomic, strong) dispatch_source_t pollTimer;
-@property (nonatomic, assign) int       sockFd;     // 当前 raw socket fd
-@property (nonatomic, assign) CFReadStreamRef  readStream;
-@property (nonatomic, assign) CFWriteStreamRef writeStream;
+@property (nonatomic, assign) int       sockFd;     // 当前 socket fd
+@property (nonatomic, assign) SSLContextRef sslCtx; // TLS 上下文
 @end
 
 @implementation WsClient
@@ -55,35 +79,30 @@ static void ensure_raw_funcs(void) {
     if (self) {
         _intentionalDisconnect = NO;
         _sockFd = -1;
-        _readStream = NULL;
-        _writeStream = NULL;
+        _sslCtx = NULL;
         _port = 443;
     }
     return self;
 }
 
-#pragma mark - 原始 TCP + TLS 连接
+#pragma mark - 原始 TCP + Secure Transport TLS
 
-// 建立原始 TCP 连接（绕过 fishhook）→ CFStream + TLS
-- (BOOL)_rawConnect:(NSString *)host port:(int)port timeout:(NSTimeInterval)timeout {
+- (BOOL)_tlsConnect:(NSString *)host port:(int)port timeout:(NSTimeInterval)timeout {
     ensure_raw_funcs();
-    [self _cleanupStreams];
+    [self _cleanup];
 
-    // DNS 解析
+    // 解析 DNS
     struct hostent *he = gethostbyname([host UTF8String]);
     if (!he || !he->h_addr_list[0]) {
-        NSLog(@"[WsClient] ❌ DNS 解析失败: %@", host);
+        NSLog(@"[WsClient] ❌ DNS: %@", host);
         return NO;
     }
 
-    // 原始 socket（不被 BH fishhook 拦截）
+    // 原始 socket（绕过 BH fishhook）
     int fd = real_socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) {
-        NSLog(@"[WsClient] ❌ socket() 失败: %s", strerror(errno));
-        return NO;
-    }
+    if (fd < 0) { NSLog(@"[WsClient] ❌ socket: %s", strerror(errno)); return NO; }
 
-    // 设置 socket 超时（connect 默认可能卡 2 分钟）
+    // 连接超时
     struct timeval tv;
     tv.tv_sec = (int)timeout;
     tv.tv_usec = (timeout - (int)timeout) * 1000000;
@@ -97,80 +116,40 @@ static void ensure_raw_funcs(void) {
     memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
 
     if (real_connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        NSLog(@"[WsClient] ❌ connect() 失败: %s (目标 %s:%d)", strerror(errno), [host UTF8String], port);
+        NSLog(@"[WsClient] ❌ connect(%s:%d): %s", [host UTF8String], port, strerror(errno));
         real_close(fd);
         return NO;
     }
-
-    NSLog(@"[WsClient] ✅ 原始 connect() 成功 (fd=%d, %s:%d)", fd, inet_ntoa(addr.sin_addr), port);
-
-    // 用 CFStream 包装已连接的 socket + 添加 TLS
-    CFStreamCreatePairWithSocket(kCFAllocatorDefault, fd, &_readStream, &_writeStream);
-    if (!_readStream || !_writeStream) {
-        NSLog(@"[WsClient] ❌ CFStreamCreatePairWithSocket 失败");
-        real_close(fd);
-        return NO;
-    }
-
-    // 配置 TLS
-    NSDictionary *sslSettings = @{
-        (__bridge id)kCFStreamSSLLevel: (__bridge id)kCFStreamSocketSecurityLevelNegotiatedSSL,
-        (__bridge id)kCFStreamSSLPeerName: host,
-    };
-    CFReadStreamSetProperty(_readStream, kCFStreamPropertySSLSettings, (__bridge CFTypeRef)sslSettings);
-    CFWriteStreamSetProperty(_writeStream, kCFStreamPropertySSLSettings, (__bridge CFTypeRef)sslSettings);
-
-    // ★ 关键：CFStream TLS 需要 run loop 驱动握手
-    // 调度到主线程 run loop
-    CFReadStreamScheduleWithRunLoop(_readStream, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
-    CFWriteStreamScheduleWithRunLoop(_writeStream, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
-
-    // 打开流
-    Boolean rOk = CFReadStreamOpen(_readStream);
-    Boolean wOk = CFWriteStreamOpen(_writeStream);
-    if (!rOk || !wOk) {
-        NSLog(@"[WsClient] ❌ CFStreamOpen 失败 (r=%d w=%d)", rOk, wOk);
-        [self _cleanupStreams];
-        return NO;
-    }
-
-    // 跑 run loop 驱动 TLS 握手（最多 10 秒）
-    CFRunLoopRunInMode(kCFRunLoopDefaultMode, timeout, false);
-
-    // 检查 TLS 握手结果
-    CFStreamStatus rStatus = CFReadStreamGetStatus(_readStream);
-    CFStreamStatus wStatus = CFWriteStreamGetStatus(_writeStream);
-    if (rStatus == kCFStreamStatusError || wStatus == kCFStreamStatusError ||
-        rStatus == kCFStreamStatusClosed || wStatus == kCFStreamStatusClosed) {
-        CFErrorRef error = CFReadStreamCopyError(_readStream);
-        if (error) {
-            NSLog(@"[WsClient] ❌ TLS 握手失败: %@", error);
-            CFRelease(error);
-        } else {
-            NSLog(@"[WsClient] ❌ TLS 握手失败 (r=%d w=%d)", rStatus, wStatus);
-        }
-        [self _cleanupStreams];
-        return NO;
-    }
-    NSLog(@"[WsClient] 🔒 TLS 握手成功 (r=%d w=%d, %@:%d)", rStatus, wStatus, host, port);
-
+    NSLog(@"[WsClient] ✅ TCP 连接 (%s:%d)", inet_ntoa(addr.sin_addr), port);
     _sockFd = fd;
+
+    // Secure Transport TLS 握手（全同步，无需 run loop）
+    SSLContextRef ctx = SSLCreateContext(kCFAllocatorDefault, kSSLClientSide, kSSLStreamType);
+    if (!ctx) { NSLog(@"[WsClient] ❌ SSLCreateContext 失败"); [self _cleanup]; return NO; }
+
+    SSLSetConnection(ctx, (SSLConnectionRef)(intptr_t)fd);
+    SSLSetIOFuncs(ctx, tls_recv, tls_send);
+    // 设置 SNI（Server Name Indication），Cloudflare 需要
+    SSLSetPeerDomainName(ctx, [host UTF8String], (SInt32)[host length]);
+
+    OSStatus status = SSLHandshake(ctx);
+    if (status != errSecSuccess) {
+        NSLog(@"[WsClient] ❌ TLS 握手失败: %d", (int)status);
+        CFRelease(ctx);
+        [self _cleanup];
+        return NO;
+    }
+
+    _sslCtx = ctx;
     NSLog(@"[WsClient] 🔒 TLS 握手成功 (%@:%d)", host, port);
     return YES;
 }
 
-- (void)_cleanupStreams {
-    if (_readStream) {
-        CFReadStreamUnscheduleFromRunLoop(_readStream, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
-        CFReadStreamClose(_readStream);
-        CFRelease(_readStream);
-        _readStream = NULL;
-    }
-    if (_writeStream) {
-        CFWriteStreamUnscheduleFromRunLoop(_writeStream, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
-        CFWriteStreamClose(_writeStream);
-        CFRelease(_writeStream);
-        _writeStream = NULL;
+- (void)_cleanup {
+    if (_sslCtx) {
+        SSLClose(_sslCtx);
+        CFRelease(_sslCtx);
+        _sslCtx = NULL;
     }
     if (_sockFd >= 0) {
         real_close(_sockFd);
@@ -178,107 +157,90 @@ static void ensure_raw_funcs(void) {
     }
 }
 
-#pragma mark - HTTP 请求（通过 TLS 流）
-
-// 发送 HTTP 请求，返回响应体（NSData）
-- (NSData *)_httpRequest:(NSString *)method path:(NSString *)path body:(NSData *)body {
-    if (!_readStream || !_writeStream) {
-        NSLog(@"[WsClient] ⚠️ 流未就绪，尝试重连...");
-        if (![self _rawConnect:self.host port:self.port timeout:10]) {
-            return nil;
-        }
+// 通过 TLS 发送数据
+- (BOOL)_tlsSend:(const void *)data length:(size_t)len {
+    if (!_sslCtx) return NO;
+    size_t processed = 0;
+    while (processed < len) {
+        size_t sent = 0;
+        OSStatus s = SSLWrite(_sslCtx, (const uint8_t *)data + processed, len - processed, &sent);
+        if (s != errSecSuccess) { return NO; }
+        processed += sent;
     }
-
-    // 构建 URL
-    NSString *urlStr = [NSString stringWithFormat:@"https://%@%@", self.host, path];
-    CFURLRef url = CFURLCreateWithString(kCFAllocatorDefault, (__bridge CFStringRef)urlStr, NULL);
-    if (!url) { NSLog(@"[WsClient] ❌ URL 创建失败: %@", urlStr); return nil; }
-
-    // 创建 CFHTTP 请求
-    CFHTTPMessageRef request = CFHTTPMessageCreateRequest(kCFAllocatorDefault,
-        (__bridge CFStringRef)method, url, kCFHTTPVersion1_1);
-    CFRelease(url);
-
-    CFHTTPMessageSetHeaderFieldValue(request, CFSTR("Host"), (__bridge CFStringRef)self.host);
-    CFHTTPMessageSetHeaderFieldValue(request, CFSTR("Connection"), CFSTR("close"));
-    CFHTTPMessageSetHeaderFieldValue(request, CFSTR("User-Agent"), CFSTR("XNOW/1.3.2"));
-
-    if (body) {
-        CFHTTPMessageSetHeaderFieldValue(request, CFSTR("Content-Type"), CFSTR("application/json"));
-        NSString *lenStr = [NSString stringWithFormat:@"%lu", (unsigned long)[body length]];
-        CFHTTPMessageSetHeaderFieldValue(request, CFSTR("Content-Length"), (__bridge CFStringRef)lenStr);
-        CFHTTPMessageSetBody(request, (__bridge CFDataRef)body);
-    }
-
-    // 序列化为原始 HTTP 字节
-    CFDataRef requestData = CFHTTPMessageCopySerializedMessage(request);
-    CFRelease(request);
-
-    if (!requestData) { NSLog(@"[WsClient] ❌ 序列化 HTTP 失败"); return nil; }
-
-    // 发送
-    const UInt8 *ptr = CFDataGetBytePtr(requestData);
-    CFIndex len = CFDataGetLength(requestData);
-    CFIndex totalSent = 0;
-    while (totalSent < len) {
-        CFIndex sent = CFWriteStreamWrite(_writeStream, ptr + totalSent, len - totalSent);
-        if (sent <= 0) {
-            NSLog(@"[WsClient] ❌ 写入流失败 (sent=%ld)", (long)sent);
-            CFRelease(requestData);
-            return nil;
-        }
-        totalSent += sent;
-    }
-    CFRelease(requestData);
-
-    // 读取响应
-    NSMutableData *responseData = [NSMutableData data];
-    uint8_t buf[16384];
-    while (1) {
-        CFIndex n = CFReadStreamRead(_readStream, buf, sizeof(buf));
-        if (n == 0) break; // EOF (Connection: close)
-        if (n < 0) {
-            CFErrorRef err = CFReadStreamCopyError(_readStream);
-            if (err) {
-                NSLog(@"[WsClient] ⚠️ 读流错误: %@", err);
-                CFRelease(err);
-            }
-            break;
-        }
-        [responseData appendBytes:buf length:n];
-    }
-
-    // 清理连接（短连接，用完即关）
-    [self _cleanupStreams];
-
-    return [self _httpResponseBody:responseData];
+    return YES;
 }
 
-// 从 HTTP 响应 data 中提取 body（跳过 headers）
-- (NSData *)_httpResponseBody:(NSData *)responseData {
-    if (!responseData || responseData.length < 4) return nil;
-    const uint8_t *bytes = [responseData bytes];
-    NSUInteger len = [responseData length];
+// 通过 TLS 读取数据（返回实际读取的字节数）
+- (SSIZE_T)_tlsRead:(void *)buf maxLen:(size_t)maxLen {
+    if (!_sslCtx) return -1;
+    size_t got = 0;
+    OSStatus s = SSLRead(_sslCtx, buf, maxLen, &got);
+    if (s == errSecSuccess || s == errSSLWouldBlock) return (SSIZE_T)got;
+    if (s == errSSLClosedGraceful || got > 0) return (SSIZE_T)got;
+    return -1;
+}
+
+#pragma mark - HTTP 请求（通过 TLS）
+
+- (NSData *)_httpRequest:(NSString *)method path:(NSString *)path body:(NSData *)body {
+    // 首次或断线时建立连接
+    if (!_sslCtx || _sockFd < 0) {
+        if (![self _tlsConnect:self.host port:self.port timeout:10]) {
+            NSLog(@"[WsClient] ⚠️ 连接失败");
+            return nil;
+        }
+    }
+
+    // 构造 HTTP 请求
+    NSMutableString *req = [NSMutableString stringWithFormat:@"%@ %@ HTTP/1.1\r\nHost: %@\r\nConnection: close\r\nUser-Agent: XNOW/1.3.2\r\n", method, path, self.host];
+    if (body) {
+        [req appendFormat:@"Content-Type: application/json\r\nContent-Length: %lu\r\n", (unsigned long)[body length]];
+    }
+    [req appendString:@"\r\n"];
+
+    // 发送请求头
+    NSData *headerData = [req dataUsingEncoding:NSUTF8StringEncoding];
+    if (![self _tlsSend:[headerData bytes] length:[headerData length]]) {
+        NSLog(@"[WsClient] ❌ 发送失败");
+        [self _cleanup];
+        return nil;
+    }
+
+    // 发送 body
+    if (body) {
+        if (![self _tlsSend:[body bytes] length:[body length]]) {
+            NSLog(@"[WsClient] ❌ body 发送失败");
+            [self _cleanup];
+            return nil;
+        }
+    }
+
+    // 读取响应
+    NSMutableData *resp = [NSMutableData data];
+    uint8_t buf[4096];
+    while (1) {
+        SSIZE_T n = [self _tlsRead:buf maxLen:sizeof(buf)];
+        if (n <= 0) break;
+        [resp appendBytes:buf length:n];
+    }
+
+    [self _cleanup]; // 短连接，用完即关
+    return [self _httpBody:resp];
+}
+
+// 从 HTTP 响应中提取 body
+- (NSData *)_httpBody:(NSData *)data {
+    if (!data || data.length < 4) return nil;
+    const uint8_t *b = [data bytes];
+    NSUInteger len = [data length];
+    // 找 \r\n\r\n
     for (NSUInteger i = 0; i < len - 3; i++) {
-        if (bytes[i] == '\r' && bytes[i+1] == '\n' && bytes[i+2] == '\r' && bytes[i+3] == '\n') {
+        if (b[i]=='\r' && b[i+1]=='\n' && b[i+2]=='\r' && b[i+3]=='\n') {
             NSUInteger bodyLen = len - i - 4;
-            if (bodyLen == 0) return nil;
-            return [responseData subdataWithRange:NSMakeRange(i+4, bodyLen)];
+            return bodyLen > 0 ? [data subdataWithRange:NSMakeRange(i+4, bodyLen)] : nil;
         }
     }
     return nil;
-}
-
-// HTTP 状态码
-- (NSInteger)_httpStatus:(NSData *)responseData {
-    if (!responseData || responseData.length < 4) return 0;
-    NSString *str = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding];
-    NSArray *lines = [str componentsSeparatedByString:@"\r\n"];
-    if (lines.count > 0) {
-        NSArray *parts = [lines[0] componentsSeparatedByString:@" "];
-        if (parts.count >= 2) return [parts[1] integerValue];
-    }
-    return 0;
 }
 
 #pragma mark - 外部接口
@@ -287,56 +249,38 @@ static void ensure_raw_funcs(void) {
     self.deviceId = deviceId;
     self.intentionalDisconnect = NO;
 
-    // 解析 URL
+    // 解析 URL: "wss://yunkong.taikon.top?api_id=xxx&device_code=xxx"
     NSString *url = serverURL;
-    // 去掉协议前缀
-    if ([url hasPrefix:@"wss://"]) url = [url substringFromIndex:6];
-    else if ([url hasPrefix:@"ws://"]) url = [url substringFromIndex:5];
-    else if ([url hasPrefix:@"https://"]) url = [url substringFromIndex:8];
-    else if ([url hasPrefix:@"http://"]) url = [url substringFromIndex:7];
-
-    // 分离 path/query
-    NSRange qRange = [url rangeOfString:@"/"];
-    NSString *hostPort;
-    if (qRange.location != NSNotFound) {
-        hostPort = [url substringToIndex:qRange.location];
-    } else {
-        hostPort = url;
+    for (NSString *prefix in @[@"wss://", @"ws://", @"https://", @"http://"]) {
+        if ([url hasPrefix:prefix]) { url = [url substringFromIndex:[prefix length]]; break; }
     }
-
-    // 分离 host 和 port
-    NSRange colonRange = [hostPort rangeOfString:@":"];
-    if (colonRange.location != NSNotFound) {
-        self.host = [hostPort substringToIndex:colonRange.location];
-        self.port = [[hostPort substringFromIndex:colonRange.location + 1] intValue];
+    // 去掉 path/query 部分，只保留 host:port
+    NSRange slash = [url rangeOfString:@"/"];
+    if (slash.location != NSNotFound) url = [url substringToIndex:slash.location];
+    NSRange colon = [url rangeOfString:@":"];
+    if (colon.location != NSNotFound) {
+        self.host = [url substringToIndex:colon.location];
+        self.port = [[url substringFromIndex:colon.location+1] intValue];
     } else {
-        self.host = hostPort;
+        self.host = url;
         self.port = 443;
     }
 
-    self.intentionalDisconnect = NO;
+    NSLog(@"[WsClient] 🚀 连接 %@:%d 设备 %@", self.host, self.port, deviceId);
 
-    NSLog(@"[WsClient] 🚀 目标: %@:%d (设备: %@)", self.host, self.port, deviceId);
-
-    // 尝试初始连接测试
+    // 连接 + 健康检查
     NSData *resp = [self _httpRequest:@"GET" path:@"/health" body:nil];
     if (resp) {
-        NSLog(@"[WsClient] ✅ 初始连接测试成功");
+        NSLog(@"[WsClient] ✅ 连接成功");
         _isConnected = YES;
         dispatch_async(dispatch_get_main_queue(), ^{
             [self.delegate wsClientDidConnect:self];
         });
-
         // 上报初始状态
-        [self sendMessage:@{
-            @"type": @"status",
-            @"data": @{@"device_id": deviceId ?: @"", @"status": @"online"}
-        }];
-
-        // 启动轮询
+        [self sendMessage:@{@"type": @"status", @"data": @{@"device_id": deviceId ?: @"", @"status": @"online"}}];
         [self _startPolling];
     } else {
-        NSLog(@"[WsClient] ❌ 初始连接测试失败");
+        NSLog(@"[WsClient] ❌ 连接失败");
         _isConnected = NO;
         dispatch_async(dispatch_get_main_queue(), ^{
             NSError *err = [NSError errorWithDomain:@"WsClient" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"连接失败"}];
@@ -349,134 +293,86 @@ static void ensure_raw_funcs(void) {
     self.intentionalDisconnect = YES;
     _isConnected = NO;
     [self _stopPolling];
-    [self _cleanupStreams];
+    [self _cleanup];
 }
 
 - (void)sendMessage:(NSDictionary *)message {
-    if (!message || self.intentionalDisconnect) return;
-
-    // 确保在主线程（CFStream TLS 需要主 run loop）
-    if (![NSThread isMainThread]) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self sendMessage:message];
-        });
-        return;
-    }
+    if (!message || self.intentionalDisconnect || !_isConnected) return;
 
     NSError *err = nil;
-    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:message options:0 error:&err];
-    if (!jsonData) {
-        NSLog(@"[WsClient] ❌ JSON 序列化失败: %@", err);
-        return;
-    }
+    NSData *json = [NSJSONSerialization dataWithJSONObject:message options:0 error:&err];
+    if (!json) { NSLog(@"[WsClient] ❌ JSON: %@", err); return; }
 
     NSString *path = [NSString stringWithFormat:@"/ws/%@", self.deviceId ?: @"unknown"];
-    NSData *respData = [self _httpRequest:@"POST" path:path body:jsonData];
-
-    if (!respData) {
-        NSLog(@"[WsClient] ⚠️ sendMessage 请求失败");
-        // 通知 delegate 断线（可能连接有问题）
+    NSData *resp = [self _httpRequest:@"POST" path:path body:json];
+    if (!resp) {
+        NSLog(@"[WsClient] ⚠️ POST 失败");
         if (_isConnected) {
             _isConnected = NO;
             dispatch_async(dispatch_get_main_queue(), ^{
-                NSError *e = [NSError errorWithDomain:@"WsClient" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"请求失败"}];
-                [self.delegate wsClientDidDisconnect:self error:e];
+                [self.delegate wsClientDidDisconnect:self error:[NSError errorWithDomain:@"WsClient" code:-1 userInfo:@{NSLocalizedDescriptionKey: @"请求失败"}]];
             });
         }
         return;
     }
-
-    // 解析响应，看是否包含指令
-    NSError *jsonErr = nil;
-    NSDictionary *respDict = [NSJSONSerialization JSONObjectWithData:respData options:0 error:&jsonErr];
-    if (respDict && !jsonErr) {
-        // 有 command 字段表示服务器有指令
-        if (respDict[@"command"]) {
+    // 解析响应指令
+    NSDictionary *dict = [NSJSONSerialization JSONObjectWithData:resp options:0 error:nil];
+    if ([dict isKindOfClass:[NSDictionary class]]) {
+        if (dict[@"command"]) {
             dispatch_async(dispatch_get_main_queue(), ^{
-                [self.delegate wsClient:self didReceiveMessage:respDict[@"command"]];
+                [self.delegate wsClient:self didReceiveMessage:dict[@"command"]];
             });
-        } else if (respDict[@"ack"]) {
-            // 处理 ack 消息（如 bind_info_ack）
+        } else if (dict[@"ack"]) {
             dispatch_async(dispatch_get_main_queue(), ^{
-                [self.delegate wsClient:self didReceiveMessage:respDict[@"ack"]];
+                [self.delegate wsClient:self didReceiveMessage:dict[@"ack"]];
             });
-        } else if (respDict[@"pong"]) {
-            // ping pong — 不需要处理
         }
     }
 }
+
+- (void)sendString:(NSString *)string {}
 
 #pragma mark - 轮询
 
 - (void)_startPolling {
     [self _stopPolling];
-
-    // 轮询必须在主线程（CFStream TLS 需要主 run loop）
     dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
         dispatch_get_main_queue());
     dispatch_source_set_timer(timer,
-        dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC),
+        dispatch_time(DISPATCH_TIME_NOW, 8 * NSEC_PER_SEC),
         8 * NSEC_PER_SEC, 2 * NSEC_PER_SEC);
-
     __weak typeof(self) weakSelf = self;
-    dispatch_source_set_event_handler(timer, ^{
-        [weakSelf _pollTick];
-    });
-
+    dispatch_source_set_event_handler(timer, ^{ [weakSelf _pollTick]; });
     _pollTimer = timer;
     dispatch_resume(timer);
 }
 
 - (void)_stopPolling {
-    if (_pollTimer) {
-        dispatch_source_cancel(_pollTimer);
-        _pollTimer = nil;
-    }
+    if (_pollTimer) { dispatch_source_cancel(_pollTimer); _pollTimer = nil; }
 }
 
 - (void)_pollTick {
     if (self.intentionalDisconnect || !self.isConnected) return;
 
     NSString *path = [NSString stringWithFormat:@"/ws/%@/poll", self.deviceId ?: @"unknown"];
-    NSData *respData = [self _httpRequest:@"GET" path:path body:nil];
+    NSData *resp = [self _httpRequest:@"GET" path:path body:nil];
+    if (!resp) return;
 
-    if (!respData) {
-        // 连接失败（静默重试，下次 poll 会自动重连 _httpRequest 中的 _rawConnect）
-        return;
-    }
-
-    // 解析响应中的指令
-    NSError *jsonErr = nil;
-    id respObj = [NSJSONSerialization JSONObjectWithData:respData options:0 error:&jsonErr];
-    if (!jsonErr && [respObj isKindOfClass:[NSDictionary class]]) {
-        NSDictionary *command = (NSDictionary *)respObj;
-        // 如果是有效指令（有 action 字段）
-        if (command[@"action"] || command[@"type"]) {
+    id obj = [NSJSONSerialization JSONObjectWithData:resp options:0 error:nil];
+    if ([obj isKindOfClass:[NSDictionary class]]) {
+        NSDictionary *cmd = (NSDictionary *)obj;
+        if (cmd[@"action"] || cmd[@"type"]) {
             dispatch_async(dispatch_get_main_queue(), ^{
-                [self.delegate wsClient:self didReceiveMessage:command];
+                [self.delegate wsClient:self didReceiveMessage:cmd];
             });
         }
-    } else if ([respObj isKindOfClass:[NSArray class]]) {
-        // 数组 = 多条指令
-        for (NSDictionary *cmd in (NSArray *)respObj) {
-            if ([cmd isKindOfClass:[NSDictionary class]] && (cmd[@"action"] || cmd[@"type"])) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    [self.delegate wsClient:self didReceiveMessage:cmd];
-                });
-            }
-        }
     }
-    // 204 No Content 或解析失败 = 无指令
-}
-
-- (void)sendString:(NSString *)string {
-    // 不支持原始字符串发送
 }
 
 - (void)dealloc {
     self.intentionalDisconnect = YES;
     [self _stopPolling];
-    [self _cleanupStreams];
+    [self _cleanup];
 }
 
 @end
