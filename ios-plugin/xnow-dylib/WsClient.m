@@ -1,334 +1,221 @@
 // WsClient.m
-// XNOW TLS 客户端（Secure Transport + dlsym 绕过 fishhook）
-// 连接: wss://yunkong.taikon.top:443 (Cloudflare Tunnel)
-// 通信: HTTP 短连接轮询
+// XNOW HTTP 客户端 — 纯 BSD socket，端口80(HTTP)，无TLS
+// 所有系统函数通过dlsym绕过BH fishhook
+// 全在后台串行队列执行
 
 #import "WsClient.h"
 #import <dlfcn.h>
 #import <sys/socket.h>
 #import <netdb.h>
 #import <arpa/inet.h>
-#import <Security/Security.h>
 
-// ====== 绕过 fishhook ======
-typedef int (*sys_socket_t)(int, int, int);
-typedef int (*sys_connect_t)(int, const struct sockaddr *, socklen_t);
-typedef int (*sys_close_t)(int);
-typedef int (*sys_send_t)(int, const void *, size_t, int);
-typedef int (*sys_recv_t)(int, void *, size_t, int);
+// ====== 原始系统函数 ======
+typedef int (*fn_socket)(int,int,int);
+typedef int (*fn_connect)(int,const struct sockaddr*,socklen_t);
+typedef int (*fn_close)(int);
+typedef int (*fn_send)(int,const void*,size_t,int);
+typedef int (*fn_recv)(int,void*,size_t,int);
 
-static sys_socket_t real_socket  = NULL;
-static sys_connect_t real_connect = NULL;
-static sys_close_t   real_close   = NULL;
-static sys_send_t    real_send    = NULL;
-static sys_recv_t    real_recv    = NULL;
+static fn_socket real_socket;
+static fn_connect real_connect;
+static fn_close   real_close;
+static fn_send    real_send;
+static fn_recv    real_recv;
 
-static void load_raw(void) {
+static void load(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        void *lib = dlopen("/usr/lib/system/libsystem_kernel.dylib", RTLD_LAZY | RTLD_NOLOAD);
+        void *lib = dlopen("/usr/lib/system/libsystem_kernel.dylib", RTLD_LAZY|RTLD_NOLOAD);
         if (lib) {
-            real_socket  = dlsym(lib, "socket");
-            real_connect = dlsym(lib, "connect");
-            real_close   = dlsym(lib, "close");
-            real_send    = (sys_send_t)dlsym(lib, "send");
-            real_recv    = (sys_recv_t)dlsym(lib, "recv");
+            real_socket  = dlsym(lib,"socket");
+            real_connect = dlsym(lib,"connect");
+            real_close   = dlsym(lib,"close");
+            real_send    = dlsym(lib,"send");
+            real_recv    = dlsym(lib,"recv");
         }
         if (!real_socket)  real_socket  = socket;
         if (!real_connect) real_connect = connect;
         if (!real_close)   real_close   = close;
-        if (!real_send)    real_send    = (sys_send_t)send;
-        if (!real_recv)    real_recv    = (sys_recv_t)recv;
+        if (!real_send)    real_send    = (fn_send)send;
+        if (!real_recv)    real_recv    = (fn_recv)recv;
     });
 }
 
-// Secure Transport I/O 回调（通过原始 send/recv）
-static OSStatus tls_read_func(SSLConnectionRef c, void *d, size_t *l) {
-    int fd = (int)(intptr_t)c;
-    int n = real_recv(fd, d, *l, 0);
-    if (n > 0) { *l = n; return 0; }
-    *l = 0;
-    return (n == 0) ? errSSLClosedGraceful : -36;
-}
-static OSStatus tls_write_func(SSLConnectionRef c, const void *d, size_t *l) {
-    int fd = (int)(intptr_t)c;
-    int n = real_send(fd, d, *l, 0);
-    if (n > 0) { *l = n; return 0; }
-    *l = 0;
-    return -36;
+static uint32_t resolve_ip(void) {
+    struct hostent *h = gethostbyname("yunkong.taikon.top");
+    if (h && h->h_addr_list[0]) {
+        uint32_t ip;
+        memcpy(&ip, h->h_addr_list[0], 4);
+        return ip;
+    }
+    return inet_addr("172.67.194.202"); // DNS兜底
 }
 
-// ====== 接口 ======
+// ====== 类扩展 ======
 @interface WsClient () {
-    int _sockFd;
-    SSLContextRef _sslCtx;
-    dispatch_queue_t _netQueue; // 串行队列，所有网络操作在此进行
+    dispatch_queue_t _q; // 串行队列
 }
 @property (copy)   NSString *deviceId;
-@property (copy)   NSString *host;
-@property (assign) int       port;
-@property (assign) BOOL      intentionalDisconnect;
+@property (assign) BOOL intentionalDisconnect;
 @property (strong) dispatch_source_t pollTimer;
 @end
 
 @implementation WsClient
 
 - (instancetype)init {
-    self = [super init];
-    if (self) {
+    if (self = [super init]) {
         _intentionalDisconnect = NO;
-        _host = @"yunkong.taikon.top";
-        _port = 443;
-        _netQueue = dispatch_queue_create("com.xnow.wsclient", DISPATCH_QUEUE_SERIAL);
+        _q = dispatch_queue_create("xnow.ws", DISPATCH_QUEUE_SERIAL);
     }
     return self;
 }
 
-#pragma mark - TLS 连接
+// ★ 核心里程碑：纯socket + HTTP(80端口)，一行多余的代码都没有
+- (NSData *)_fetch:(NSString *)method path:(NSString *)path body:(NSData *)body {
+    load();
 
-// 原始 socket + real_connect + Secure Transport TLS，全同步
-- (BOOL)_connect {
-    load_raw();
-    [self _cleanup];
+    // 1. 解析IP
+    uint32_t ip = resolve_ip();
+    if (!ip) return nil;
 
-    // DNS (如果 gethostbyname 也被 BH hook，用硬编码 IP 兜底)
-    struct hostent *he = gethostbyname([self.host UTF8String]);
-    uint32_t fallback_ip = 0;
-    if (!he || !he->h_addr_list[0]) {
-        // gethostbyname 返回空，可能是被 BH hook 了，用硬编码 Cloudflare IP
-        NSLog(@"[WsClient] ⚠️ DNS 失败，用硬编码 IP");
-        // yunkong.taikon.top → 172.67.194.202 (Cloudflare)
-        fallback_ip = inet_addr("172.67.194.202");
-    }
-
-    // Socket
+    // 2. socket
     int fd = real_socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) return NO;
+    if (fd < 0) return nil;
 
-    // ★ 关键：收发都要超时，否则可能永久卡住
-    struct timeval tv = {10, 0};
+    // 3. 10s超时
+    struct timeval tv = {10,0};
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    // Connect (绕过 BH fishhook)
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
+    // 4. connect (80端口HTTP, 无TLS)
+    struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
-    addr.sin_port   = htons(self.port);
-    if (fallback_ip != 0) {
-        addr.sin_addr.s_addr = fallback_ip;
-    } else {
-        memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
-    }
-    if (real_connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+    addr.sin_port = htons(80);
+    addr.sin_addr.s_addr = ip;
+
+    if (real_connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         real_close(fd);
-        return NO;
-    }
-
-    // Secure Transport TLS（全同步，无 run loop）
-    SSLContextRef ctx = SSLCreateContext(NULL, kSSLClientSide, kSSLStreamType);
-    if (!ctx) { real_close(fd); return NO; }
-    SSLSetConnection(ctx, (SSLConnectionRef)(intptr_t)fd);
-    SSLSetIOFuncs(ctx, tls_read_func, tls_write_func);
-    SSLSetPeerDomainName(ctx, [self.host UTF8String], strlen([self.host UTF8String]));
-
-    // ★ 设置 TLS 对等名称用于 SNI + 验证
-    // 允许过期证书（Cloudflare cert 没问题但避免意外）
-    // 实际 iOS 上 SSLSetSessionOption 可能不存在，直接握手即可
-
-    OSStatus status = SSLHandshake(ctx);
-    if (status != errSecSuccess) {
-        NSLog(@"[WsClient] ❌ TLS %d", (int)status);
-        CFRelease(ctx);
-        real_close(fd);
-        return NO;
-    }
-
-    // 存入成员变量供后续 I/O
-    _sockFd = fd;
-    _sslCtx = ctx;
-    return YES;
-}
-
-- (void)_cleanup {
-    if (_sslCtx) { SSLClose(_sslCtx); CFRelease(_sslCtx); _sslCtx = NULL; }
-    if (_sockFd >= 0) { real_close(_sockFd); _sockFd = -1; }
-}
-
-// 通过 TLS 发送数据
-- (BOOL)_tlsSend:(const void *)d len:(size_t)l {
-    if (!_sslCtx) return NO;
-    size_t total = 0;
-    while (total < l) {
-        size_t sent = 0;
-        if (SSLWrite(_sslCtx, (const uint8_t *)d + total, l - total, &sent) != 0) return NO;
-        total += sent;
-    }
-    return YES;
-}
-
-// 通过 TLS 读取（返回 >0 成功, 0 EOF, -1 失败）
-- (int)_tlsRead:(void *)b max:(size_t)m {
-    if (!_sslCtx) return -1;
-    size_t got = 0;
-    OSStatus s = SSLRead(_sslCtx, b, m, &got);
-    if (got > 0) return (int)got;
-    if (s == errSSLClosedGraceful || s == errSSLClosedAbort) return 0;
-    return -1;
-}
-
-#pragma mark - HTTP
-
-- (NSData *)_httpCall:(NSString *)method path:(NSString *)path body:(NSData *)body {
-    @try {
-        if (!_sslCtx || _sockFd < 0) {
-            if (![self _connect]) return nil;
-        }
-
-        // 构建请求
-        NSMutableData *req = [NSMutableData data];
-        [req appendData:[[NSString stringWithFormat:@"%@ %@ HTTP/1.1\r\nHost: %@\r\nConnection: close\r\nUser-Agent: XNOW/1.3.2\r\n", method, path, self.host] dataUsingEncoding:NSUTF8StringEncoding]];
-        if (body) {
-            [req appendData:[[NSString stringWithFormat:@"Content-Type: application/json\r\nContent-Length: %lu\r\n", (unsigned long)[body length]] dataUsingEncoding:NSUTF8StringEncoding]];
-        }
-        [req appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
-        if (body) [req appendData:body];
-
-        // 发送
-        if (![self _tlsSend:[req bytes] len:[req length]]) {
-            [self _cleanup];
-            return nil;
-        }
-
-        // 读取响应
-        NSMutableData *resp = [NSMutableData data];
-        uint8_t buf[4096];
-        while (1) {
-            int n = [self _tlsRead:buf max:sizeof(buf)];
-            if (n <= 0) break;
-            [resp appendBytes:buf length:n];
-        }
-
-        [self _cleanup]; // 短连接
-        // 取 body
-        const uint8_t *b = [resp bytes];
-        NSUInteger len = [resp length];
-        for (NSUInteger i = 0; i + 3 < len; i++) {
-            if (b[i]=='\r' && b[i+1]=='\n' && b[i+2]=='\r' && b[i+3]=='\n') {
-                NSUInteger blen = len - i - 4;
-                return blen > 0 ? [resp subdataWithRange:NSMakeRange(i+4, blen)] : nil;
-            }
-        }
-        return nil;
-    } @catch (NSException *e) {
-        NSLog(@"[WsClient] ⚠️ 异常: %@", e);
-        [self _cleanup];
         return nil;
     }
+
+    // 5. 构造HTTP请求
+    NSMutableData *req = [NSMutableData data];
+    [req appendData:[[NSString stringWithFormat:@"%@ %@ HTTP/1.1\r\nHost: yunkong.taikon.top\r\nConnection: close\r\n", method, path] dataUsingEncoding:NSUTF8StringEncoding]];
+    if (body) {
+        [req appendData:[[NSString stringWithFormat:@"Content-Type: application/json\r\nContent-Length: %lu\r\n", (unsigned long)body.length] dataUsingEncoding:NSUTF8StringEncoding]];
+    }
+    [req appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
+    if (body) [req appendData:body];
+
+    // 6. send
+    const uint8_t *p = req.bytes;
+    NSUInteger left = req.length;
+    while (left > 0) {
+        int n = real_send(fd, p, left, 0);
+        if (n <= 0) { real_close(fd); return nil; }
+        p += n; left -= n;
+    }
+
+    // 7. recv
+    NSMutableData *resp = [NSMutableData data];
+    uint8_t buf[4096];
+    while (1) {
+        int n = real_recv(fd, buf, sizeof(buf), 0);
+        if (n <= 0) break;
+        [resp appendBytes:buf length:n];
+    }
+    real_close(fd);
+
+    // 8. 提取body
+    const uint8_t *b = resp.bytes;
+    for (NSUInteger i = 0; i+3 < resp.length; i++) {
+        if (b[i]=='\r' && b[i+1]=='\n' && b[i+2]=='\r' && b[i+3]=='\n') {
+            NSUInteger blen = resp.length - i - 4;
+            return blen > 0 ? [resp subdataWithRange:NSMakeRange(i+4, blen)] : nil;
+        }
+    }
+    return nil;
 }
 
-#pragma mark - 外部接口
+#pragma mark - 接口
 
-- (void)connectToServer:(NSString *)serverURL deviceId:(NSString *)deviceId {
+- (void)connectToServer:(NSString *)url deviceId:(NSString *)deviceId {
     self.deviceId = deviceId;
     self.intentionalDisconnect = NO;
 
-    // 从 URL 提取 host（忽略 scheme、query）
-    NSString *u = serverURL;
-    for (NSString *p in @[@"wss://", @"ws://", @"https://", @"http://"]) {
-        if ([u hasPrefix:p]) { u = [u substringFromIndex:[p length]]; break; }
-    }
-    NSRange q = [u rangeOfString:@"?"];
-    if (q.location != NSNotFound) u = [u substringToIndex:q.location];
-    NSRange s = [u rangeOfString:@"/"];
-    if (s.location != NSNotFound) u = [u substringToIndex:s.location];
-    NSRange c = [u rangeOfString:@":"];
-    if (c.location != NSNotFound) {
-        self.host = [u substringToIndex:c.location];
-        self.port = [[u substringFromIndex:c.location+1] intValue];
-    } else {
-        self.host = u;
-        self.port = 443;
-    }
-
-    NSLog(@"[WsClient] 🚀 %@:%d id=%@", self.host, self.port, deviceId);
-
-    // ★ 所有网络操作在后台串行队列执行，不阻塞主线程
     __weak typeof(self) ws = self;
-    dispatch_async(_netQueue, ^{
-        typeof(self) strongSelf = ws;
-        if (!strongSelf || strongSelf.intentionalDisconnect) return;
+    dispatch_async(_q, ^{
+        typeof(self) s = ws;
+        if (!s || s.intentionalDisconnect) return;
 
-        NSData *r = [strongSelf _httpCall:@"GET" path:@"/health" body:nil];
+        // 健康检查
+        NSData *r = [s _fetch:@"GET" path:@"/health" body:nil];
         if (!r) {
             NSLog(@"[WsClient] ❌ 连接失败");
-            strongSelf->_isConnected = NO;
+            s->_isConnected = NO;
             dispatch_async(dispatch_get_main_queue(), ^{
-                [ws.delegate wsClientDidDisconnect:ws error:[NSError errorWithDomain:@"WsClient" code:-1 userInfo:@{NSLocalizedDescriptionKey:@"连接失败"}]];
+                [ws.delegate wsClientDidDisconnect:ws error:[NSError errorWithDomain:@"Ws" code:1 userInfo:@{NSLocalizedDescriptionKey:@"连接失败"}]];
             });
             return;
         }
 
         NSLog(@"[WsClient] ✅ 连接成功");
-        strongSelf->_isConnected = YES;
+        s->_isConnected = YES;
         dispatch_async(dispatch_get_main_queue(), ^{
             [ws.delegate wsClientDidConnect:ws];
         });
-        [strongSelf sendMessage:@{@"type": @"status", @"data": @{@"device_id": deviceId ?: @"", @"status": @"online"}}];
-        [strongSelf _startPolling];
+        [s _doPost:@{@"type":@"status",@"data":@{@"device_id":deviceId?:@"",@"status":@"online"}}];
+        [s _startPolling];
     });
 }
 
-- (void)disconnect {
-    self.intentionalDisconnect = YES;
-    _isConnected = NO;
-    [self _stopPolling];
-    dispatch_async(_netQueue, ^{
-        [self _cleanup];
-    });
+- (void)_doPost:(NSDictionary *)msg {
+    NSData *json = [NSJSONSerialization dataWithJSONObject:msg options:0 error:nil];
+    if (!json) return;
+    NSString *path = [NSString stringWithFormat:@"/ws/%@", self.deviceId?:@"unknown"];
+    NSData *r = [self _fetch:@"POST" path:path body:json];
+    if (!r) {
+        _isConnected = NO;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.delegate wsClientDidDisconnect:self error:[NSError errorWithDomain:@"Ws" code:2 userInfo:@{NSLocalizedDescriptionKey:@"通信中断"}]];
+        });
+        return;
+    }
+    NSDictionary *d = [NSJSONSerialization JSONObjectWithData:r options:0 error:nil];
+    if ([d isKindOfClass:[NSDictionary class]]) {
+        if (d[@"command"])
+            dispatch_async(dispatch_get_main_queue(), ^{ [self.delegate wsClient:self didReceiveMessage:d[@"command"]]; });
+        else if (d[@"ack"])
+            dispatch_async(dispatch_get_main_queue(), ^{ [self.delegate wsClient:self didReceiveMessage:d[@"ack"]]; });
+    }
 }
 
 - (void)sendMessage:(NSDictionary *)msg {
     if (!msg || self.intentionalDisconnect || !_isConnected) return;
-
     __weak typeof(self) ws = self;
-    dispatch_async(_netQueue, ^{
+    dispatch_async(_q, ^{
         typeof(self) s = ws;
         if (!s || s.intentionalDisconnect) return;
-
-        NSData *json = [NSJSONSerialization dataWithJSONObject:msg options:0 error:nil];
-        if (!json) return;
-        NSString *path = [NSString stringWithFormat:@"/ws/%@", s.deviceId ?: @"unknown"];
-        NSData *r = [s _httpCall:@"POST" path:path body:json];
-        if (!r) {
-            s->_isConnected = NO;
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [ws.delegate wsClientDidDisconnect:ws error:[NSError errorWithDomain:@"WsClient" code:-2 userInfo:@{NSLocalizedDescriptionKey:@"通信中断"}]];
-            });
-            return;
-        }
-        NSDictionary *d = [NSJSONSerialization JSONObjectWithData:r options:0 error:nil];
-        if ([d isKindOfClass:[NSDictionary class]]) {
-            if (d[@"command"])
-                dispatch_async(dispatch_get_main_queue(), ^{ [ws.delegate wsClient:ws didReceiveMessage:d[@"command"]]; });
-            else if (d[@"ack"])
-                dispatch_async(dispatch_get_main_queue(), ^{ [ws.delegate wsClient:ws didReceiveMessage:d[@"ack"]]; });
-        }
+        [s _doPost:msg];
     });
 }
 
 - (void)sendString:(NSString *)string {}
 
+- (void)disconnect {
+    self.intentionalDisconnect = YES; _isConnected = NO;
+    [self _stopPolling];
+}
+
 #pragma mark - 轮询
 
 - (void)_startPolling {
     [self _stopPolling];
-    dispatch_source_t t = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
-    dispatch_source_set_timer(t, dispatch_time(DISPATCH_TIME_NOW, 8 * NSEC_PER_SEC), 8 * NSEC_PER_SEC, 2 * NSEC_PER_SEC);
+    dispatch_source_t t = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER,0,0,dispatch_get_main_queue());
+    dispatch_source_set_timer(t, dispatch_time(DISPATCH_TIME_NOW,8*NSEC_PER_SEC), 8*NSEC_PER_SEC, 2*NSEC_PER_SEC);
     __weak typeof(self) ws = self;
     dispatch_source_set_event_handler(t, ^{ [ws _pollTick]; });
-    _pollTimer = t;
-    dispatch_resume(t);
+    _pollTimer = t; dispatch_resume(t);
 }
 
 - (void)_stopPolling {
@@ -338,13 +225,13 @@ static OSStatus tls_write_func(SSLConnectionRef c, const void *d, size_t *l) {
 - (void)_pollTick {
     if (self.intentionalDisconnect || !self.isConnected) return;
     __weak typeof(self) ws = self;
-    dispatch_async(_netQueue, ^{
+    dispatch_async(_q, ^{
         typeof(self) s = ws;
         if (!s || s.intentionalDisconnect || !s.isConnected) return;
-        NSData *r = [s _httpCall:@"GET" path:[NSString stringWithFormat:@"/ws/%@/poll", s.deviceId ?: @"unknown"] body:nil];
+        NSData *r = [s _fetch:@"GET" path:[NSString stringWithFormat:@"/ws/%@/poll", s.deviceId?:@"unknown"] body:nil];
         if (!r) return;
         id obj = [NSJSONSerialization JSONObjectWithData:r options:0 error:nil];
-        if ([obj isKindOfClass:[NSDictionary class]] && (((NSDictionary *)obj)[@"action"] || ((NSDictionary *)obj)[@"type"]))
+        if ([obj isKindOfClass:[NSDictionary class]] && (((NSDictionary*)obj)[@"action"]||((NSDictionary*)obj)[@"type"]))
             dispatch_async(dispatch_get_main_queue(), ^{ [ws.delegate wsClient:ws didReceiveMessage:obj]; });
     });
 }
@@ -352,7 +239,6 @@ static OSStatus tls_write_func(SSLConnectionRef c, const void *d, size_t *l) {
 - (void)dealloc {
     self.intentionalDisconnect = YES;
     [self _stopPolling];
-    [self _cleanup];
 }
 
 @end
