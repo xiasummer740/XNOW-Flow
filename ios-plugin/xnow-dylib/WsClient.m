@@ -1,6 +1,7 @@
 // WsClient.m
 // XNOW HTTP 客户端 — 纯 BSD socket，端口80(HTTP)，无TLS
-// 所有系统函数通过dlsym绕过BH fishhook
+// 所有系统函数通过dlsym绕过BH fishhook（PLT级）
+// send/recv 使用直接 syscall 绕过 BH 的 MSHookFunction（指令级inline hook）
 // 全在后台串行队列执行
 
 #import "WsClient.h"
@@ -8,47 +9,70 @@
 #import <sys/socket.h>
 #import <netdb.h>
 #import <arpa/inet.h>
+#import <sys/syscall.h>
 
-// ====== 原始系统函数 ======
+// ====== 原始系统函数（全部走dlsym绕过BH fishhook PLT级hook） ======
 typedef int (*fn_socket)(int,int,int);
 typedef int (*fn_connect)(int,const struct sockaddr*,socklen_t);
 typedef int (*fn_close)(int);
-typedef int (*fn_send)(int,const void*,size_t,int);
-typedef int (*fn_recv)(int,void*,size_t,int);
+typedef struct hostent* (*fn_gethostbyname)(const char*);
 
-static fn_socket real_socket;
-static fn_connect real_connect;
-static fn_close   real_close;
-static fn_send    real_send;
-static fn_recv    real_recv;
+static fn_socket       real_socket;
+static fn_connect      real_connect;
+static fn_close        real_close;
+static fn_gethostbyname real_gethostbyname;
+
+// 从指定dylib加载符号，返回是否成功
+static bool _dlsym_from(void *lib, const char *name, void **out) {
+    if (!lib) return false;
+    void *p = dlsym(lib, name);
+    if (p) { *out = p; return true; }
+    return false;
+}
 
 static void load(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        void *lib = dlopen("/usr/lib/system/libsystem_kernel.dylib", RTLD_LAZY|RTLD_NOLOAD);
-        if (lib) {
-            real_socket  = dlsym(lib,"socket");
-            real_connect = dlsym(lib,"connect");
-            real_close   = dlsym(lib,"close");
-            real_send    = dlsym(lib,"send");
-            real_recv    = dlsym(lib,"recv");
-        }
-        if (!real_socket)  real_socket  = socket;
-        if (!real_connect) real_connect = connect;
-        if (!real_close)   real_close   = close;
-        if (!real_send)    real_send    = (fn_send)send;
-        if (!real_recv)    real_recv    = (fn_recv)recv;
+        void *kernel  = dlopen("/usr/lib/system/libsystem_kernel.dylib",  RTLD_LAZY|RTLD_NOLOAD);
+        void *network = dlopen("/usr/lib/system/libsystem_network.dylib", RTLD_LAZY|RTLD_NOLOAD);
+
+        _dlsym_from(kernel,  "socket",        (void**)&real_socket);
+        _dlsym_from(kernel,  "connect",       (void**)&real_connect);
+        _dlsym_from(kernel,  "close",         (void**)&real_close);
+        _dlsym_from(kernel,  "gethostbyname", (void**)&real_gethostbyname);
+        _dlsym_from(network, "gethostbyname", (void**)&real_gethostbyname);
+
+        // 兜底
+        if (!real_socket)        real_socket        = socket;
+        if (!real_connect)       real_connect       = connect;
+        if (!real_close)         real_close         = close;
+        if (!real_gethostbyname) real_gethostbyname = gethostbyname;
     });
 }
 
+// ★ send/recv 通过直接 syscall 绕过 BH 的 MSHookFunction（指令级 inline hook）
+// syscall() 直接触发 svc 指令进入内核，不经过被 hook 的 send()/recv() 函数体
+#define SYS_SENDTO   290  // arm64 iOS
+#define SYS_RECVFROM 291
+
+static inline int sys_send(int fd, const void *buf, size_t len, int flags) {
+    return (int)syscall(SYS_SENDTO, fd, buf, len, flags, NULL, 0);
+}
+
+static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
+    return (int)syscall(SYS_RECVFROM, fd, buf, len, flags, NULL, 0);
+}
+
 static uint32_t resolve_ip(void) {
-    struct hostent *h = gethostbyname("yunkong.taikon.top");
+    load();
+    struct hostent *h = real_gethostbyname("yunkong.taikon.top");
     if (h && h->h_addr_list[0]) {
         uint32_t ip;
         memcpy(&ip, h->h_addr_list[0], 4);
         return ip;
     }
-    return inet_addr("172.67.194.202"); // DNS兜底
+    // DNS兜底 — Cloudflare Anycast IP
+    return inet_addr("172.67.194.202");
 }
 
 // ====== 类扩展 ======
@@ -70,7 +94,9 @@ static uint32_t resolve_ip(void) {
     return self;
 }
 
-// ★ 核心里程碑：纯socket + HTTP(80端口)，一行多余的代码都没有
+// ★ 核心里程碑：BSD socket + dlsym(connect) + syscall(send/recv)
+// connect 走 dlsym 绕过 BH fishhook（PLT级），
+// send/recv 走 syscall 绕过 BH MSHookFunction（指令级 inline hook）
 - (NSData *)_fetch:(NSString *)method path:(NSString *)path body:(NSData *)body {
     load();
 
@@ -107,20 +133,20 @@ static uint32_t resolve_ip(void) {
     [req appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
     if (body) [req appendData:body];
 
-    // 6. send
+    // 6. send — 用 syscall 绕过 MSHookFunction
     const uint8_t *p = req.bytes;
     NSUInteger left = req.length;
     while (left > 0) {
-        int n = real_send(fd, p, left, 0);
+        int n = sys_send(fd, p, left, 0);
         if (n <= 0) { real_close(fd); return nil; }
         p += n; left -= n;
     }
 
-    // 7. recv
+    // 7. recv — 用 syscall 绕过 MSHookFunction
     NSMutableData *resp = [NSMutableData data];
     uint8_t buf[4096];
     while (1) {
-        int n = real_recv(fd, buf, sizeof(buf), 0);
+        int n = sys_recv(fd, buf, sizeof(buf), 0);
         if (n <= 0) break;
         [resp appendBytes:buf length:n];
     }
