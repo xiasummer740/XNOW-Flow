@@ -100,13 +100,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)start {
     NSLog(@"[XNOWER] 🚀 start() 已执行 — dylib 加载成功");
 
-    // 立刻显示浮窗
+    // 只显示浮窗，不自动连 WS — BH TikTok 检测到外部连接会 exit()
+    // 用户可在浮窗菜单中手动点击"连接到服务器"
     [self showFloatingPanel];
-
-    // 延迟自动连接服务器（等 TikTok 完全初始化）
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-        [self connectWebSocket];
-    });
 }
 
 /// 添加操作日志（显示在左上角透明日志窗口）
