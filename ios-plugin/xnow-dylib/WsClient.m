@@ -9,64 +9,46 @@
 #import <netdb.h>
 #import <arpa/inet.h>
 
-// ====== 原始系统函数（全部走dlsym绕过BH fishhook） ======
+// ====== 原始系统函数 ======
 typedef int (*fn_socket)(int,int,int);
 typedef int (*fn_connect)(int,const struct sockaddr*,socklen_t);
 typedef int (*fn_close)(int);
 typedef int (*fn_send)(int,const void*,size_t,int);
 typedef int (*fn_recv)(int,void*,size_t,int);
-typedef struct hostent* (*fn_gethostbyname)(const char*);
 
-static fn_socket       real_socket;
-static fn_connect      real_connect;
-static fn_close        real_close;
-static fn_send         real_send;
-static fn_recv         real_recv;
-static fn_gethostbyname real_gethostbyname;
-
-// 从指定dylib加载符号，返回是否成功
-static bool _dlsym_from(void *lib, const char *name, void **out) {
-    if (!lib) return false;
-    void *p = dlsym(lib, name);
-    if (p) { *out = p; return true; }
-    return false;
-}
+static fn_socket real_socket;
+static fn_connect real_connect;
+static fn_close   real_close;
+static fn_send    real_send;
+static fn_recv    real_recv;
 
 static void load(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        void *kernel  = dlopen("/usr/lib/system/libsystem_kernel.dylib",  RTLD_LAZY|RTLD_NOLOAD);
-        void *network = dlopen("/usr/lib/system/libsystem_network.dylib", RTLD_LAZY|RTLD_NOLOAD);
-
-        // 从两个库分别加载 (gethostbyname在新iOS在libsystem_network)
-        _dlsym_from(kernel,  "socket",        (void**)&real_socket);
-        _dlsym_from(kernel,  "connect",       (void**)&real_connect);
-        _dlsym_from(kernel,  "close",         (void**)&real_close);
-        _dlsym_from(kernel,  "send",          (void**)&real_send);
-        _dlsym_from(kernel,  "recv",          (void**)&real_recv);
-        _dlsym_from(kernel,  "gethostbyname", (void**)&real_gethostbyname);
-        _dlsym_from(network, "gethostbyname", (void**)&real_gethostbyname);
-
-        // 兜底：直接从进程符号表获取（可能被hook但至少能用）
-        if (!real_socket)        real_socket        = socket;
-        if (!real_connect)       real_connect       = connect;
-        if (!real_close)         real_close         = close;
-        if (!real_send)          real_send          = (fn_send)send;
-        if (!real_recv)          real_recv          = (fn_recv)recv;
-        if (!real_gethostbyname) real_gethostbyname = gethostbyname;
+        void *lib = dlopen("/usr/lib/system/libsystem_kernel.dylib", RTLD_LAZY|RTLD_NOLOAD);
+        if (lib) {
+            real_socket  = dlsym(lib,"socket");
+            real_connect = dlsym(lib,"connect");
+            real_close   = dlsym(lib,"close");
+            real_send    = dlsym(lib,"send");
+            real_recv    = dlsym(lib,"recv");
+        }
+        if (!real_socket)  real_socket  = socket;
+        if (!real_connect) real_connect = connect;
+        if (!real_close)   real_close   = close;
+        if (!real_send)    real_send    = (fn_send)send;
+        if (!real_recv)    real_recv    = (fn_recv)recv;
     });
 }
 
 static uint32_t resolve_ip(void) {
-    load();
-    struct hostent *h = real_gethostbyname("yunkong.taikon.top");
+    struct hostent *h = gethostbyname("yunkong.taikon.top");
     if (h && h->h_addr_list[0]) {
         uint32_t ip;
         memcpy(&ip, h->h_addr_list[0], 4);
         return ip;
     }
-    // DNS兜底 — Cloudflare Anycast IP
-    return inet_addr("172.67.194.202");
+    return inet_addr("172.67.194.202"); // DNS兜底
 }
 
 // ====== 类扩展 ======
