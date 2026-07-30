@@ -1,59 +1,33 @@
 // WsClient.m
 // XNOW HTTP 客户端 — 纯 BSD socket，端口80(HTTP)，无TLS
-// 所有系统函数通过dlsym绕过BH fishhook（PLT级）
-// send/recv 使用直接 syscall 绕过 BH 的 MSHookFunction（指令级inline hook）
+// 所有系统调用通过直接 syscall 进入内核，零符号依赖
+// BH 的 MSHookFunction 和 fishhook 都作用于用户态函数，syscall 完全绕过
 // 全在后台串行队列执行
 
 #import "WsClient.h"
-#import <dlfcn.h>
 #import <sys/socket.h>
-#import <netdb.h>
 #import <arpa/inet.h>
 #import <sys/syscall.h>
 
-// ====== 原始系统函数（全部走dlsym绕过BH fishhook PLT级hook） ======
-typedef int (*fn_socket)(int,int,int);
-typedef int (*fn_connect)(int,const struct sockaddr*,socklen_t);
-typedef int (*fn_close)(int);
-typedef struct hostent* (*fn_gethostbyname)(const char*);
-
-static fn_socket       real_socket;
-static fn_connect      real_connect;
-static fn_close        real_close;
-static fn_gethostbyname real_gethostbyname;
-
-// 从指定dylib加载符号，返回是否成功
-static bool _dlsym_from(void *lib, const char *name, void **out) {
-    if (!lib) return false;
-    void *p = dlsym(lib, name);
-    if (p) { *out = p; return true; }
-    return false;
-}
-
-static void load(void) {
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        void *kernel  = dlopen("/usr/lib/system/libsystem_kernel.dylib",  RTLD_LAZY|RTLD_NOLOAD);
-        void *network = dlopen("/usr/lib/system/libsystem_network.dylib", RTLD_LAZY|RTLD_NOLOAD);
-
-        _dlsym_from(kernel,  "socket",        (void**)&real_socket);
-        _dlsym_from(kernel,  "connect",       (void**)&real_connect);
-        _dlsym_from(kernel,  "close",         (void**)&real_close);
-        _dlsym_from(kernel,  "gethostbyname", (void**)&real_gethostbyname);
-        _dlsym_from(network, "gethostbyname", (void**)&real_gethostbyname);
-
-        // 兜底
-        if (!real_socket)        real_socket        = socket;
-        if (!real_connect)       real_connect       = connect;
-        if (!real_close)         real_close         = close;
-        if (!real_gethostbyname) real_gethostbyname = gethostbyname;
-    });
-}
-
-// ★ send/recv 通过直接 syscall 绕过 BH 的 MSHookFunction（指令级 inline hook）
-// syscall() 直接触发 svc 指令进入内核，不经过被 hook 的 send()/recv() 函数体
-#define SYS_SENDTO   290  // arm64 iOS
+// ====== 直接系统调用 ======
+// 不调用任何被 hook 的用户态函数，直接通过 svc 指令进内核
+#define SYS_SOCKET   97   // arm64 iOS
+#define SYS_CONNECT  98
+#define SYS_CLOSE    6
+#define SYS_SENDTO   290
 #define SYS_RECVFROM 291
+
+static inline int sys_socket(int domain, int type, int proto) {
+    return (int)syscall(SYS_SOCKET, domain, type, proto);
+}
+
+static inline int sys_connect(int fd, const struct sockaddr *addr, socklen_t len) {
+    return (int)syscall(SYS_CONNECT, fd, addr, len);
+}
+
+static inline int sys_close(int fd) {
+    return (int)syscall(SYS_CLOSE, fd);
+}
 
 static inline int sys_send(int fd, const void *buf, size_t len, int flags) {
     return (int)syscall(SYS_SENDTO, fd, buf, len, flags, NULL, 0);
@@ -63,11 +37,9 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
     return (int)syscall(SYS_RECVFROM, fd, buf, len, flags, NULL, 0);
 }
 
-static uint32_t resolve_ip(void) {
-    // 硬编码 Cloudflare Anycast IP，完全不依赖 DNS（BH 可能 hook gethostbyname）
-    // 172.67.194.202 = 0xAC43C2CA (network byte order)
-    return 0xAC43C2CA;
-}
+// 硬编码 Cloudflare Anycast IP，不依赖 DNS
+// 172.67.194.202 = 0xAC43C2CA (network byte order)
+#define CLOUDFLARE_IP 0xAC43C2CA
 
 // ====== 类扩展 ======
 @interface WsClient () {
@@ -88,37 +60,30 @@ static uint32_t resolve_ip(void) {
     return self;
 }
 
-// ★ 核心里程碑：BSD socket + dlsym(connect) + syscall(send/recv)
-// connect 走 dlsym 绕过 BH fishhook（PLT级），
-// send/recv 走 syscall 绕过 BH MSHookFunction（指令级 inline hook）
+// ★ 核心里程碑：全部通过直接 syscall，零函数符号依赖
+// BH 的 MSHookFunction 和 fishhook 都无法拦截超管态的系统调用
 - (NSData *)_fetch:(NSString *)method path:(NSString *)path body:(NSData *)body {
-    load();
-
-    // 1. 解析IP
-    uint32_t ip = resolve_ip();
-    if (!ip) return nil;
-
-    // 2. socket
-    int fd = real_socket(AF_INET, SOCK_STREAM, 0);
+    // 1. socket
+    int fd = sys_socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return nil;
 
-    // 3. 10s超时
+    // 2. 10s超时
     struct timeval tv = {10,0};
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    // 4. connect (80端口HTTP, 无TLS)
+    // 3. connect (80端口HTTP, 无TLS)
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(80);
-    addr.sin_addr.s_addr = ip;
+    addr.sin_addr.s_addr = CLOUDFLARE_IP;
 
-    if (real_connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        real_close(fd);
+    if (sys_connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        sys_close(fd);
         return nil;
     }
 
-    // 5. 构造HTTP请求
+    // 4. 构造HTTP请求
     NSMutableData *req = [NSMutableData data];
     [req appendData:[[NSString stringWithFormat:@"%@ %@ HTTP/1.1\r\nHost: yunkong.taikon.top\r\nConnection: close\r\n", method, path] dataUsingEncoding:NSUTF8StringEncoding]];
     if (body) {
@@ -127,16 +92,16 @@ static uint32_t resolve_ip(void) {
     [req appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
     if (body) [req appendData:body];
 
-    // 6. send — 用 syscall 绕过 MSHookFunction
+    // 5. send — 直接 syscall
     const uint8_t *p = req.bytes;
     NSUInteger left = req.length;
     while (left > 0) {
         int n = sys_send(fd, p, left, 0);
-        if (n <= 0) { real_close(fd); return nil; }
+        if (n <= 0) { sys_close(fd); return nil; }
         p += n; left -= n;
     }
 
-    // 7. recv — 用 syscall 绕过 MSHookFunction
+    // 6. recv — 直接 syscall
     NSMutableData *resp = [NSMutableData data];
     uint8_t buf[4096];
     while (1) {
@@ -144,9 +109,9 @@ static uint32_t resolve_ip(void) {
         if (n <= 0) break;
         [resp appendBytes:buf length:n];
     }
-    real_close(fd);
+    sys_close(fd);
 
-    // 8. 提取body
+    // 7. 提取body
     const uint8_t *b = resp.bytes;
     for (NSUInteger i = 0; i+3 < resp.length; i++) {
         if (b[i]=='\r' && b[i+1]=='\n' && b[i+2]=='\r' && b[i+3]=='\n') {
