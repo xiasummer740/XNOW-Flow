@@ -64,15 +64,9 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
 }
 
 static uint32_t resolve_ip(void) {
-    load();
-    struct hostent *h = real_gethostbyname("yunkong.taikon.top");
-    if (h && h->h_addr_list[0]) {
-        uint32_t ip;
-        memcpy(&ip, h->h_addr_list[0], 4);
-        return ip;
-    }
-    // DNS兜底 — Cloudflare Anycast IP
-    return inet_addr("172.67.194.202");
+    // 硬编码 Cloudflare Anycast IP，完全不依赖 DNS（BH 可能 hook gethostbyname）
+    // 172.67.194.202 = 0xAC43C2CA (network byte order)
+    return 0xAC43C2CA;
 }
 
 // ====== 类扩展 ======
