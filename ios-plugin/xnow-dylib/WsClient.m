@@ -106,14 +106,18 @@ static const int TRY_PORTS[] = {80, 8080, 443};
             [req appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
             if (body) [req appendData:body];
 
+            // send (syscall)
             const uint8_t *p = req.bytes;
             NSUInteger left = req.length;
+            BOOL sendOk = YES;
             while (left > 0) {
                 int n = sys_send(fd, p, left, 0);
-                if (n <= 0) { real_close(fd); goto next; }
+                if (n <= 0) { sendOk = NO; break; }
                 p += n; left -= n;
             }
+            if (!sendOk) { real_close(fd); continue; }
 
+            // recv (syscall)
             NSMutableData *resp = [NSMutableData data];
             uint8_t buf[4096];
             while (1) {
@@ -132,8 +136,6 @@ static const int TRY_PORTS[] = {80, 8080, 443};
                 }
             }
             return nil;
-
-        next:;
         }
     }
     return nil;
