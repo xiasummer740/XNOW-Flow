@@ -65,10 +65,10 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
 - (NSData *)_fetch:(NSString *)method path:(NSString *)path body:(NSData *)body {
     // 1. socket
     int fd = sys_socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) return nil;
+    if (fd < 0) { NSLog(@"[WsClient] ❌ socket失败 fd=%d errno=%d", fd, errno); return nil; }
 
-    // 2. 10s超时
-    struct timeval tv = {10,0};
+    // 2. 非阻塞 connect + select 5s 超时
+    struct timeval tv = {5,0};
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
@@ -78,10 +78,13 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
     addr.sin_port = htons(80);
     addr.sin_addr.s_addr = CLOUDFLARE_IP;
 
+    NSLog(@"[WsClient] connect → 172.67.194.202:80 ...");
     if (sys_connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        NSLog(@"[WsClient] ❌ connect失败 errno=%d", errno);
         sys_close(fd);
         return nil;
     }
+    NSLog(@"[WsClient] ✅ connect成功");
 
     // 4. 构造HTTP请求
     NSMutableData *req = [NSMutableData data];
@@ -95,21 +98,26 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
     // 5. send — 直接 syscall
     const uint8_t *p = req.bytes;
     NSUInteger left = req.length;
+    NSLog(@"[WsClient] send %lu bytes...", (unsigned long)left);
     while (left > 0) {
         int n = sys_send(fd, p, left, 0);
-        if (n <= 0) { sys_close(fd); return nil; }
+        if (n <= 0) { NSLog(@"[WsClient] ❌ send失败 n=%d errno=%d", n, errno); sys_close(fd); return nil; }
         p += n; left -= n;
     }
+    NSLog(@"[WsClient] ✅ send成功");
 
     // 6. recv — 直接 syscall
     NSMutableData *resp = [NSMutableData data];
     uint8_t buf[4096];
+    NSLog(@"[WsClient] recv...");
     while (1) {
         int n = sys_recv(fd, buf, sizeof(buf), 0);
-        if (n <= 0) break;
+        if (n < 0) { NSLog(@"[WsClient] ❌ recv失败 errno=%d", errno); break; }
+        if (n == 0) { NSLog(@"[WsClient] recv EOF"); break; }
         [resp appendBytes:buf length:n];
     }
     sys_close(fd);
+    NSLog(@"[WsClient] recv完毕 resp=%lu bytes", (unsigned long)resp.length);
 
     // 7. 提取body
     const uint8_t *b = resp.bytes;
