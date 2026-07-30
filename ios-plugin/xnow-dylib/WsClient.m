@@ -1,33 +1,43 @@
 // WsClient.m
-// XNOW HTTP 客户端 — 纯 BSD socket，端口80(HTTP)，无TLS
-// 所有系统调用通过直接 syscall 进入内核，零符号依赖
-// BH 的 MSHookFunction 和 fishhook 都作用于用户态函数，syscall 完全绕过
+// XNOW HTTP 客户端 — 混合方案
+// socket/connect/close：dlsym 绕过 PLT 级 hook（stage9 已验证"连接失败"快返）
+// send/recv：直接 syscall 绕过 MSHookFunction 指令级 inline hook
 // 全在后台串行队列执行
 
 #import "WsClient.h"
+#import <dlfcn.h>
 #import <sys/socket.h>
 #import <arpa/inet.h>
 #import <sys/syscall.h>
 
-// ====== 直接系统调用 ======
-// 不调用任何被 hook 的用户态函数，直接通过 svc 指令进内核
-#define SYS_SOCKET   97   // arm64 iOS
-#define SYS_CONNECT  98
-#define SYS_CLOSE    6
-#define SYS_SENDTO   290
+// ====== socket/connect/close：dlsym 绕过 fishhook（PLT 级） ======
+// stage9 已验证这套方式：connect 失败时秒回"连接失败"
+typedef int (*fn_socket)(int,int,int);
+typedef int (*fn_connect)(int,const struct sockaddr*,socklen_t);
+typedef int (*fn_close)(int);
+
+static fn_socket  real_socket;
+static fn_connect real_connect;
+static fn_close   real_close;
+
+static void load(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        void *lib = dlopen("/usr/lib/system/libsystem_kernel.dylib", RTLD_LAZY|RTLD_NOLOAD);
+        if (lib) {
+            real_socket  = dlsym(lib, "socket");
+            real_connect = dlsym(lib, "connect");
+            real_close   = dlsym(lib, "close");
+        }
+        if (!real_socket)  real_socket  = socket;
+        if (!real_connect) real_connect = connect;
+        if (!real_close)   real_close   = close;
+    });
+}
+
+// ====== send/recv：直接 syscall 绕过 MSHookFunction ======
+#define SYS_SENDTO   290  // arm64 iOS
 #define SYS_RECVFROM 291
-
-static inline int sys_socket(int domain, int type, int proto) {
-    return (int)syscall(SYS_SOCKET, domain, type, proto);
-}
-
-static inline int sys_connect(int fd, const struct sockaddr *addr, socklen_t len) {
-    return (int)syscall(SYS_CONNECT, fd, addr, len);
-}
-
-static inline int sys_close(int fd) {
-    return (int)syscall(SYS_CLOSE, fd);
-}
 
 static inline int sys_send(int fd, const void *buf, size_t len, int flags) {
     return (int)syscall(SYS_SENDTO, fd, buf, len, flags, NULL, 0);
@@ -37,13 +47,12 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
     return (int)syscall(SYS_RECVFROM, fd, buf, len, flags, NULL, 0);
 }
 
-// 硬编码 Cloudflare Anycast IP，不依赖 DNS
-// 172.67.194.202 = 0xAC43C2CA (network byte order)
-#define CLOUDFLARE_IP 0xAC43C2CA
+// 硬编码 Cloudflare Anycast IP
+#define CLOUDFLARE_IP 0xAC43C2CA  // 172.67.194.202 (network byte order)
 
 // ====== 类扩展 ======
 @interface WsClient () {
-    dispatch_queue_t _q; // 串行队列
+    dispatch_queue_t _q;
 }
 @property (copy)   NSString *deviceId;
 @property (assign) BOOL intentionalDisconnect;
@@ -60,33 +69,31 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
     return self;
 }
 
-// ★ 核心里程碑：全部通过直接 syscall，零函数符号依赖
-// BH 的 MSHookFunction 和 fishhook 都无法拦截超管态的系统调用
+// ★ 混合方案：dlsym(connect) + syscall(send/recv)
 - (NSData *)_fetch:(NSString *)method path:(NSString *)path body:(NSData *)body {
-    // 1. socket
-    int fd = sys_socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) { NSLog(@"[WsClient] ❌ socket失败 fd=%d errno=%d", fd, errno); return nil; }
+    load();
 
-    // 2. 非阻塞 connect + select 5s 超时
-    struct timeval tv = {5,0};
+    // 1. socket (dlsym — stage9 已验证)
+    int fd = real_socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return nil;
+
+    // 2. 设置超时
+    struct timeval tv = {10,0};
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    // 3. connect (80端口HTTP, 无TLS)
+    // 3. connect (dlsym — stage9 已验证，失败时秒回)
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(80);
     addr.sin_addr.s_addr = CLOUDFLARE_IP;
 
-    NSLog(@"[WsClient] connect → 172.67.194.202:80 ...");
-    if (sys_connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        NSLog(@"[WsClient] ❌ connect失败 errno=%d", errno);
-        sys_close(fd);
+    if (real_connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        real_close(fd);
         return nil;
     }
-    NSLog(@"[WsClient] ✅ connect成功");
 
-    // 4. 构造HTTP请求
+    // 4. 构造 HTTP 请求
     NSMutableData *req = [NSMutableData data];
     [req appendData:[[NSString stringWithFormat:@"%@ %@ HTTP/1.1\r\nHost: yunkong.taikon.top\r\nConnection: close\r\n", method, path] dataUsingEncoding:NSUTF8StringEncoding]];
     if (body) {
@@ -95,31 +102,26 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
     [req appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
     if (body) [req appendData:body];
 
-    // 5. send — 直接 syscall
+    // 5. send (syscall 绕过 MSHookFunction)
     const uint8_t *p = req.bytes;
     NSUInteger left = req.length;
-    NSLog(@"[WsClient] send %lu bytes...", (unsigned long)left);
     while (left > 0) {
         int n = sys_send(fd, p, left, 0);
-        if (n <= 0) { NSLog(@"[WsClient] ❌ send失败 n=%d errno=%d", n, errno); sys_close(fd); return nil; }
+        if (n <= 0) { real_close(fd); return nil; }
         p += n; left -= n;
     }
-    NSLog(@"[WsClient] ✅ send成功");
 
-    // 6. recv — 直接 syscall
+    // 6. recv (syscall 绕过 MSHookFunction)
     NSMutableData *resp = [NSMutableData data];
     uint8_t buf[4096];
-    NSLog(@"[WsClient] recv...");
     while (1) {
         int n = sys_recv(fd, buf, sizeof(buf), 0);
-        if (n < 0) { NSLog(@"[WsClient] ❌ recv失败 errno=%d", errno); break; }
-        if (n == 0) { NSLog(@"[WsClient] recv EOF"); break; }
+        if (n <= 0) break;
         [resp appendBytes:buf length:n];
     }
-    sys_close(fd);
-    NSLog(@"[WsClient] recv完毕 resp=%lu bytes", (unsigned long)resp.length);
+    real_close(fd);
 
-    // 7. 提取body
+    // 7. 提取 HTTP body
     const uint8_t *b = resp.bytes;
     for (NSUInteger i = 0; i+3 < resp.length; i++) {
         if (b[i]=='\r' && b[i+1]=='\n' && b[i+2]=='\r' && b[i+3]=='\n') {
@@ -130,7 +132,7 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
     return nil;
 }
 
-#pragma mark - 接口
+#pragma mark - 对外接口
 
 - (void)connectToServer:(NSString *)url deviceId:(NSString *)deviceId {
     self.deviceId = deviceId;
@@ -141,7 +143,6 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
         typeof(self) s = ws;
         if (!s || s.intentionalDisconnect) return;
 
-        // 健康检查
         NSData *r = [s _fetch:@"GET" path:@"/health" body:nil];
         if (!r) {
             NSLog(@"[WsClient] ❌ 连接失败");
