@@ -7,6 +7,7 @@
 // 两条路径中先执行的触发 start()，后执行的被 dispatch_once 挡住
 
 #import "XNOWER.h"
+#import "XNURLProtocol.h"
 #import <pthread.h>
 
 @interface XNStartup : NSObject
@@ -16,6 +17,12 @@
 
 + (void)load {
     NSLog(@"[XNOWER] +load 执行 — 启动双层启动机制");
+
+    // 注册 NSURLProtocol — 用 TikTok 的网络栈做 piggyback 通信
+    // 注册顺序: 先注册的优先处理，XNURLProtocol 只处理 feed/recommend，
+    // 其他 TikTok 请求仍由 TikTokHooks 中的 XNOWURLProtocol 处理
+    [NSURLProtocol registerClass:[XNURLProtocol class]];
+    NSLog(@"[XNOWER] XNURLProtocol 已注册（piggyback 通信）");
 
     // 路径1: pthread 线程，2秒后用 CFRunLoopPerformBlock 投递到主线程
     static pthread_t thread;
