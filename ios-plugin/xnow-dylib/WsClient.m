@@ -1,65 +1,40 @@
 // WsClient.m
-// XNOW HTTP 客户端 — dlsym(connect+超时) + syscall(send/recv)
-// connect 非阻塞 + select 5s 超时，快速失败
+// 全部走 syscall 绕过 BH hook + VPS/Cloudflare 多目标探测
+// connect/send/recv/socket/close 全部 syscall(0 符号依赖)
 
 #import "WsClient.h"
-#import <dlfcn.h>
 #import <sys/socket.h>
-#import <arpa/inet.h>
 #import <sys/syscall.h>
 #import <sys/select.h>
+#import <sys/time.h>
+#import <arpa/inet.h>
+#import <errno.h>
+#import <fcntl.h>
 
-// ====== dlsym 加载 ======
-typedef int (*fn_socket)(int,int,int);
-typedef int (*fn_connect)(int,const struct sockaddr*,socklen_t);
-typedef int (*fn_close)(int);
-typedef int (*fn_fcntl)(int,int,...);
-typedef int (*fn_select)(int,fd_set*,fd_set*,fd_set*,struct timeval*);
-typedef int (*fn_getsockopt)(int,int,int,void*,socklen_t*);
-
-static fn_socket      real_socket;
-static fn_connect     real_connect;
-static fn_close       real_close;
-static fn_fcntl       real_fcntl;
-static fn_select      real_select;
-static fn_getsockopt  real_getsockopt;
-
-static void load(void) {
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        void *lib = dlopen("/usr/lib/system/libsystem_kernel.dylib", RTLD_LAZY|RTLD_NOLOAD);
-        if (lib) {
-            real_socket     = dlsym(lib, "socket");
-            real_connect    = dlsym(lib, "connect");
-            real_close      = dlsym(lib, "close");
-            real_fcntl      = dlsym(lib, "fcntl");
-            real_select     = dlsym(lib, "select");
-            real_getsockopt = dlsym(lib, "getsockopt");
-        }
-        if (!real_socket)     real_socket     = socket;
-        if (!real_connect)    real_connect    = connect;
-        if (!real_close)      real_close      = close;
-        if (!real_fcntl)      real_fcntl      = fcntl;
-        if (!real_select)     real_select     = select;
-        if (!real_getsockopt) real_getsockopt = getsockopt;
-    });
-}
-
-// ====== syscall send/recv ======
+// ====== syscall ======
+#define SYS_SOCKET   97
+#define SYS_CONNECT  98
+#define SYS_CLOSE    6
+#define SYS_FCNTL    92
+#define SYS_SELECT   93
+#define SYS_GETSOCKOPT 118
 #define SYS_SENDTO   290
 #define SYS_RECVFROM 291
-static inline int sys_send(int fd, const void *buf, size_t len, int flags) {
-    return (int)syscall(SYS_SENDTO, fd, buf, len, flags, NULL, 0);
-}
-static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
-    return (int)syscall(SYS_RECVFROM, fd, buf, len, flags, NULL, 0);
-}
 
-// ====== 目标 ======
-// 172.67.194.202 = 0xAC43C2CA
-#define CLOUDFLARE_IP 0xAC43C2CA
-// 104.21.52.37 = 0x68153525
-#define CLOUDFLARE_IP2 0x68153525
+#define SYSCALL_INT(ret, num, ...) do { ret = (int)syscall(num, ##__VA_ARGS__); } while(0)
+static int sys_sock(int d, int t, int p) { return (int)syscall(SYS_SOCKET, d, t, p); }
+static int sys_con(int fd, const struct sockaddr *a, socklen_t l) { return (int)syscall(SYS_CONNECT, fd, a, l); }
+static int sys_cls(int fd) { return (int)syscall(SYS_CLOSE, fd); }
+static int sys_snd(int fd, const void *b, size_t l, int f) { return (int)syscall(SYS_SENDTO, fd, b, l, f, NULL, 0); }
+static int sys_rcv(int fd, void *b, size_t l, int f) { return (int)syscall(SYS_RECVFROM, fd, b, l, f, NULL, 0); }
+static int sys_fctl(int fd, int cmd, int val) { return (int)syscall(SYS_FCNTL, fd, cmd, val); }
+static int sys_sel(int nfds, fd_set *r, fd_set *w, fd_set *e, struct timeval *t) { return (int)syscall(SYS_SELECT, nfds, r, w, e, t); }
+static int sys_gso(int fd, int lv, int on, void *v, socklen_t *len) { return (int)syscall(SYS_GETSOCKOPT, fd, lv, on, v, len); }
+
+// ====== 地址 ======
+#define VPS_IP  0xC081D234  // 192.129.210.52
+#define CF_IP1  0xAC43C2CA  // 172.67.194.202
+#define CF_IP2  0x68153525  // 104.21.52.37
 
 // ====== 类扩展 ======
 @interface WsClient () {
@@ -81,126 +56,111 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
     return self;
 }
 
-// 单次 connect 尝试（非阻塞 + select 5s 超时）
-- (BOOL)_tryConnect:(int)fd ip:(uint32_t)ip port:(int)port {
-    // 设置非阻塞
-    int flags = real_fcntl(fd, F_GETFL, 0);
-    real_fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+// 试一个 IP:PORT 组合（非阻塞 + select 5s）
+- (BOOL)_tryConn:(int)fd ip:(uint32_t)ip port:(int)port {
+    int flags = sys_fctl(fd, F_GETFL, 0);
+    if (flags >= 0) sys_fctl(fd, F_SETFL, flags | O_NONBLOCK);
 
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = ip;
 
-    int ret = real_connect(fd, (struct sockaddr*)&addr, sizeof(addr));
-    if (ret == 0) {
-        real_fcntl(fd, F_SETFL, flags); // 恢复阻塞
-        return YES;
-    }
+    int ret = sys_con(fd, (struct sockaddr*)&addr, sizeof(addr));
+    if (ret == 0) { if (flags>=0) sys_fctl(fd, F_SETFL, flags); return YES; }
     if (errno != EINPROGRESS) {
         self.lastError = [NSString stringWithFormat:@"conn %d.%d.%d.%d:%d errno=%d",
             (ip>>24)&0xFF, (ip>>16)&0xFF, (ip>>8)&0xFF, ip&0xFF, port, errno];
-        real_fcntl(fd, F_SETFL, flags);
+        if (flags>=0) sys_fctl(fd, F_SETFL, flags);
         return NO;
     }
 
-    // select 等待 5 秒
     struct timeval tv = {5, 0};
     fd_set wset;
     FD_ZERO(&wset);
     FD_SET(fd, &wset);
-    ret = real_select(fd + 1, NULL, &wset, NULL, &tv);
-
+    ret = sys_sel(fd+1, NULL, &wset, NULL, &tv);
     if (ret <= 0) {
         self.lastError = [NSString stringWithFormat:@"conn %d.%d.%d.%d:%d timeout",
             (ip>>24)&0xFF, (ip>>16)&0xFF, (ip>>8)&0xFF, ip&0xFF, port];
-        real_fcntl(fd, F_SETFL, flags);
+        if (flags>=0) sys_fctl(fd, F_SETFL, flags);
         return NO;
     }
 
-    // 检查 socket 错误
     int err = 0;
     socklen_t elen = sizeof(err);
-    real_getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &elen);
-    real_fcntl(fd, F_SETFL, flags);
+    sys_gso(fd, SOL_SOCKET, SO_ERROR, &err, &elen);
+    if (flags>=0) sys_fctl(fd, F_SETFL, flags);
     if (err != 0) {
         self.lastError = [NSString stringWithFormat:@"conn %d.%d.%d.%d:%d err=%d",
             (ip>>24)&0xFF, (ip>>16)&0xFF, (ip>>8)&0xFF, ip&0xFF, port, err];
         return NO;
     }
-    return YES; // ✅ 连接成功
+    return YES;
 }
 
-// 尝试连接 + 发请求
+// 连接 + 发 HTTP 请求
 - (NSData *)_fetch:(NSString *)method path:(NSString *)path body:(NSData *)body {
-    load();
+    // 目标: [ip, port] 组合
+    struct { uint32_t ip; int port; } targets[] = {
+        {VPS_IP, 8000},   // VPS 直连（绕过 BH hook）
+        {CF_IP1, 80},     // Cloudflare
+        {CF_IP1, 8080},
+        {CF_IP2, 80},
+        {CF_IP2, 8080},
+    };
+    int ntargets = sizeof(targets)/sizeof(targets[0]);
 
-    // 依次尝试 2 个 IP × 2 个端口
-    uint32_t ips[] = {CLOUDFLARE_IP, CLOUDFLARE_IP2};
-    int ports[] = {80, 8080};
-    int retryAfter = 0; // 0=正常, 1=但send/recv失败
+    for (int i = 0; i < ntargets; i++) {
+        uint32_t ip = targets[i].ip;
+        int port = targets[i].port;
 
-    for (int pi = 0; pi < 2; pi++) {
-        for (int ii = 0; ii < 2; ii++) {
-            int port = ports[pi];
-            uint32_t ip = ips[ii];
+        int fd = sys_sock(AF_INET, SOCK_STREAM, 0);
+        if (fd < 0) continue;
 
-            int fd = real_socket(AF_INET, SOCK_STREAM, 0);
-            if (fd < 0) continue;
+        if (![self _tryConn:fd ip:ip port:port]) {
+            sys_cls(fd);
+            continue; // 连接失败，试下一个
+        }
 
-            BOOL ok = [self _tryConnect:fd ip:ip port:port];
-            if (!ok) { real_close(fd); continue; }
+        // ✅ connect 成功，发 HTTP
+        NSMutableData *req = [NSMutableData data];
+        [req appendData:[[NSString stringWithFormat:@"%@ %@ HTTP/1.1\r\nHost: yunkong.taikon.top\r\nConnection: close\r\n", method, path] dataUsingEncoding:NSUTF8StringEncoding]];
+        if (body) {
+            [req appendData:[[NSString stringWithFormat:@"Content-Type: application/json\r\nContent-Length: %lu\r\n", (unsigned long)body.length] dataUsingEncoding:NSUTF8StringEncoding]];
+        }
+        [req appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
+        if (body) [req appendData:body];
 
-            // ✅ connect 成功，发 HTTP
-            NSMutableData *req = [NSMutableData data];
-            [req appendData:[[NSString stringWithFormat:@"%@ %@ HTTP/1.1\r\nHost: yunkong.taikon.top\r\nConnection: close\r\n", method, path] dataUsingEncoding:NSUTF8StringEncoding]];
-            if (body) {
-                [req appendData:[[NSString stringWithFormat:@"Content-Type: application/json\r\nContent-Length: %lu\r\n", (unsigned long)body.length] dataUsingEncoding:NSUTF8StringEncoding]];
-            }
-            [req appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
-            if (body) [req appendData:body];
+        const uint8_t *p = req.bytes;
+        NSUInteger left = req.length;
+        BOOL bad = NO;
+        while (left > 0) {
+            int n = sys_snd(fd, p, left, 0);
+            if (n <= 0) { bad = YES; break; }
+            p += n; left -= n;
+        }
+        if (bad) { sys_cls(fd); continue; }
 
-            // send (syscall)
-            const uint8_t *p = req.bytes;
-            NSUInteger left = req.length;
-            BOOL sendBad = NO;
-            while (left > 0) {
-                int n = sys_send(fd, p, left, 0);
-                if (n <= 0) { sendBad = YES; break; }
-                p += n; left -= n;
-            }
-            if (sendBad) { real_close(fd); continue; }
+        NSMutableData *resp = [NSMutableData data];
+        uint8_t buf[4096];
+        while (1) {
+            int n = sys_rcv(fd, buf, sizeof(buf), 0);
+            if (n <= 0) break;
+            [resp appendBytes:buf length:n];
+        }
+        sys_cls(fd);
 
-            // recv (syscall)
-            NSMutableData *resp = [NSMutableData data];
-            uint8_t buf[4096];
-            while (1) {
-                int n = sys_recv(fd, buf, sizeof(buf), 0);
-                if (n < 0) break;
-                if (n == 0) break;
-                [resp appendBytes:buf length:n];
-            }
-            real_close(fd);
-
-            // 提取 body
-            const uint8_t *b = resp.bytes;
-            if (resp.length > 4) {
-                for (NSUInteger i = 0; i+3 < resp.length; i++) {
-                    if (b[i]=='\r' && b[i+1]=='\n' && b[i+2]=='\r' && b[i+3]=='\n') {
-                        NSUInteger blen = resp.length - i - 4;
-                        return blen > 0 ? [resp subdataWithRange:NSMakeRange(i+4, blen)] : nil;
-                    }
+        const uint8_t *b = resp.bytes;
+        if (resp.length > 4) {
+            for (NSUInteger j = 0; j+3 < resp.length; j++) {
+                if (b[j]=='\r' && b[j+1]=='\n' && b[j+2]=='\r' && b[j+3]=='\n') {
+                    NSUInteger blen = resp.length - j - 4;
+                    return blen > 0 ? [resp subdataWithRange:NSMakeRange(j+4, blen)] : nil;
                 }
             }
-            // 连上了但响应解析失败 → 标记重试
-            retryAfter = 1;
-            real_close(fd);
         }
-    }
-
-    // 全失败
-    if (!retryAfter) {
-        NSLog(@"[WsClient] ❌ 全部连接失败");
+        // 连上了但响应不对，标记然后重试
     }
     return nil;
 }
@@ -217,16 +177,15 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
 
         NSData *r = [s _fetch:@"GET" path:@"/health" body:nil];
         if (!r) {
-            NSString *errMsg = s.lastError ?: @"全部连接失败";
-            NSLog(@"[WsClient] ❌ %@", errMsg);
+            NSString *msg = s.lastError ?: @"全部连接尝试均失败";
+            NSLog(@"[WsClient] ❌ %@", msg);
             s->_isConnected = NO;
             dispatch_async(dispatch_get_main_queue(), ^{
                 [ws.delegate wsClientDidDisconnect:ws error:
-                    [NSError errorWithDomain:@"Ws" code:1 userInfo:@{NSLocalizedDescriptionKey: errMsg}]];
+                    [NSError errorWithDomain:@"Ws" code:1 userInfo:@{NSLocalizedDescriptionKey: msg}]];
             });
             return;
         }
-
         NSLog(@"[WsClient] ✅ 连接成功");
         s->_isConnected = YES;
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -270,14 +229,12 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
 }
 
 - (void)sendString:(NSString *)string {}
-
 - (void)disconnect {
     self.intentionalDisconnect = YES; _isConnected = NO;
     [self _stopPolling];
 }
 
 #pragma mark - 轮询
-
 - (void)_startPolling {
     [self _stopPolling];
     dispatch_source_t t = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER,0,0,dispatch_get_main_queue());
@@ -286,11 +243,9 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
     dispatch_source_set_event_handler(t, ^{ [ws _pollTick]; });
     _pollTimer = t; dispatch_resume(t);
 }
-
 - (void)_stopPolling {
     if (_pollTimer) { dispatch_source_cancel(_pollTimer); _pollTimer = nil; }
 }
-
 - (void)_pollTick {
     if (self.intentionalDisconnect || !self.isConnected) return;
     __weak typeof(self) ws = self;
@@ -304,7 +259,6 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
             dispatch_async(dispatch_get_main_queue(), ^{ [ws.delegate wsClient:ws didReceiveMessage:obj]; });
     });
 }
-
 - (void)dealloc {
     self.intentionalDisconnect = YES;
     [self _stopPolling];
