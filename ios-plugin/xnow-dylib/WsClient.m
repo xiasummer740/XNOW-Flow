@@ -1,8 +1,5 @@
 // WsClient.m
-// XNOW HTTP 客户端 — 混合方案
-// socket/connect/close：dlsym 绕过 PLT 级 hook（stage9 已验证"连接失败"快返）
-// send/recv：直接 syscall 绕过 MSHookFunction 指令级 inline hook
-// 全在后台串行队列执行
+// XNOW HTTP 客户端 — 多IP多端口探测 + syscall(send/recv)
 
 #import "WsClient.h"
 #import <dlfcn.h>
@@ -10,8 +7,7 @@
 #import <arpa/inet.h>
 #import <sys/syscall.h>
 
-// ====== socket/connect/close：dlsym 绕过 fishhook（PLT 级） ======
-// stage9 已验证这套方式：connect 失败时秒回"连接失败"
+// ====== dlsym 加载（socket/connect/close） ======
 typedef int (*fn_socket)(int,int,int);
 typedef int (*fn_connect)(int,const struct sockaddr*,socklen_t);
 typedef int (*fn_close)(int);
@@ -35,8 +31,8 @@ static void load(void) {
     });
 }
 
-// ====== send/recv：直接 syscall 绕过 MSHookFunction ======
-#define SYS_SENDTO   290  // arm64 iOS
+// ====== syscall send/recv ======
+#define SYS_SENDTO   290
 #define SYS_RECVFROM 291
 
 static inline int sys_send(int fd, const void *buf, size_t len, int flags) {
@@ -47,14 +43,22 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
     return (int)syscall(SYS_RECVFROM, fd, buf, len, flags, NULL, 0);
 }
 
-// 硬编码 Cloudflare Anycast IP
-#define CLOUDFLARE_IP 0xAC43C2CA  // 172.67.194.202 (network byte order)
+// ====== 多 IP 探测 ======
+// Cloudflare Anycast IPs for yunkong.taikon.top
+static const uint32_t TRY_IPS[] = {
+    0xAC43C2CA,  // 172.67.194.202
+    0x68153525,  // 104.21.52.37
+};
+static const int TRY_PORTS[] = {80, 8080, 443};
+#define IP_COUNT  (sizeof(TRY_IPS)/sizeof(TRY_IPS[0]))
+#define PORT_COUNT (sizeof(TRY_PORTS)/sizeof(TRY_PORTS[0]))
 
 // ====== 类扩展 ======
 @interface WsClient () {
     dispatch_queue_t _q;
 }
 @property (copy)   NSString *deviceId;
+@property (copy)   NSString *lastError;  // 最后一次错误详情
 @property (assign) BOOL intentionalDisconnect;
 @property (strong) dispatch_source_t pollTimer;
 @end
@@ -69,74 +73,76 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
     return self;
 }
 
-// ★ 混合方案：dlsym(connect) + syscall(send/recv)
+// 尝试所有 IP:PORT 组合，直到一个成功
 - (NSData *)_fetch:(NSString *)method path:(NSString *)path body:(NSData *)body {
     load();
 
-    // 1. socket (dlsym — stage9 已验证)
-    int fd = real_socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) return nil;
+    for (int pi = 0; pi < PORT_COUNT; pi++) {
+        for (int ii = 0; ii < IP_COUNT; ii++) {
+            int port = TRY_PORTS[pi];
+            uint32_t ip = TRY_IPS[ii];
 
-    // 2. 设置超时
-    struct timeval tv = {10,0};
-    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+            int fd = real_socket(AF_INET, SOCK_STREAM, 0);
+            if (fd < 0) continue;
 
-    // 3. connect (dlsym — stage9 已验证，失败时秒回)
-    struct sockaddr_in addr = {0};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(80);
-    addr.sin_addr.s_addr = CLOUDFLARE_IP;
+            struct sockaddr_in addr = {0};
+            addr.sin_family = AF_INET;
+            addr.sin_port = htons(port);
+            addr.sin_addr.s_addr = ip;
 
-    if (real_connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        real_close(fd);
-        return nil;
-    }
+            if (real_connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+                self.lastError = [NSString stringWithFormat:@"conn %d.%d.%d.%d:%d errno=%d",
+                    (ip>>24)&0xFF, (ip>>16)&0xFF, (ip>>8)&0xFF, ip&0xFF, port, errno];
+                real_close(fd);
+                continue;
+            }
 
-    // 4. 构造 HTTP 请求
-    NSMutableData *req = [NSMutableData data];
-    [req appendData:[[NSString stringWithFormat:@"%@ %@ HTTP/1.1\r\nHost: yunkong.taikon.top\r\nConnection: close\r\n", method, path] dataUsingEncoding:NSUTF8StringEncoding]];
-    if (body) {
-        [req appendData:[[NSString stringWithFormat:@"Content-Type: application/json\r\nContent-Length: %lu\r\n", (unsigned long)body.length] dataUsingEncoding:NSUTF8StringEncoding]];
-    }
-    [req appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
-    if (body) [req appendData:body];
+            // connect 成功 → 发 HTTP 请求
+            NSMutableData *req = [NSMutableData data];
+            [req appendData:[[NSString stringWithFormat:@"%@ %@ HTTP/1.1\r\nHost: yunkong.taikon.top\r\nConnection: close\r\n", method, path] dataUsingEncoding:NSUTF8StringEncoding]];
+            if (body) {
+                [req appendData:[[NSString stringWithFormat:@"Content-Type: application/json\r\nContent-Length: %lu\r\n", (unsigned long)body.length] dataUsingEncoding:NSUTF8StringEncoding]];
+            }
+            [req appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
+            if (body) [req appendData:body];
 
-    // 5. send (syscall 绕过 MSHookFunction)
-    const uint8_t *p = req.bytes;
-    NSUInteger left = req.length;
-    while (left > 0) {
-        int n = sys_send(fd, p, left, 0);
-        if (n <= 0) { real_close(fd); return nil; }
-        p += n; left -= n;
-    }
+            const uint8_t *p = req.bytes;
+            NSUInteger left = req.length;
+            while (left > 0) {
+                int n = sys_send(fd, p, left, 0);
+                if (n <= 0) { real_close(fd); goto next; }
+                p += n; left -= n;
+            }
 
-    // 6. recv (syscall 绕过 MSHookFunction)
-    NSMutableData *resp = [NSMutableData data];
-    uint8_t buf[4096];
-    while (1) {
-        int n = sys_recv(fd, buf, sizeof(buf), 0);
-        if (n <= 0) break;
-        [resp appendBytes:buf length:n];
-    }
-    real_close(fd);
+            NSMutableData *resp = [NSMutableData data];
+            uint8_t buf[4096];
+            while (1) {
+                int n = sys_recv(fd, buf, sizeof(buf), 0);
+                if (n <= 0) break;
+                [resp appendBytes:buf length:n];
+            }
+            real_close(fd);
 
-    // 7. 提取 HTTP body
-    const uint8_t *b = resp.bytes;
-    for (NSUInteger i = 0; i+3 < resp.length; i++) {
-        if (b[i]=='\r' && b[i+1]=='\n' && b[i+2]=='\r' && b[i+3]=='\n') {
-            NSUInteger blen = resp.length - i - 4;
-            return blen > 0 ? [resp subdataWithRange:NSMakeRange(i+4, blen)] : nil;
+            // 提取 HTTP body
+            const uint8_t *b = resp.bytes;
+            for (NSUInteger i = 0; i+3 < resp.length; i++) {
+                if (b[i]=='\r' && b[i+1]=='\n' && b[i+2]=='\r' && b[i+3]=='\n') {
+                    NSUInteger blen = resp.length - i - 4;
+                    return blen > 0 ? [resp subdataWithRange:NSMakeRange(i+4, blen)] : nil;
+                }
+            }
+            return nil;
+
+        next:;
         }
     }
     return nil;
 }
 
-#pragma mark - 对外接口
-
 - (void)connectToServer:(NSString *)url deviceId:(NSString *)deviceId {
     self.deviceId = deviceId;
     self.intentionalDisconnect = NO;
+    self.lastError = nil;
 
     __weak typeof(self) ws = self;
     dispatch_async(_q, ^{
@@ -145,10 +151,12 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
 
         NSData *r = [s _fetch:@"GET" path:@"/health" body:nil];
         if (!r) {
-            NSLog(@"[WsClient] ❌ 连接失败");
+            NSString *errMsg = s.lastError ?: @"全部连接尝试均失败";
+            NSLog(@"[WsClient] ❌ 连接失败 — %@", errMsg);
             s->_isConnected = NO;
             dispatch_async(dispatch_get_main_queue(), ^{
-                [ws.delegate wsClientDidDisconnect:ws error:[NSError errorWithDomain:@"Ws" code:1 userInfo:@{NSLocalizedDescriptionKey:@"连接失败"}]];
+                [ws.delegate wsClientDidDisconnect:ws error:
+                    [NSError errorWithDomain:@"Ws" code:1 userInfo:@{NSLocalizedDescriptionKey: errMsg}]];
             });
             return;
         }
@@ -171,7 +179,8 @@ static inline int sys_recv(int fd, void *buf, size_t len, int flags) {
     if (!r) {
         _isConnected = NO;
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self.delegate wsClientDidDisconnect:self error:[NSError errorWithDomain:@"Ws" code:2 userInfo:@{NSLocalizedDescriptionKey:@"通信中断"}]];
+            [self.delegate wsClientDidDisconnect:self error:
+                [NSError errorWithDomain:@"Ws" code:2 userInfo:@{NSLocalizedDescriptionKey: self.lastError ?: @"通信中断"}]];
         });
         return;
     }

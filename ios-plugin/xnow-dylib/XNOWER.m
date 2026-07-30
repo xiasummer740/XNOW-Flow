@@ -196,11 +196,11 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)wsClientDidDisconnect:(WsClient *)client error:(NSError *)error {
     _isConnected = NO;
 
+    [self addLog:@"❌ %@", error.localizedDescription ?: @"连接断开"];
+
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.floatingPanel setConnected:NO];
     });
-
-    // 自动重连（指数退避由 WsClient 内部处理）
 }
 
 - (void)wsClient:(WsClient *)client didReceiveMessage:(NSDictionary *)message {
