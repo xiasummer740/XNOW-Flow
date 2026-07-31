@@ -16,6 +16,13 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface XNURLProtocol : NSURLProtocol
+
+/// 后端是否可达（最后一次检测结果）
++ (BOOL)isBackendReachable;
+
+/// 手动立即检测后端连通性
++ (void)checkBackendNow:(void (^)(BOOL ok))completion;
+
 @end
 
 NS_ASSUME_NONNULL_END

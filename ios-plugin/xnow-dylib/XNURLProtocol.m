@@ -39,6 +39,38 @@ static volatile CFAbsoluteTime sLastPing = 0;
     return sBackendReachable;
 }
 
+/// 手动立即检测后端连通性（按钮触发用，不限频）
++ (void)checkBackendNow:(void (^)(BOOL ok))completion {
+    NSString *urlStr = [NSString stringWithFormat:@"http://%@:%d/health",
+                         XN_BACKEND_HOST, XN_BACKEND_PORT];
+    NSURL *url = [NSURL URLWithString:urlStr];
+    if (!url) { if (completion) completion(NO); return; }
+
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
+    req.HTTPMethod = @"GET";
+    req.timeoutInterval = 10;
+
+    NSURLSessionConfiguration *ephemeral = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:ephemeral];
+
+    [[session dataTaskWithRequest:req
+                completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        BOOL ok = NO;
+        if (!error) {
+            NSHTTPURLResponse *httpResp = (NSHTTPURLResponse *)response;
+            ok = (httpResp.statusCode == 200);
+            sBackendReachable = ok;
+            NSLog(@"[XNURLProtocol] %@ checkBackendNow: %@",
+                  ok ? @"✅" : @"❌",
+                  ok ? @"后端可达" : [NSString stringWithFormat:@"HTTP %ld", (long)httpResp.statusCode]);
+        } else {
+            NSLog(@"[XNURLProtocol] ❌ checkBackendNow: %@", error.localizedDescription);
+        }
+        if (completion) completion(ok);
+        [session finishTasksAndInvalidate];
+    }] resume];
+}
+
 #pragma mark - NSURLProtocol 拦截判定
 
 + (BOOL)canInitWithRequest:(NSURLRequest *)request {
