@@ -18,8 +18,9 @@ static NSString *const kXNHandledKey    = @"XN_piggyback_handled";
 static NSString *const kXNProcKey       = @"XNOWER_processed";
 
 // ====== 后端配置 ======
-#define XN_BACKEND_HOST  @"yunkong.taikon.top"
-#define XN_BACKEND_PORT  80   // Cloudflare 代理端口
+// 优先 VPS 直连（运营商封了 Cloudflare，但 VPS IP 通）
+#define XN_BACKEND_HOST  @"192.129.210.52"
+#define XN_BACKEND_PORT  8000
 #define XN_POLL_INTERVAL 8.0  // 秒，两次后端请求最小间隔
 
 // ====== 全局状态 ======
