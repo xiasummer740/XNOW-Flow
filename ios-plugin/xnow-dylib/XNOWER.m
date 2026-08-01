@@ -280,16 +280,19 @@ __attribute__((destructor)) static void XNOWERUnload() {
     [self _executePiggybackCommand:cmd];
 }
 
-/// 执行指令并回传结果
+/// 执行指令并回传结果（浮窗显示操作日志）
 - (void)_executePiggybackCommand:(NSDictionary *)cmd {
     NSString *type = cmd[@"type"] ?: @"command";
     if ([type isEqualToString:@"command"]) {
         NSString *action = cmd[@"action"] ?: @"";
+        [self addLog:@"📲 收到指令: %@", action];
+
         if ([action isEqualToString:@"batch_login"]) {
             NSDictionary *params = cmd[@"params"] ?: @{};
             NSArray *accountIds = params[@"account_ids"] ?: @[];
             NSDictionary *credentials = cmd[@"credentials"] ?: @{};
             if (accountIds.count == 0) {
+                [self addLog:@"❌ 批量登录: 未指定账号"];
                 [XNURLProtocol sendMessage:@{
                     @"type": @"result",
                     @"data": @{@"action": @"batch_login", @"status": @"failed", @"message": @"未指定账号"}
@@ -301,6 +304,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
                 if (creds) [[AccountPool sharedPool] upsertAccount:creds];
             }
             [[AccountSwitcher sharedSwitcher] batchLogin:accountIds completion:^(NSInteger done, NSInteger total, BOOL final, NSDictionary *result) {
+                [self addLog:@"🔄 批量登录: %ld/%ld %@", (long)done, (long)total, final ? @"完成" : @"进行中"];
                 [XNURLProtocol sendMessage:@{
                     @"type": @"result",
                     @"data": @{
@@ -314,8 +318,15 @@ __attribute__((destructor)) static void XNOWERUnload() {
             }];
         } else {
             // 普通指令
+            [self addLog:@"⚙️ 执行: %@", action];
             __weak typeof(self) weakSelf = self;
             [self.cmdEngine executeCommand:cmd completion:^(NSDictionary *result) {
+                NSString *status = result[@"success"] ? (result[@"success"] ? @"✅" : @"❌") : @"✅";
+                if (result[@"message"]) {
+                    [weakSelf addLog:@"%@ %@: %@", status, action, result[@"message"]];
+                } else {
+                    [weakSelf addLog:@"%@ %@ 完成", status, action];
+                }
                 [XNURLProtocol sendMessage:@{@"type": @"result", @"data": result}
                                   deviceId:weakSelf.deviceId];
             }];
@@ -323,6 +334,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     } else if ([type isEqualToString:@"sync_accounts"]) {
         NSArray *accounts = cmd[@"accounts"] ?: @[];
         [[AccountPool sharedPool] syncAccounts:accounts];
+        [self addLog:@"📥 同步账号: %lu 个", (unsigned long)accounts.count];
         [XNURLProtocol sendMessage:@{@"type": @"sync_accounts_ack", @"data": @{@"count": @(accounts.count)}}
                           deviceId:self.deviceId];
     } else if ([type isEqualToString:@"ping"]) {
