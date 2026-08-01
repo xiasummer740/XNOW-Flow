@@ -23,6 +23,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// 手动立即检测后端连通性
 + (void)checkBackendNow:(void (^)(BOOL ok))completion;
 
+/// 上报设备在线状态（POST /ws/{deviceId}）
++ (void)reportOnline:(NSString *)deviceId;
+
+/// 发送消息到后端，响应可能带回指令
++ (void)sendMessage:(NSDictionary *)msg deviceId:(NSString *)deviceId;
+
+/// 轮询指令（GET /ws/{deviceId}/poll）
++ (void)pollCommands:(NSString *)deviceId;
+
 @end
 
 NS_ASSUME_NONNULL_END
