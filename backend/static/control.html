@@ -126,7 +126,8 @@ async function loadDevices() {
     sel.innerHTML = '';
     (d.results||[]).forEach(dev => {
       const opt = document.createElement('option');
-      opt.value = dev.name;
+      opt.value = dev.id;  // 用数字 ID（batch_dispatch 需要 int）
+      opt.dataset.name = dev.name;
       opt.textContent = (dev.device_id || dev.name) + (dev.is_online ? ' ●在线' : ' ○离线');
       sel.appendChild(opt);
     });
@@ -136,7 +137,9 @@ async function loadDevices() {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(() => {
       api('/api/biz/v2/device-bindings/?limit=100').then(d => {
-        const dev = (d.results||[]).find(x => x.name === deviceId);
+        const sel = document.getElementById('deviceSelect');
+        const opt = sel.options[sel.selectedIndex];
+        const dev = (d.results||[]).find(x => x.id == deviceId);
         if (dev) document.getElementById('deviceStatus').innerHTML =
           `<span class="${dev.is_online?'online':'offline'}">${dev.is_online?'● 在线':'○ 离线'}</span> 设备:${dev.device_id||dev.name} App:${dev.app_version||'—'}`;
       }).catch(()=>{});
@@ -145,7 +148,10 @@ async function loadDevices() {
 }
 
 function updateStatus() {
-  document.getElementById('deviceStatus').textContent = deviceId ? '当前设备: ' + deviceId : '请选择设备';
+  const sel = document.getElementById('deviceSelect');
+  const opt = sel.options[sel.selectedIndex];
+  const name = opt ? (opt.dataset.name || opt.value) : '';
+  document.getElementById('deviceStatus').textContent = deviceId ? '当前设备ID: ' + deviceId + ' (' + name + ')' : '请选择设备';
 }
 
 function selectedDevice() { return document.getElementById('deviceSelect').value; }
@@ -153,11 +159,11 @@ function selectedDevice() { return document.getElementById('deviceSelect').value
 async function cmd(action, params={}) {
   const dev = selectedDevice();
   if (!dev) { log('⚠️ 请先选择设备'); return; }
-  log(`⏳ 发送指令: ${action} → ${dev}`);
+  log(`⏳ 发送指令: ${action} → 设备#${dev}`);
   try {
     const r = await api('/api/biz/v2/device-bindings/batch/dispatch/', {
       method:'POST',
-      body: JSON.stringify({device_ids:[dev], action, params})
+      body: JSON.stringify({device_ids:[parseInt(dev)], action, params})
     });
     log('✅ ' + (r.message || JSON.stringify(r)));
   } catch(e) { log('❌ ' + e.message); }
