@@ -56,6 +56,15 @@ button:disabled { opacity:.4; cursor:not-allowed; }
 </div>
 
 <div class="card">
+  <h2>✏️ 修改资料</h2>
+  <label>新昵称</label>
+  <input type="text" id="newNickname" placeholder="如: 某某品牌">
+  <label>新签名</label>
+  <input type="text" id="newSignature" placeholder="如: 欢迎关注">
+  <button onclick="cmd('edit_profile',{nickname:document.getElementById('newNickname').value,signature:document.getElementById('newSignature').value})">✏️ 修改资料</button>
+</div>
+
+<div class="card">
   <h2>🔗 打开指定内容</h2>
   <label>搜索关键词</label>
   <input type="text" id="kw" placeholder="如 美食 或 用户名">

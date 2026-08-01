@@ -87,6 +87,8 @@ static const CGFloat kAvatarRatioY = 0.82;
             @"save_video":        @(CommandActionSaveVideo),
             // 账号
             @"logout":            @(CommandActionLogout),
+            // 修改资料
+            @"edit_profile":      @(CommandActionEditProfile),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -256,6 +258,11 @@ static const CGFloat kAvatarRatioY = 0.82;
             // === 账号 ===
             case CommandActionLogout:
                 [self _performLogout];
+                break;
+
+            // === 修改资料 ===
+            case CommandActionEditProfile:
+                [self _performEditProfile:params];
                 break;
 
             default:
@@ -1133,6 +1140,88 @@ static const CGFloat kAvatarRatioY = 0.82;
 
     // 清除本地账号缓存
     [[AccountManager sharedManager] clearAccount];
+}
+
+/// 修改账号资料（昵称/签名/链接）
+/// params: {nickname, signature, link}
+- (void)_performEditProfile:(NSDictionary *)params {
+    NSString *nickname = params[@"nickname"] ?: @"";
+    NSString *signature = params[@"signature"] ?: @"";
+    NSString *link = params[@"link"] ?: @"";
+    if (nickname.length == 0 && signature.length == 0 && link.length == 0) return;
+
+    // 导航到个人主页 → 点编辑资料
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        [self _navigateToProfile];
+    });
+    [NSThread sleepForTimeInterval:1.5];
+
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *editBtn = [self _findButtonWithAnyLabel:@[@"Edit profile", @"Edit Profile", @"编辑资料", @"编辑"]
+                                                   inView:XN_ActiveWindow()];
+        if (editBtn) {
+            [self _safeTapAtPoint:[editBtn.superview convertPoint:editBtn.center toView:nil]];
+        } else {
+            // 坐标回退：编辑按钮通常在资料卡右上
+            CGSize screen = [UIScreen mainScreen].bounds.size;
+            [self _safeTapAtPoint:CGPointMake(screen.width - 40, screen.height * 0.38)];
+        }
+    });
+    [NSThread sleepForTimeInterval:1.5];
+
+    // 改昵称
+    if (nickname.length > 0) {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            UITextField *nameField = [self _findTextFieldWithPlaceholderInView:XN_ActiveWindow()
+                                                                     keywords:@[@"name", @"Name", @"昵称", @"name", @"username"]];
+            if (nameField) {
+                nameField.text = nickname;
+                [nameField becomeFirstResponder];
+                [[NSNotificationCenter defaultCenter] postNotificationName:UITextFieldTextDidChangeNotification object:nameField];
+            }
+        });
+        [NSThread sleepForTimeInterval:0.5];
+    }
+
+    // 改签名
+    if (signature.length > 0) {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            UITextField *bioField = [self _findTextFieldWithPlaceholderInView:XN_ActiveWindow()
+                                                                     keywords:@[@"bio", @"Bio", @"签名", @"简介", @"introduce"]];
+            if (bioField) {
+                bioField.text = signature;
+                [bioField becomeFirstResponder];
+                [[NSNotificationCenter defaultCenter] postNotificationName:UITextFieldTextDidChangeNotification object:bioField];
+            }
+        });
+        [NSThread sleepForTimeInterval:0.5];
+    }
+
+    // 保存
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *saveBtn = [self _findButtonWithAnyLabel:@[@"Save", @"save", @"保存", @"Done", @"完成"]
+                                                   inView:XN_ActiveWindow()];
+        if (saveBtn) {
+            [self _safeTapAtPoint:[saveBtn.superview convertPoint:saveBtn.center toView:nil]];
+        }
+    });
+    [NSThread sleepForTimeInterval:1.0];
+}
+
+/// 按 placeholder 关键词查找输入框
+- (UITextField *)_findTextFieldWithPlaceholderInView:(UIView *)view keywords:(NSArray *)keywords {
+    if ([view isKindOfClass:[UITextField class]]) {
+        UITextField *tf = (UITextField *)view;
+        NSString *ph = tf.placeholder ?: @"";
+        for (NSString *kw in keywords) {
+            if ([ph.lowercaseString containsString:kw.lowercaseString]) return tf;
+        }
+    }
+    for (UIView *sub in view.subviews) {
+        UITextField *tf = [self _findTextFieldWithPlaceholderInView:sub keywords:keywords];
+        if (tf) return tf;
+    }
+    return nil;
 }
 
 #pragma mark - 辅助: 手势模拟

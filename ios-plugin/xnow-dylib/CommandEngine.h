@@ -47,6 +47,9 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 
     // 账号 (Phase 3)
     CommandActionLogout,        // 退出登录
+
+    // 修改资料 (Phase 4)
+    CommandActionEditProfile,   // params: nickname/signature/link
 };
 
 @interface CommandEngine : NSObject

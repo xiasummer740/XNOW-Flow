@@ -20,6 +20,7 @@ from models.announcement import Announcement
 from models.reply_template import ReplyTemplate
 from models.media import Media
 from models.collected_data import CollectedData
+from models.material import MaterialGroup, Material
 
 # 创建表
 Base.metadata.create_all(bind=engine)
@@ -38,6 +39,7 @@ app.add_middleware(
 from routers import auth, dashboard, devices, accounts, tasks, task_executions
 from routers import timed_tasks, feedback, announcements, reply_templates
 from routers import media, collected_data, execution_stats
+from routers import materials
 from routers import ws as ws_router
 from routers import device_commands
 
@@ -54,6 +56,7 @@ app.include_router(reply_templates.router)
 app.include_router(media.router)
 app.include_router(collected_data.router)
 app.include_router(execution_stats.router)
+app.include_router(materials.router)
 app.include_router(ws_router.router)
 app.include_router(device_commands.router)
 
