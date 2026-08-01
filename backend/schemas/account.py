@@ -3,6 +3,8 @@ from typing import Optional, List
 from datetime import datetime
 import json
 
+from crypto import encrypt_credentials, has_credentials
+
 class AccountImportRequest(BaseModel):
     """单条账号导入"""
     nickname: Optional[str] = ""
@@ -51,7 +53,7 @@ class AccountImportRequest(BaseModel):
         if self.password: creds["password"] = self.password
         if self.cookies: creds["cookies"] = self.cookies
         if self.token: creds["token"] = self.token
-        d["credentials"] = json.dumps(creds, ensure_ascii=False)
+        d["credentials"] = encrypt_credentials(creds)
         return d
 
 
@@ -121,11 +123,7 @@ class AccountResponse(BaseModel):
 
     @staticmethod
     def from_orm_with_creds(account) -> "AccountResponse":
-        """从 ORM 对象构建，自动计算 has_credentials"""
+        """从 ORM 对象构建，自动计算 has_credentials（不暴露凭证内容）"""
         resp = AccountResponse.model_validate(account)
-        try:
-            creds = json.loads(account.credentials or "{}")
-            resp.has_credentials = bool(creds.get("password") or creds.get("cookies") or creds.get("token"))
-        except (json.JSONDecodeError, TypeError):
-            resp.has_credentials = False
+        resp.has_credentials = has_credentials(account.credentials or "")
         return resp

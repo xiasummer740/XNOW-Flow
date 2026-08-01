@@ -83,13 +83,10 @@ def account_stats(
         accounts_query = accounts_query.filter(scope)
     accounts = accounts_query.all()
     with_creds = 0
+    from crypto import has_credentials
     for a in accounts:
-        try:
-            c = json.loads(a.credentials or "{}")
-            if c.get("password") or c.get("cookies") or c.get("token"):
-                with_creds += 1
-        except (json.JSONDecodeError, TypeError):
-            pass
+        if has_credentials(a.credentials or ""):
+            with_creds += 1
     return {
         "total": len(accounts),
         "active": sum(1 for a in accounts if a.status == "active"),
@@ -124,8 +121,16 @@ def update_account(
     if not account:
         raise HTTPException(status_code=404, detail="账号不存在")
     ensure_owned(account, current_user)
+    # 阻止越权字段（所有权/主键/密钥）
+    blocked = {"id", "api_id", "device_secret", "created_at", "updated_at"}
     for key, value in updates.items():
-        if hasattr(account, key):
+        if key in blocked or not hasattr(account, key):
+            continue
+        # credentials 单独加密存储
+        if key == "credentials" and isinstance(value, dict):
+            from crypto import encrypt_credentials
+            setattr(account, key, encrypt_credentials(value))
+        else:
             setattr(account, key, value)
     db.commit()
     db.refresh(account)

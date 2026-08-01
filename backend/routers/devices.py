@@ -115,9 +115,12 @@ def update_device(
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
     ensure_owned(device, current_user)
+    # 阻止越权字段（所有权/主键/密钥）
+    blocked = {"id", "api_id", "device_secret", "name", "created_at", "updated_at"}
     for key, value in update.items():
-        if hasattr(device, key):
-            setattr(device, key, value)
+        if key in blocked or not hasattr(device, key):
+            continue
+        setattr(device, key, value)
     db.commit()
     db.refresh(device)
     return DeviceResponse.model_validate(device)
@@ -195,7 +198,8 @@ def batch_dispatch_task(
         accounts = accounts_query.all()
         for acc in accounts:
             try:
-                creds = json.loads(acc.credentials or "{}")
+                from crypto import decrypt_credentials
+                creds = decrypt_credentials(acc.credentials or "")
                 account_credentials[str(acc.id)] = {
                     "id": acc.id,
                     "nickname": acc.nickname,
