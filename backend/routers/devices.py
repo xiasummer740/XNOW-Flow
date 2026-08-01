@@ -3,6 +3,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 from database import get_db
 from models.device import DeviceBinding
@@ -204,7 +207,7 @@ def batch_dispatch_task(
         )
         db.add(task)
 
-        # Send via WebSocket if online
+        # 下发指令（WebSocket 优先，HTTP 轮询设备入队）
         if manager.is_online(d.name):
             import asyncio
             payload = {
@@ -217,15 +220,21 @@ def batch_dispatch_task(
                 payload["credentials"] = account_credentials
 
             try:
-                asyncio.get_event_loop().run_until_complete(
-                    manager.send_command(d.name, payload)
-                )
-                sent_count += 1
-            except:
-                pass
+                # send_or_enqueue_command: WS可达就发，否则入轮询队列
+                loop = asyncio.new_event_loop()
+                try:
+                    sent, via_ws = loop.run_until_complete(
+                        manager.send_or_enqueue_command(d.name, payload)
+                    )
+                finally:
+                    loop.close()
+                if sent:
+                    sent_count += 1
+            except Exception as e:
+                logger.error(f"dispatch to {d.name} error: {e}")
 
     db.commit()
-    return MessageResponse(message=f"已向 {len(devices)} 台设备下发任务，{sent_count} 台在线已推送")
+    return MessageResponse(message=f"已向 {len(devices)} 台设备下发任务，{sent_count} 台已推送(含队列)")
 
 
 # ========== Group Management ==========
