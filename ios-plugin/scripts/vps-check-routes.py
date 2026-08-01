@@ -4,7 +4,7 @@ import json
 
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect("192.129.210.52", 22, "root", "0ISvaWdV88lLq871Re", timeout=30)
+ssh.connect("192.129.210.52", 22, "root", "XNW_VPS_PASSWORD_FROM_ENV", timeout=30)
 
 # Check active process
 stdin, stdout, stderr = ssh.exec_command("ps aux | grep uvicorn | grep -v grep")

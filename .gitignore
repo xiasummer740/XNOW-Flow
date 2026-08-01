@@ -30,3 +30,7 @@ raw-analysis/
 *.exe
 *.png
 *.zip
+
+# 本地密钥（勿提交）
+.env.local
+*.secret

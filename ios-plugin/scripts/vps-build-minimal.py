@@ -4,7 +4,7 @@ import paramiko, os
 
 HOST = '192.129.210.52'
 USER = 'root'
-PASSWORD = '0ISvaWdV88lLq871Re'
+PASSWORD = 'XNW_VPS_PASSWORD_FROM_ENV'
 REMOTE = '/root/xnow-build'
 SDK = '/opt/theos/sdks/iPhoneOS16.5.sdk'
 LD = '/usr/lib/llvm-16/bin/ld64.lld'

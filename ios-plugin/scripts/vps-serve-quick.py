@@ -4,7 +4,7 @@ import paramiko, os, sys, time
 
 HOST = "192.129.210.52"
 USER = "root"
-PASSWORD = "0ISvaWdV88lLq871Re"
+PASSWORD = "XNW_VPS_PASSWORD_FROM_ENV"
 
 REMOTE_DIR = "/root/xnow-inject"
 

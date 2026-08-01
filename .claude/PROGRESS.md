@@ -89,7 +89,7 @@
 
 ### 环境
 - Device: iPhone 10,2 (8 Plus) / iOS 16.7.15 (20H380)
-- VPS: 192.129.210.52 / root / 0ISvaWdV88lLq871Re
+- VPS: 192.129.210.52 / root / XNW_VPS_PASSWORD_FROM_ENV
 - 证书: Apple Distribution: alvaro reyes (2YH8B2Z9X9) 过期2027-06-17
 - GH Actions: macos-14 (Xcode 15.0.1), 产物自动 artifact
 - IPA 基底: `TikTok_43.7.0_BH.ipa` (BH 1.9.3 插件版)

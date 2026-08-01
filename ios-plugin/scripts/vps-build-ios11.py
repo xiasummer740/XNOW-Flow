@@ -4,7 +4,7 @@ import paramiko, os, sys
 
 HOST = '192.129.210.52'
 USER = 'root'
-PASSWORD = '0ISvaWdV88lLq871Re'
+PASSWORD = 'XNW_VPS_PASSWORD_FROM_ENV'
 REMOTE = '/root/xnow-build'
 SDK_OLD = '/opt/theos/sdks/iPhoneOS11.4.sdk'
 PROJECT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
