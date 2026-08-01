@@ -129,8 +129,8 @@ def _mark_device_online(device_id: str, api_id: str = "", device_code: str = "")
         ).first()
         if device:
             device.online = True
+            device.is_online = True  # 前端用 is_online 判断在线
             device.status = "online"
-            device.online = True
             if api_id:
                 device.api_id = api_id
             device.last_online = datetime.utcnow()
@@ -140,6 +140,7 @@ def _mark_device_online(device_id: str, api_id: str = "", device_code: str = "")
                 device_name=device_id,
                 status="online",
                 online=True,
+                is_online=True,  # 前端用 is_online 判断在线
                 account_count=0,
                 api_id=api_id,
                 last_online=datetime.utcnow(),
@@ -292,6 +293,9 @@ async def device_http_poll(device_id: str):
     设备定时（每 5 秒）GET 此端点，获取服务端下发的指令。
     无指令时返回 204 No Content。
     """
+    # 轮询也更新在线状态（前端用 is_online/last_online 判断设备在线）
+    _mark_device_online(device_id)
+
     pending = manager.dequeue_commands(device_id)
     if not pending:
         from fastapi.responses import Response
