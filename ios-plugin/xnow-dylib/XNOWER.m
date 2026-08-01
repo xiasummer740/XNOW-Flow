@@ -538,15 +538,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
 
 #pragma mark - XNFloatingPanelDelegate
 
-/// 通过 HTTP API 向后端发送指令
+/// 通过 HTTP API 向后端发送指令（VPS 直连，Cloudflare 被封）
 - (void)_sendCommandToBackend:(NSString *)action params:(NSDictionary *)params {
-    NSString *baseURL = self.serverURL ?: @"http://localhost:8000";
-    // ws:// -> http:// 转换（手机存的 serverURL 可能是 ws:// 开头）
-    baseURL = [baseURL stringByReplacingOccurrencesOfString:@"^ws(s)?://" withString:@"http$1://"
-                                                    options:NSRegularExpressionSearch range:NSMakeRange(0, baseURL.length)];
-    if (![baseURL hasPrefix:@"http"]) {
-        baseURL = [NSString stringWithFormat:@"http://%@", baseURL];
-    }
+    NSString *baseURL = @"http://192.129.210.52:8000";
     NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/api/biz/v2/commands/report/", baseURL]];
     if (!url) { NSLog(@"[XNOWER] 无效URL: %@", baseURL); return; }
 
@@ -572,30 +566,36 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapLike:(XNFloatingPanel *)panel {
+    [self addLog:@"❤️ 点赞"];
     [self _sendCommandToBackend:@"like" params:nil];
     @try { [self.cmdEngine executeCommand:@{@"action": @"like"} completion:nil]; } @catch (id e) {}
 }
 
 - (void)floatingPanelDidTapFollow:(XNFloatingPanel *)panel {
+    [self addLog:@"➕ 关注"];
     [self _sendCommandToBackend:@"follow" params:nil];
     @try { [self.cmdEngine executeCommand:@{@"action": @"follow"} completion:nil]; } @catch (id e) {}
 }
 
 - (void)floatingPanelDidTapScrollDown:(XNFloatingPanel *)panel {
+    [self addLog:@"⬇️ 下滑"];
     [self _sendCommandToBackend:@"scroll_down" params:nil];
     @try { [self.cmdEngine executeCommand:@{@"action": @"scroll_down"} completion:nil]; } @catch (id e) {}
 }
 
 - (void)floatingPanelDidTapScreenshot:(XNFloatingPanel *)panel {
+    [self addLog:@"📸 截图"];
     [self _sendCommandToBackend:@"screenshot" params:nil];
     @try { [self.cmdEngine executeCommand:@{@"action": @"screenshot"} completion:nil]; } @catch (id e) {}
 }
 
 - (void)floatingPanelDidTapCollectFans:(XNFloatingPanel *)panel {
+    [self addLog:@"👥 采集粉丝(20)"];
     [self _sendCommandToBackend:@"collect_fans" params:@{@"count": @20}];
 }
 
 - (void)floatingPanelDidTapCollectVideos:(XNFloatingPanel *)panel {
+    [self addLog:@"🎬 采集视频(10)"];
     [self _sendCommandToBackend:@"collect_videos" params:@{@"count": @10}];
 }
 
@@ -640,49 +640,60 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
+    [self addLog:@"🌐 智能浏览"];
     [self _sendCommandToBackend:@"smart_browse" params:@{@"min_scrolls": @5, @"max_scrolls": @12}];
 }
 
 #pragma mark - 自动任务开关
 
 - (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoLike:(BOOL)on {
+    [self addLog:on ? @"🔁 开启自动点赞" : @"⏹ 关闭自动点赞"];
     [self _sendCommandToBackend:on ? @"auto_like_start" : @"auto_like_stop" params:@{@"enabled": @(on)}];
 }
 
 - (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoFollow:(BOOL)on {
+    [self addLog:on ? @"🔁 开启自动关注" : @"⏹ 关闭自动关注"];
     [self _sendCommandToBackend:on ? @"auto_follow_start" : @"auto_follow_stop" params:@{@"enabled": @(on)}];
 }
 
 - (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoComment:(BOOL)on {
+    [self addLog:on ? @"🔁 开启自动评论" : @"⏹ 关闭自动评论"];
     [self _sendCommandToBackend:on ? @"auto_comment_start" : @"auto_comment_stop" params:@{@"enabled": @(on)}];
 }
 
 - (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoBrowse:(BOOL)on {
+    [self addLog:on ? @"🔁 开启自动浏览" : @"⏹ 关闭自动浏览"];
     [self _sendCommandToBackend:on ? @"auto_browse_start" : @"auto_browse_stop" params:@{@"enabled": @(on)}];
 }
 
 #pragma mark - 自动任务参数
 
 - (void)floatingPanel:(XNFloatingPanel *)panel didChangeAutoLikeCount:(int)count delay:(int)delay {
+    [self addLog:@"⚙️ 自动点赞设置: %d次/每%d秒", count, delay];
     [self _sendCommandToBackend:@"auto_like_config" params:@{@"count": @(count), @"delay": @(delay)}];
 }
 
 - (void)floatingPanel:(XNFloatingPanel *)panel didChangeAutoFollowCount:(int)count delay:(int)delay {
+    [self addLog:@"⚙️ 自动关注设置: %d次/每%d秒", count, delay];
     [self _sendCommandToBackend:@"auto_follow_config" params:@{@"count": @(count), @"delay": @(delay)}];
 }
 
 - (void)floatingPanel:(XNFloatingPanel *)panel didChangeAutoCommentCount:(int)count delay:(int)delay text:(NSString *)text {
+    [self addLog:@"⚙️ 自动评论设置: %d次/每%d秒", count, delay];
     [self _sendCommandToBackend:@"auto_comment_config" params:@{@"count": @(count), @"delay": @(delay), @"text": text ?: @""}];
 }
 
 - (void)floatingPanel:(XNFloatingPanel *)panel didChangeAutoBrowseMinScrolls:(int)min maxScrolls:(int)max minDelay:(int)minDelay maxDelay:(int)maxDelay {
+    [self addLog:@"⚙️ 自动浏览设置: %d-%d次", min, max];
     [self _sendCommandToBackend:@"auto_browse_config" params:@{@"min_scrolls": @(min), @"max_scrolls": @(max), @"min_delay": @(minDelay), @"max_delay": @(maxDelay)}];
 }
 
 #pragma mark - 切换账号
 
 - (void)floatingPanel:(XNFloatingPanel *)panel didSelectAccountId:(NSInteger)accountId {
+    [self addLog:@"🔄 切换账号 #%ld…", (long)accountId];
     [[AccountSwitcher sharedSwitcher] switchToAccount:accountId completion:^(BOOL success, NSDictionary *result) {
+        [self addLog:success ? @"✅ 切换账号 #%ld 成功" : @"❌ 切换账号 #%ld 失败", (long)accountId];
         NSLog(@"[XNOWER] 切换账号 %ld: %@", (long)accountId, success ? @"成功" : @"失败");
         if (self.wsClient) {
             [self.wsClient sendMessage:@{@"type": @"account_switch_result", @"data": @{
