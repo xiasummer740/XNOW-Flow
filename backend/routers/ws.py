@@ -74,6 +74,19 @@ def _handle_device_message(device_id: str, msg: dict):
         if api_id:
             _mark_device_online(device_id, api_id, device_code)
 
+        # 更新 App 版本（应用程序列）
+        app_version = status_data.get("app_version", "")
+        if app_version:
+            try:
+                db = SessionLocal()
+                dev = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
+                if dev:
+                    dev.app_version = app_version
+                    db.commit()
+                db.close()
+            except Exception as e:
+                logger.error(f"update app_version error: {e}")
+
         current_account = status_data.get("current_account")
         if current_account:
             _upsert_account(device_id, current_account)
@@ -133,11 +146,15 @@ def _mark_device_online(device_id: str, api_id: str = "", device_code: str = "")
             device.status = "online"
             if api_id:
                 device.api_id = api_id
+            # 机器码：设备唯一标识（用于区分多台设备）
+            if not device.device_id:
+                device.device_id = device_id
             device.last_online = datetime.utcnow()
         else:
             device = DeviceBinding(
                 name=device_id,
                 device_name=device_id,
+                device_id=device_id,  # 机器码 = 设备唯一ID
                 status="online",
                 online=True,
                 is_online=True,  # 前端用 is_online 判断在线

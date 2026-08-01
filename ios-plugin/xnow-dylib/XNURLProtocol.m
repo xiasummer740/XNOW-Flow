@@ -102,9 +102,16 @@ static volatile CFAbsoluteTime sLastPing = 0;
 /// 上报设备状态
 + (void)reportOnline:(NSString *)deviceId {
     if (!deviceId) return;
+    NSString *appVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"";
+    NSString *bundleId = [[NSBundle mainBundle] bundleIdentifier] ?: @"";
     NSDictionary *payload = @{
         @"type": @"status",
-        @"data": @{@"device_id": deviceId, @"status": @"online"}
+        @"data": @{
+            @"device_id": deviceId,
+            @"status": @"online",
+            @"app_version": appVersion,
+            @"bundle_id": bundleId,
+        }
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:payload options:0 error:nil];
     if (!json) return;
