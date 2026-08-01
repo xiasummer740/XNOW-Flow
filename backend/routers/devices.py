@@ -17,6 +17,7 @@ from schemas.device import (
 from schemas.common import PaginatedResponse, MessageResponse
 from dependencies import get_current_user
 from models.user import User
+from tenant import tenant_scope, ensure_owned
 
 router = APIRouter(prefix="/api/biz/v2", tags=["devices"])
 
@@ -99,6 +100,7 @@ def get_device(
     device = db.query(DeviceBinding).filter(DeviceBinding.id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
+    ensure_owned(device, current_user)
     return DeviceResponse.model_validate(device)
 
 
@@ -112,6 +114,7 @@ def update_device(
     device = db.query(DeviceBinding).filter(DeviceBinding.id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
+    ensure_owned(device, current_user)
     for key, value in update.items():
         if hasattr(device, key):
             setattr(device, key, value)
@@ -129,6 +132,7 @@ def delete_device(
     device = db.query(DeviceBinding).filter(DeviceBinding.id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
+    ensure_owned(device, current_user)
     db.delete(device)
     db.commit()
     return MessageResponse(message="删除成功")
@@ -144,6 +148,7 @@ def batch_update_group(
 ):
     devices = db.query(DeviceBinding).filter(DeviceBinding.id.in_(req.device_ids)).all()
     for d in devices:
+        ensure_owned(d, current_user)
         d.group_name = req.group_name
     db.commit()
     return MessageResponse(message=f"已更新 {len(devices)} 台设备的分组")
@@ -157,6 +162,7 @@ def batch_delete_devices(
 ):
     devices = db.query(DeviceBinding).filter(DeviceBinding.id.in_(req.device_ids)).all()
     for d in devices:
+        ensure_owned(d, current_user)
         db.delete(d)
     db.commit()
     return MessageResponse(message=f"已删除 {len(devices)} 台设备")
@@ -176,11 +182,17 @@ def batch_dispatch_task(
     import json
 
     devices = db.query(DeviceBinding).filter(DeviceBinding.id.in_(req.device_ids)).all()
+    for d in devices:
+        ensure_owned(d, current_user)
 
     # 批量登录时，获取账号凭证附带到指令参数
     account_credentials = {}
     if req.action == "batch_login" and req.params and req.params.get("account_ids"):
-        accounts = db.query(Account).filter(Account.id.in_(req.params["account_ids"])).all()
+        accounts_query = db.query(Account).filter(Account.id.in_(req.params["account_ids"]))
+        scope = tenant_scope(Account, current_user)
+        if scope is not None:
+            accounts_query = accounts_query.filter(scope)
+        accounts = accounts_query.all()
         for acc in accounts:
             try:
                 creds = json.loads(acc.credentials or "{}")
@@ -293,10 +305,14 @@ def device_stats_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    total = db.query(DeviceBinding).count()
-    online = db.query(DeviceBinding).filter(DeviceBinding.is_online == True).count()
-    offline = db.query(DeviceBinding).filter(DeviceBinding.is_online == False).count()
-    executing = db.query(DeviceBinding).filter(DeviceBinding.device_state == "executing").count()
+    query = db.query(DeviceBinding)
+    scope = tenant_scope(DeviceBinding, current_user)
+    if scope is not None:
+        query = query.filter(scope)
+    total = query.count()
+    online = query.filter(DeviceBinding.is_online == True).count()
+    offline = query.filter(DeviceBinding.is_online == False).count()
+    executing = query.filter(DeviceBinding.device_state == "executing").count()
     return {
         "total": total,
         "online": online,

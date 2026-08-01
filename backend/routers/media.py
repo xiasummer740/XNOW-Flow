@@ -1,3 +1,4 @@
+# TODO(tenant-isolation): Media 模型缺少 api_id 列，当前无租户隔离，任何已登录用户可查看/删除他人素材。需加列 + 过滤。
 from fastapi import APIRouter, Depends, UploadFile, File, Query
 from sqlalchemy.orm import Session
 import os

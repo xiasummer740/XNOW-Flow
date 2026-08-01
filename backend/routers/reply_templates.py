@@ -1,3 +1,4 @@
+# TODO(tenant-isolation): ReplyTemplate 模型缺少 api_id 列，当前无租户隔离，任何已登录用户可查看/修改他人模板。需加列 + 过滤。
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 

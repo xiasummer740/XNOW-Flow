@@ -27,6 +27,8 @@ class Account(Base):
     web_url = Column(String(500), default="")             # 主页链接
     # Status
     status = Column(String(20), default="active")         # active/risk_control/banned/offline
+    # Tenant
+    api_id = Column(String(20), default="", index=True)   # 租户（关联用户）
     # Device & App
     device_id = Column(String(255), default="")           # 绑定设备
     bundle_id = Column(String(100), default="")           # 包名

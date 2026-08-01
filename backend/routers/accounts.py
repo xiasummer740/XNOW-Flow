@@ -14,6 +14,7 @@ from schemas.account import (
 from schemas.common import PaginatedResponse, MessageResponse
 from dependencies import get_current_user
 from models.user import User
+from tenant import tenant_scope, ensure_owned
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/biz/v2", tags=["accounts"])
@@ -34,6 +35,11 @@ def list_accounts(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Account)
+
+    # 租户隔离：非 admin 只能看自己的账号
+    scope = tenant_scope(Account, current_user)
+    if scope is not None:
+        query = query.filter(scope)
 
     if search:
         query = query.filter(
@@ -71,7 +77,11 @@ def account_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    accounts = db.query(Account).all()
+    accounts_query = db.query(Account)
+    scope = tenant_scope(Account, current_user)
+    if scope is not None:
+        accounts_query = accounts_query.filter(scope)
+    accounts = accounts_query.all()
     with_creds = 0
     for a in accounts:
         try:
@@ -99,6 +109,7 @@ def get_account(
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
         raise HTTPException(status_code=404, detail="账号不存在")
+    ensure_owned(account, current_user)
     return AccountResponse.from_orm_with_creds(account)
 
 
@@ -112,6 +123,7 @@ def update_account(
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
         raise HTTPException(status_code=404, detail="账号不存在")
+    ensure_owned(account, current_user)
     for key, value in updates.items():
         if hasattr(account, key):
             setattr(account, key, value)
@@ -132,6 +144,8 @@ def import_account(
     """导入单个账号（支持密码/cookies/token）"""
     data = req.to_orm_dict()
     account = Account(**data)
+    if current_user.role != "admin":
+        account.api_id = current_user.api_id or ""
     db.add(account)
     db.commit()
     db.refresh(account)
@@ -156,7 +170,10 @@ def batch_import_accounts(
     if body and body.accounts:
         for req in body.accounts:
             data = req.to_orm_dict()
-            db.add(Account(**data))
+            acct = Account(**data)
+            if current_user.role != "admin":
+                acct.api_id = current_user.api_id or ""
+            db.add(acct)
             imported.append(data)
         db.commit()
 
@@ -167,7 +184,10 @@ def batch_import_accounts(
         for row in reader:
             req = AccountImportRequest(**row)
             data = req.to_orm_dict()
-            db.add(Account(**data))
+            acct = Account(**data)
+            if current_user.role != "admin":
+                acct.api_id = current_user.api_id or ""
+            db.add(acct)
             imported.append(data)
         db.commit()
 
@@ -193,6 +213,7 @@ def delete_account(
     account = db.query(Account).filter(Account.id == account_id).first()
     if not account:
         raise HTTPException(status_code=404, detail="账号不存在")
+    ensure_owned(account, current_user)
     db.delete(account)
     db.commit()
     logger.info(f"删除账号 id={account_id}")
@@ -208,7 +229,12 @@ def batch_delete_accounts(
     account_ids = data.get("account_ids", [])
     if not account_ids:
         raise HTTPException(status_code=400, detail="未指定删除的账号")
-    deleted = db.query(Account).filter(Account.id.in_(account_ids)).delete(synchronize_session=False)
+    accounts = db.query(Account).filter(Account.id.in_(account_ids)).all()
+    deleted = 0
+    for acc in accounts:
+        ensure_owned(acc, current_user)
+        db.delete(acc)
+        deleted += 1
     db.commit()
     logger.info(f"批量删除 {deleted} 个账号")
     return MessageResponse(message=f"删除 {deleted} 个账号成功")
@@ -229,8 +255,13 @@ def dispatch_accounts(
     ).first()
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
+    ensure_owned(device, current_user)
 
-    accounts = db.query(Account).filter(Account.id.in_(req.account_ids)).all()
+    accounts_query = db.query(Account).filter(Account.id.in_(req.account_ids))
+    scope = tenant_scope(Account, current_user)
+    if scope is not None:
+        accounts_query = accounts_query.filter(scope)
+    accounts = accounts_query.all()
     if not accounts:
         raise HTTPException(status_code=404, detail="未找到指定账号")
 

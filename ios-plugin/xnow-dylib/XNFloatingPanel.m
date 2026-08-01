@@ -1,25 +1,18 @@
 // XNFloatingPanel.m
-// XNOW 快捷菜单 v4 — 激活→绑定→功能菜单 完整商业流程
+// XNOW 控制浮窗 v5 — Apple iOS 17 原生质感玻璃面板
+// 视觉重构：真玻璃材质 + SF Symbols + 系统语义色 + InsetGrouped 列表 + 弹簧动画
 
 #import "XNFloatingPanel.h"
 #import "AccountPool.h"
 #import <objc/runtime.h>
 
-static const CGFloat kCollapsedSize = 56;
-static const CGFloat kExpandedWidth = 300;
-static const CGFloat kExpandedHeight = 520;
-static const CGFloat kCornerRadius = 16;
-static const CGFloat kMargin = 12;
-
-#define XN_COLOR(r,g,b) [UIColor colorWithRed:r/255.0 green:g/255.0 blue:b/255.0 alpha:1]
-#define XN_BRAND XN_COLOR(108, 92, 231)
-#define XN_ACCENT XN_COLOR(0, 206, 201)
-#define XN_BG [UIColor colorWithRed:0.08 green:0.08 blue:0.12 alpha:0.95]
-#define XN_CARD [UIColor colorWithWhite:1 alpha:0.08]
-#define XN_TEXT [UIColor whiteColor]
-#define XN_DIM [UIColor colorWithWhite:1 alpha:0.45]
-#define XN_GREEN XN_COLOR(34, 197, 94)
-#define XN_RED XN_COLOR(239, 68, 68)
+static const CGFloat kCollapsedSize = 56;       // 折叠徽章尺寸
+static const CGFloat kExpandedWidth = 300;      // 展开面板宽度
+static const CGFloat kExpandedHeight = 520;     // 展开面板高度
+static const CGFloat kCornerRadius = 24;        // 大圆角 (iOS 17 风格)
+static const CGFloat kHeaderHeight = 60;        // 标题栏高度
+static const CGFloat kMargin = 16;              // 16pt 间距节奏
+#define kHairline (1.0 / [UIScreen mainScreen].scale)   // 1px 细线
 
 static NSArray *kCountries;
 
@@ -38,6 +31,10 @@ static NSArray *kCountries;
 @property (nonatomic, strong) UIVisualEffectView *blurView;
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UIButton *closeBtn, *backBtn;
+@property (nonatomic, strong) UIView *panelHeader;
+@property (nonatomic, strong) UIView *statusPill;
+@property (nonatomic, strong) UIView *statusDotView;
+@property (nonatomic, strong) UILabel *statusLabel;
 @property (nonatomic, strong) UITableView *menuTable;
 // 激活/绑定输入
 @property (nonatomic, strong) UITextField *inputField;
@@ -49,6 +46,8 @@ static NSArray *kCountries;
 // 数据
 @property (nonatomic, assign) BOOL isConnected;
 @property (nonatomic, copy) NSString *panelDeviceId, *panelServerURL, *selectedCountry;
+@property (nonatomic, strong) NSDictionary *panelAccount;
+@property (nonatomic, copy) NSString *panelQuality;
 @property (nonatomic, strong) NSArray *mainMenu;
 
 @end
@@ -75,37 +74,47 @@ static NSArray *kCountries;
     CGFloat topY = 120;
     self = [super initWithFrame:CGRectMake(rightX, topY, kCollapsedSize, kCollapsedSize)];
     if (self) {
+        // 强制深色语义色环境，使 labelColor / systemGroupedBackgroundColor 等解析为深色玻璃风格
+        self.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
         _isExpanded = NO; _isConnected = NO;
         _selectedCountry = @"日本";
         _logLines = [NSMutableArray array];
         [self _buildMainMenu];
         [self _setupViews];
-        [self _setupLogView];
     }
     return self;
 }
 
+#pragma mark - Menu Data
+
 - (void)_buildMainMenu {
+    // icon 为 SF Symbol 名称，保持 action 字符串与旧版完全一致
     _mainMenu = @[
-        @{@"icon": @"🌐", @"label": @"绑定云控后台", @"action": @"bind_server"},
-        @{@"icon": @"🔗", @"label": @"连接到服务器", @"action": @"connect_server"},
-        @{@"icon": @"👤", @"label": @"账号管理", @"action": @"account_mgmt"},
-        @{@"icon": @"🎬", @"label": @"下载无水印视频", @"action": @"dl_video"},
-        @{@"icon": @"🌍", @"label": @"设置国家", @"action": @"set_country"},
-        @{@"icon": @"🗑️", @"label": @"一键清理所有数据", @"action": @"clear_data"},
-        @{@"icon": @"🔌", @"label": @"关闭服务器链接", @"action": @"disconnect"},
-        @{@"icon": @"❤️", @"label": @"采集点赞", @"action": @"collect_likes"},
-        @{@"icon": @"🌱", @"label": @"养号", @"action": @"nurture"},
-        @{@"icon": @"📋", @"label": @"复制机器码", @"action": @"copy_device_id"},
-        @{@"icon": @"📝", @"label": @"显示/关闭日志", @"action": @"toggle_log"},
-        @{@"icon": @"❌", @"label": @"关闭", @"action": @"close_panel"},
+        @{@"icon": @"network", @"label": @"绑定云控后台", @"action": @"bind_server"},
+        @{@"icon": @"antenna.radiowaves.left.and.right", @"label": @"连接到服务器", @"action": @"connect_server"},
+        @{@"icon": @"person.2.fill", @"label": @"账号管理", @"action": @"account_mgmt"},
+        @{@"icon": @"square.and.arrow.down.fill", @"label": @"下载无水印视频", @"action": @"dl_video"},
+        @{@"icon": @"globe", @"label": @"设置国家", @"action": @"set_country"},
+        @{@"icon": @"trash.fill", @"label": @"一键清理所有数据", @"action": @"clear_data"},
+        @{@"icon": @"power", @"label": @"关闭服务器链接", @"action": @"disconnect"},
+        @{@"icon": @"heart.fill", @"label": @"采集点赞", @"action": @"collect_likes"},
+        @{@"icon": @"leaf.fill", @"label": @"养号", @"action": @"nurture"},
+        @{@"icon": @"doc.on.doc.fill", @"label": @"复制机器码", @"action": @"copy_device_id"},
+        @{@"icon": @"doc.plaintext.fill", @"label": @"显示/关闭日志", @"action": @"toggle_log"},
+        @{@"icon": @"xmark.circle.fill", @"label": @"关闭", @"action": @"close_panel"},
     ];
 }
+
+#pragma mark - Setup
 
 - (void)_setupViews {
     self.clipsToBounds = NO;
     self.layer.shadowColor = UIColor.blackColor.CGColor;
-    self.layer.shadowOffset = CGSizeMake(0, 4); self.layer.shadowRadius = 12; self.layer.shadowOpacity = 0.4;
+    self.layer.shadowOffset = CGSizeMake(0, 6);
+    self.layer.shadowRadius = 16;
+    self.layer.shadowOpacity = 0.35;
+    [self _updateShadowPath];
+
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(_handlePan:)];
     [self addGestureRecognizer:pan];
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(_handleTap)];
@@ -114,32 +123,50 @@ static NSArray *kCountries;
     [self _buildBadge];
 }
 
+/// 为 self 设置与当前形态匹配的圆角阴影路径
+- (void)_updateShadowPath {
+    CGSize size = _isExpanded ? CGSizeMake(kExpandedWidth, kExpandedHeight) : CGSizeMake(kCollapsedSize, kCollapsedSize);
+    CGFloat r = _isExpanded ? kCornerRadius : kCollapsedSize * 0.3;
+    self.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, size.width, size.height) cornerRadius:r].CGPath;
+}
+
 #pragma mark - Badge
 
 - (void)_buildBadge {
     _badgeButton = [UIButton buttonWithType:UIButtonTypeCustom];
     _badgeButton.frame = CGRectMake(0, 0, kCollapsedSize, kCollapsedSize);
     _badgeButton.backgroundColor = UIColor.clearColor;
-    _badgeButton.layer.cornerRadius = kCollapsedSize/2;
+    _badgeButton.layer.cornerRadius = kCollapsedSize * 0.3;
     _badgeButton.clipsToBounds = YES;
-    // Logo 图片
-    NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
-    NSString *logoPath = [bundlePath stringByAppendingPathComponent:@"logo.png"];
-    UIImage *logoImg = [UIImage imageWithContentsOfFile:logoPath];
-    if (logoImg) {
-        [_badgeButton setImage:logoImg forState:UIControlStateNormal];
-        _badgeButton.imageView.contentMode = UIViewContentModeScaleAspectFill;
-    } else {
-        _badgeButton.backgroundColor = XN_BRAND;
-        [_badgeButton setTitle:@"X" forState:UIControlStateNormal];
-        [_badgeButton setTitleColor:XN_TEXT forState:UIControlStateNormal];
-        _badgeButton.titleLabel.font = [UIFont boldSystemFontOfSize:20];
-    }
+
+    // 玻璃材质背景（深色系统材质）
+    UIVisualEffectView *blur = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemMaterialDark]];
+    blur.frame = _badgeButton.bounds;
+    blur.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    blur.userInteractionEnabled = NO;
+    [_badgeButton addSubview:blur];
+
+    // SF Symbol 图标
+    UIImageView *iconView = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"bolt.fill"]];
+    iconView.tintColor = [UIColor systemBlueColor];
+    iconView.contentMode = UIViewContentModeScaleAspectFit;
+    iconView.frame = CGRectInset(_badgeButton.bounds, kCollapsedSize * 0.26, kCollapsedSize * 0.26);
+    iconView.userInteractionEnabled = NO;
+    [_badgeButton addSubview:iconView];
+
     [_badgeButton addTarget:self action:@selector(_handleTap) forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:_badgeButton];
-    _statusDot = [[UIView alloc] initWithFrame:CGRectMake(kCollapsedSize-14, kCollapsedSize-14, 12, 12)];
-    _statusDot.backgroundColor = UIColor.redColor; _statusDot.layer.cornerRadius = 6;
-    _statusDot.layer.borderWidth = 2; _statusDot.layer.borderColor = UIColor.whiteColor.CGColor;
+
+    // 在线状态圆点
+    _statusDot = [[UIView alloc] initWithFrame:CGRectMake(kCollapsedSize - 15, kCollapsedSize - 15, 14, 14)];
+    _statusDot.backgroundColor = [UIColor systemRedColor];
+    _statusDot.layer.cornerRadius = 7;
+    _statusDot.layer.borderWidth = 2;
+    _statusDot.layer.borderColor = [UIColor whiteColor].CGColor;
+    _statusDot.layer.shadowColor = UIColor.blackColor.CGColor;
+    _statusDot.layer.shadowOpacity = 0.3;
+    _statusDot.layer.shadowRadius = 2;
+    _statusDot.layer.shadowOffset = CGSizeMake(0, 1);
     [self addSubview:_statusDot];
 }
 
@@ -148,45 +175,79 @@ static NSArray *kCountries;
 - (void)_ensurePanel {
     if (_panelContainer) return;
     _panelContainer = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kExpandedWidth, kExpandedHeight)];
-    _panelContainer.layer.cornerRadius = kCornerRadius; _panelContainer.clipsToBounds = YES; _panelContainer.alpha = 0;
+    _panelContainer.layer.cornerRadius = kCornerRadius;
+    _panelContainer.clipsToBounds = YES;
+    _panelContainer.alpha = 0;
+    _panelContainer.layer.borderWidth = kHairline;
+    _panelContainer.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.12].CGColor; // 1px 高光描边
     [self addSubview:_panelContainer];
-    UIBlurEffect *blur = [UIBlurEffect effectWithStyle:UIBlurEffectStyleDark];
+
+    // 玻璃材质
+    UIBlurEffect *blur = [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemMaterialDark];
     _blurView = [[UIVisualEffectView alloc] initWithEffect:blur];
-    _blurView.frame = _panelContainer.bounds; [_panelContainer addSubview:_blurView];
+    _blurView.frame = _panelContainer.bounds;
+    _blurView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [_panelContainer addSubview:_blurView];
 
     // 标题栏
-    _titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(44, 8, kExpandedWidth-88, 32)];
-    _titleLabel.font = [UIFont boldSystemFontOfSize:15]; _titleLabel.textColor = XN_TEXT;
-    _titleLabel.textAlignment = NSTextAlignmentCenter; [_panelContainer addSubview:_titleLabel];
+    _panelHeader = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kExpandedWidth, kHeaderHeight)];
+    [_panelContainer addSubview:_panelHeader];
 
     _backBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    _backBtn.frame = CGRectMake(8, 8, 32, 32); _backBtn.hidden = YES;
-    [_backBtn setTitle:@"◀" forState:UIControlStateNormal]; [_backBtn setTintColor:XN_TEXT];
-    _backBtn.titleLabel.font = [UIFont systemFontOfSize:16];
+    _backBtn.frame = CGRectMake(10, 10, 40, 40);
+    [_backBtn setImage:[UIImage systemImageNamed:@"chevron.left"] forState:UIControlStateNormal];
+    _backBtn.tintColor = [UIColor labelColor];
+    _backBtn.backgroundColor = [UIColor colorWithWhite:1 alpha:0.10];
+    _backBtn.layer.cornerRadius = 20;
+    _backBtn.hidden = YES;
     [_backBtn addTarget:self action:@selector(_backToMain) forControlEvents:UIControlEventTouchUpInside];
-    [_panelContainer addSubview:_backBtn];
+    [_panelHeader addSubview:_backBtn];
 
     _closeBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    _closeBtn.frame = CGRectMake(kExpandedWidth-36, 8, 28, 28);
-    _closeBtn.backgroundColor = [UIColor colorWithWhite:1 alpha:0.1]; _closeBtn.layer.cornerRadius = 14;
-    [_closeBtn setTitle:@"✕" forState:UIControlStateNormal]; [_closeBtn setTintColor:XN_DIM];
-    _closeBtn.titleLabel.font = [UIFont boldSystemFontOfSize:12];
-    [_closeBtn addTarget:self action:@selector(dismiss) forControlEvents:UIControlEventTouchUpInside];
-    [_panelContainer addSubview:_closeBtn];
+    _closeBtn.frame = CGRectMake(kExpandedWidth - 50, 10, 40, 40);
+    [_closeBtn setImage:[UIImage systemImageNamed:@"xmark"] forState:UIControlStateNormal];
+    _closeBtn.tintColor = [UIColor secondaryLabelColor];
+    _closeBtn.backgroundColor = [UIColor colorWithWhite:1 alpha:0.10];
+    _closeBtn.layer.cornerRadius = 20;
+    [_closeBtn addTarget:self action:@selector(_collapsePanel) forControlEvents:UIControlEventTouchUpInside];
+    [_panelHeader addSubview:_closeBtn];
 
-    // 状态运行指示
-    UILabel *runL = [[UILabel alloc] initWithFrame:CGRectMake(kMargin, 42, 80, 14)];
-    runL.text = @"● 运行中"; runL.font = [UIFont systemFontOfSize:9]; runL.textColor = XN_GREEN;
-    [_panelContainer addSubview:runL];
+    _titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(56, 12, kExpandedWidth - 112, 24)];
+    _titleLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
+    _titleLabel.textColor = [UIColor labelColor];
+    _titleLabel.textAlignment = NSTextAlignmentCenter;
+    _titleLabel.text = @"XNOW";
+    [_panelHeader addSubview:_titleLabel];
 
-    // 表格
-    _menuTable = [[UITableView alloc] initWithFrame:CGRectMake(0, 58, kExpandedWidth, kExpandedHeight-58)
-                                              style:UITableViewStylePlain];
-    _menuTable.backgroundColor = UIColor.clearColor; _menuTable.dataSource = self; _menuTable.delegate = self;
-    _menuTable.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
-    _menuTable.separatorColor = [UIColor colorWithWhite:1 alpha:0.06];
+    // 连接状态胶囊（圆点 + 文字）
+    _statusPill = [[UIView alloc] initWithFrame:CGRectMake(0, 40, 120, 18)];
+    _statusDotView = [[UIView alloc] initWithFrame:CGRectMake(0, 5, 8, 8)];
+    _statusDotView.layer.cornerRadius = 4;
+    _statusDotView.backgroundColor = [UIColor systemRedColor];
+    [_statusPill addSubview:_statusDotView];
+    _statusLabel = [[UILabel alloc] initWithFrame:CGRectMake(12, 0, 100, 18)];
+    _statusLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
+    _statusLabel.textColor = [UIColor secondaryLabelColor];
+    _statusLabel.numberOfLines = 1;
+    _statusLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+    _statusLabel.text = @"未连接";
+    [_statusPill addSubview:_statusLabel];
+    [_panelHeader addSubview:_statusPill];
+    [self _updateStatusUI];
+
+    // 标题栏下细线
+    UIView *sep = [[UIView alloc] initWithFrame:CGRectMake(0, kHeaderHeight, kExpandedWidth, kHairline)];
+    sep.backgroundColor = [UIColor colorWithWhite:1 alpha:0.08];
+    [_panelContainer addSubview:sep];
+
+    // 菜单列表 — InsetGrouped 圆角分组卡片
+    _menuTable = [[UITableView alloc] initWithFrame:CGRectMake(0, kHeaderHeight + 2, kExpandedWidth, kExpandedHeight - kHeaderHeight - 2)
+                                              style:UITableViewStyleInsetGrouped];
+    _menuTable.backgroundColor = UIColor.clearColor;
+    _menuTable.dataSource = self;
+    _menuTable.delegate = self;
+    _menuTable.separatorStyle = UITableViewCellSeparatorStyleNone;
     _menuTable.showsVerticalScrollIndicator = NO;
-    [_menuTable registerClass:[UITableViewCell class] forCellReuseIdentifier:@"cell"];
     [_panelContainer addSubview:_menuTable];
 }
 
@@ -196,70 +257,78 @@ static NSArray *kCountries;
     _viewMode = 0; _backBtn.hidden = YES; _closeBtn.hidden = NO;
     _titleLabel.text = @"设备激活";
     _menuTable.hidden = YES;
+    [self _removeInputViews];
 
-    // 移除旧输入
-    for (UIView *v in _panelContainer.subviews) {
-        if ([v isKindOfClass:[UIScrollView class]] && v != _menuTable) [v removeFromSuperview];
-        if (v.tag == 1001 || v.tag == 1002) [v removeFromSuperview];
-    }
-
-    UIScrollView *sv = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 58, kExpandedWidth, kExpandedHeight-58)];
+    UIScrollView *sv = [[UIScrollView alloc] initWithFrame:CGRectMake(0, kHeaderHeight + 2, kExpandedWidth, kExpandedHeight - kHeaderHeight - 2)];
     sv.tag = 1001; sv.showsVerticalScrollIndicator = NO;
+    sv.alwaysBounceVertical = YES;
     [_panelContainer addSubview:sv];
 
-    CGFloat y = 12;
-    // UUID
-    UILabel *uuidTitle = [[UILabel alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 16)];
-    uuidTitle.text = @"设备UUID"; uuidTitle.font = [UIFont systemFontOfSize:12 weight:UIFontWeightBold];
-    uuidTitle.textColor = XN_TEXT; [sv addSubview:uuidTitle];
-    y += 20;
-    UILabel *uuidV = [[UILabel alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 20)];
-    NSString *uuid = [[[UIDevice currentDevice] identifierForVendor] UUIDString] ?: @"UNKNOWN";
-    uuidV.text = [NSString stringWithFormat:@"【%@】", uuid];
-    uuidV.font = [UIFont systemFontOfSize:11]; uuidV.textColor = XN_ACCENT;
-    uuidV.numberOfLines = 0; [sv addSubview:uuidV];
-    y += 30;
+    CGFloat m = kMargin;
+    CGFloat w = kExpandedWidth - 2 * m;
+    CGFloat y = 16;
 
-    // 重要提示
-    UITextView *notice = [[UITextView alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 100)];
-    notice.text = @"重要提示\n请联系客服并提供机器码进行设备激活！\n您也可以在下方输入卡密进行自动激活！";
-    notice.font = [UIFont systemFontOfSize:12]; notice.textColor = XN_RED;
-    notice.backgroundColor = UIColor.clearColor; notice.editable = NO; notice.scrollEnabled = NO;
-    [sv addSubview:notice];
-    y += 110;
+    // UUID 卡片
+    NSString *uuid = [[[UIDevice currentDevice] identifierForVendor] UUIDString] ?: @"UNKNOWN";
+    UIView *uuidCard = [self _makeCardViewWithFrame:CGRectMake(m, y, w, 66)];
+    UILabel *uuidTitle = [[UILabel alloc] initWithFrame:CGRectMake(14, 10, w - 28, 14)];
+    uuidTitle.text = @"设备 UUID";
+    uuidTitle.font = [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold];
+    uuidTitle.textColor = [UIColor secondaryLabelColor];
+    [uuidCard addSubview:uuidTitle];
+    UILabel *uuidV = [[UILabel alloc] initWithFrame:CGRectMake(14, 28, w - 28, 30)];
+    uuidV.text = uuid;
+    uuidV.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
+    uuidV.textColor = [UIColor labelColor];
+    uuidV.numberOfLines = 2;
+    uuidV.lineBreakMode = NSLineBreakByTruncatingMiddle;
+    [uuidCard addSubview:uuidV];
+    [sv addSubview:uuidCard];
+    y += 66 + 14;
+
+    // 重要提示（警告卡片）
+    UIView *noticeCard = [self _makeCardViewWithFrame:CGRectMake(m, y, w, 92)];
+    noticeCard.backgroundColor = [UIColor systemYellowColor colorWithAlphaComponent:0.10];
+    UILabel *noticeTitle = [[UILabel alloc] initWithFrame:CGRectMake(14, 10, w - 28, 16)];
+    noticeTitle.text = @"重要提示";
+    noticeTitle.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
+    noticeTitle.textColor = [UIColor systemOrangeColor];
+    [noticeCard addSubview:noticeTitle];
+    UILabel *noticeBody = [[UILabel alloc] initWithFrame:CGRectMake(14, 30, w - 28, 54)];
+    noticeBody.text = @"请联系客服并提供机器码进行设备激活！您也可以在下方输入卡密进行自动激活。";
+    noticeBody.font = [UIFont systemFontOfSize:11];
+    noticeBody.textColor = [UIColor secondaryLabelColor];
+    noticeBody.numberOfLines = 0;
+    [noticeCard addSubview:noticeBody];
+    [sv addSubview:noticeCard];
+    y += 92 + 16;
 
     // 卡密输入
-    UILabel *inputLabel = [[UILabel alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 16)];
-    inputLabel.text = @"请输入卡密"; inputLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightBold];
-    inputLabel.textColor = XN_TEXT; [sv addSubview:inputLabel];
-    y += 20;
+    UILabel *inputLabel = [[UILabel alloc] initWithFrame:CGRectMake(m, y, w, 16)];
+    inputLabel.text = @"输入卡密";
+    inputLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
+    inputLabel.textColor = [UIColor labelColor];
+    [sv addSubview:inputLabel];
+    y += 22;
 
-    _inputField = [[UITextField alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 36)];
-    _inputField.placeholder = @"输入卡密";
-    _inputField.backgroundColor = XN_CARD; _inputField.textColor = XN_TEXT;
-    _inputField.layer.cornerRadius = 8; _inputField.font = [UIFont systemFontOfSize:13];
-    _inputField.leftView = [[UIView alloc] initWithFrame:CGRectMake(0,0,10,36)];
-    _inputField.leftViewMode = UITextFieldViewModeAlways;
-    _inputField.delegate = self;
+    _inputField = [self _makeInputFieldWithFrame:CGRectMake(m, y, w, 42) placeholder:@"输入卡密"];
     _inputField.tag = 1002;
+    _inputField.autocorrectionType = UITextAutocorrectionTypeNo;
     [sv addSubview:_inputField];
-    y += 44;
+    y += 54;
 
-    UIButton *activateBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    activateBtn.frame = CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 36);
-    activateBtn.backgroundColor = XN_BRAND; activateBtn.layer.cornerRadius = 8;
-    [activateBtn setTitle:@"确定" forState:UIControlStateNormal];
-    [activateBtn setTintColor:XN_TEXT]; activateBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
-    [activateBtn addTarget:self action:@selector(_activateTapped) forControlEvents:UIControlEventTouchUpInside];
+    UIButton *activateBtn = [self _makePrimaryButtonWithTitle:@"确定" action:@selector(_activateTapped)];
+    activateBtn.frame = CGRectMake(m, y, w, 44);
     [sv addSubview:activateBtn];
+    y += 44 + 16;
 
-    sv.contentSize = CGSizeMake(kExpandedWidth, y + 60);
+    sv.contentSize = CGSizeMake(kExpandedWidth, MAX(y, sv.bounds.size.height));
     [_inputField becomeFirstResponder];
 }
 
 - (void)_showMainMenu {
     _viewMode = 1; _backBtn.hidden = YES; _closeBtn.hidden = NO;
-    _titleLabel.text = @"快捷菜单 v3";
+    _titleLabel.text = @"快捷菜单";
     _menuTable.hidden = NO;
     [self _removeInputViews];
     [_menuTable reloadData];
@@ -271,10 +340,13 @@ static NSArray *kCountries;
     _menuTable.hidden = YES;
     [self _removeInputViews];
 
-    UIScrollView *sv = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 58, kExpandedWidth, kExpandedHeight-58)];
+    UIScrollView *sv = [[UIScrollView alloc] initWithFrame:CGRectMake(0, kHeaderHeight + 2, kExpandedWidth, kExpandedHeight - kHeaderHeight - 2)];
     sv.tag = 1001; sv.showsVerticalScrollIndicator = NO;
+    sv.alwaysBounceVertical = YES;
     [_panelContainer addSubview:sv];
 
+    CGFloat m = kMargin;
+    CGFloat w = kExpandedWidth - 2 * m;
     CGFloat y = 16;
 
     // 检查是否已绑定
@@ -282,45 +354,78 @@ static NSArray *kCountries;
     NSString *savedApi = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_BindAPIID"];
     BOOL alreadyBound = (savedDev.length > 0 && savedApi.length > 0);
 
-    UILabel *desc = [[UILabel alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 30)];
+    UILabel *desc = [[UILabel alloc] initWithFrame:CGRectMake(m, y, w, 34)];
     desc.text = alreadyBound ? @"已绑定，可修改设备编号和 APIID" : @"请输入设备编号和 APIID 绑定云控后台";
-    desc.font = [UIFont systemFontOfSize:11]; desc.textColor = XN_DIM;
-    desc.numberOfLines = 0; [sv addSubview:desc];
-    y += 36;
+    desc.font = [UIFont systemFontOfSize:12];
+    desc.textColor = [UIColor secondaryLabelColor];
+    desc.numberOfLines = 0;
+    [sv addSubview:desc];
+    y += 40;
 
     // 设备编号（1-20）
-    UILabel *dl = [[UILabel alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 14)];
-    dl.text = @"设备编号（1-20）"; dl.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold]; dl.textColor = XN_TEXT;
-    [sv addSubview:dl]; y += 18;
-    UITextField *dF = [self _makeInputFieldWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 36) placeholder:@"输入 1-20"];
+    UILabel *dl = [[UILabel alloc] initWithFrame:CGRectMake(m, y, w, 16)];
+    dl.text = @"设备编号（1-20）";
+    dl.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
+    dl.textColor = [UIColor labelColor];
+    [sv addSubview:dl]; y += 22;
+    UITextField *dF = [self _makeInputFieldWithFrame:CGRectMake(m, y, w, 42) placeholder:@"输入 1-20"];
     if (alreadyBound) dF.text = savedDev;
-    dF.tag = 1003; [sv addSubview:dF]; y += 44;
+    dF.tag = 1003; dF.keyboardType = UIKeyboardTypeNumberPad;
+    [sv addSubview:dF]; y += 54;
 
     // APIID
-    UILabel *al = [[UILabel alloc] initWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 14)];
-    al.text = @"APIID（后台用户中心获取）"; al.font = [UIFont systemFontOfSize:11 weight:UIFontWeightBold]; al.textColor = XN_TEXT;
-    [sv addSubview:al]; y += 18;
-    UITextField *aF = [self _makeInputFieldWithFrame:CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 36) placeholder:@"输入后台分配的 API ID"];
+    UILabel *al = [[UILabel alloc] initWithFrame:CGRectMake(m, y, w, 16)];
+    al.text = @"APIID（后台用户中心获取）";
+    al.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
+    al.textColor = [UIColor labelColor];
+    [sv addSubview:al]; y += 22;
+    UITextField *aF = [self _makeInputFieldWithFrame:CGRectMake(m, y, w, 42) placeholder:@"输入后台分配的 API ID"];
     if (alreadyBound) aF.text = savedApi;
-    aF.tag = 1004; [sv addSubview:aF]; y += 44;
+    aF.tag = 1004; aF.keyboardType = UIKeyboardTypeNumberPad;
+    [sv addSubview:aF]; y += 54;
 
-    UIButton *okBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    okBtn.frame = CGRectMake(kMargin, y, kExpandedWidth-2*kMargin, 36);
-    okBtn.backgroundColor = XN_BRAND; okBtn.layer.cornerRadius = 8;
-    [okBtn setTitle:@"确定" forState:UIControlStateNormal];
-    [okBtn setTintColor:XN_TEXT]; okBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
-    [okBtn addTarget:self action:@selector(_bindTapped) forControlEvents:UIControlEventTouchUpInside];
+    UIButton *okBtn = [self _makePrimaryButtonWithTitle:@"确定" action:@selector(_bindTapped)];
+    okBtn.frame = CGRectMake(m, y, w, 44);
     [sv addSubview:okBtn];
+    y += 44 + 16;
 
-    sv.contentSize = CGSizeMake(kExpandedWidth, y + 60);
+    sv.contentSize = CGSizeMake(kExpandedWidth, MAX(y, sv.bounds.size.height));
+}
+
+- (UIView *)_makeCardViewWithFrame:(CGRect)frame {
+    UIView *card = [[UIView alloc] initWithFrame:frame];
+    card.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
+    card.layer.cornerRadius = 14;
+    card.layer.borderWidth = kHairline;
+    card.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.08].CGColor;
+    return card;
+}
+
+- (UIButton *)_makePrimaryButtonWithTitle:(NSString *)title action:(SEL)sel {
+    UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+    b.backgroundColor = [UIColor systemBlueColor];
+    b.layer.cornerRadius = 12;
+    b.clipsToBounds = YES;
+    [b setTitle:title forState:UIControlStateNormal];
+    [b setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    b.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
+    [b addTarget:self action:sel forControlEvents:UIControlEventTouchUpInside];
+    return b;
 }
 
 - (UITextField *)_makeInputFieldWithFrame:(CGRect)frame placeholder:(NSString *)ph {
     UITextField *f = [[UITextField alloc] initWithFrame:frame];
-    f.placeholder = ph; f.backgroundColor = XN_CARD; f.textColor = XN_TEXT;
-    f.layer.cornerRadius = 8; f.font = [UIFont systemFontOfSize:13];
-    f.leftView = [[UIView alloc] initWithFrame:CGRectMake(0,0,10,36)]; f.leftViewMode = UITextFieldViewModeAlways;
-    f.delegate = self; f.attributedPlaceholder = [[NSAttributedString alloc] initWithString:ph attributes:@{NSForegroundColorAttributeName: XN_DIM}];
+    f.placeholder = ph;
+    f.backgroundColor = [UIColor tertiarySystemFillColor];
+    f.textColor = [UIColor labelColor];
+    f.layer.cornerRadius = 10;
+    f.layer.borderWidth = kHairline;
+    f.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.08].CGColor;
+    f.font = [UIFont systemFontOfSize:14];
+    f.leftView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 12, 42)];
+    f.leftViewMode = UITextFieldViewModeAlways;
+    f.delegate = self;
+    f.attributedPlaceholder = [[NSAttributedString alloc] initWithString:ph attributes:@{NSForegroundColorAttributeName: [UIColor tertiaryLabelColor]}];
     return f;
 }
 
@@ -373,13 +478,20 @@ static NSArray *kCountries;
 }
 
 - (void)_showToast:(NSString *)msg {
-    UILabel *toast = [[UILabel alloc] initWithFrame:CGRectMake(20, kExpandedHeight-60, kExpandedWidth-40, 36)];
-    toast.text = msg; toast.font = [UIFont systemFontOfSize:12]; toast.textColor = XN_TEXT;
+    UILabel *toast = [[UILabel alloc] initWithFrame:CGRectMake(24, kExpandedHeight - 72, kExpandedWidth - 48, 36)];
+    toast.text = msg;
+    toast.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    toast.textColor = [UIColor labelColor];
     toast.textAlignment = NSTextAlignmentCenter;
-    toast.backgroundColor = [UIColor colorWithWhite:0 alpha:0.7];
-    toast.layer.cornerRadius = 8; toast.clipsToBounds = YES; toast.alpha = 0;
+    toast.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
+    toast.layer.cornerRadius = 18;
+    toast.clipsToBounds = YES;
+    toast.layer.borderWidth = kHairline;
+    toast.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.10].CGColor;
+    toast.alpha = 0;
     [_panelContainer addSubview:toast];
-    [UIView animateWithDuration:0.3 animations:^{ toast.alpha = 1; }];
+    [UIView animateWithDuration:0.25 delay:0 usingSpringWithDamping:0.8 initialSpringVelocity:0.5
+                        options:UIViewAnimationOptionCurveEaseOut animations:^{ toast.alpha = 1; } completion:nil];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
         [UIView animateWithDuration:0.3 animations:^{ toast.alpha = 0; } completion:^(BOOL f) { [toast removeFromSuperview]; }];
     });
@@ -400,40 +512,66 @@ static NSArray *kCountries;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tv cellForRowAtIndexPath:(NSIndexPath *)ip {
-    UITableViewCell *cell = [tv dequeueReusableCellWithIdentifier:@"cell" forIndexPath:ip];
-    cell.backgroundColor = UIColor.clearColor; cell.textLabel.textColor = XN_TEXT;
-    cell.textLabel.font = [UIFont systemFontOfSize:14];
-    cell.textLabel.textAlignment = NSTextAlignmentCenter;
-    cell.selectionStyle = UITableViewCellSelectionStyleGray;
-    cell.accessoryView = nil; cell.accessoryType = UITableViewCellAccessoryNone;
+    UITableViewCell *cell = [tv dequeueReusableCellWithIdentifier:@"cell"];
+    if (!cell) {
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"cell"];
+    }
+    // 统一 Apple 风格基础样式
+    cell.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
+    cell.textLabel.textColor = [UIColor labelColor];
+    cell.textLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightRegular];
+    cell.textLabel.textAlignment = NSTextAlignmentLeft;
+    cell.textLabel.numberOfLines = 1;
+    cell.detailTextLabel.text = nil;
+    cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
+    cell.detailTextLabel.font = [UIFont systemFontOfSize:11];
+    cell.imageView.image = nil;
+    cell.imageView.tintColor = [UIColor systemBlueColor];
+    cell.accessoryView = nil;
+    cell.accessoryType = UITableViewCellAccessoryNone;
+    cell.selectionStyle = UITableViewCellSelectionStyleDefault;
 
     if (_viewMode == 1) {
         NSDictionary *item = _mainMenu[ip.row];
-        cell.textLabel.text = [NSString stringWithFormat:@"%@  %@", item[@"icon"], item[@"label"]];
+        cell.imageView.image = [UIImage systemImageNamed:item[@"icon"]];
+        NSString *action = item[@"action"];
+        if ([action isEqualToString:@"close_panel"] || [action isEqualToString:@"clear_data"]) {
+            cell.imageView.tintColor = [UIColor systemRedColor];
+        } else if ([action isEqualToString:@"connect_server"]) {
+            cell.imageView.tintColor = [UIColor systemGreenColor];
+        } else {
+            cell.imageView.tintColor = [UIColor systemBlueColor];
+        }
+        cell.textLabel.text = item[@"label"];
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"set_country"]) {
         NSString *c = kCountries[ip.row];
         cell.textLabel.text = c;
-        cell.textLabel.textColor = [c isEqualToString:_selectedCountry] ? XN_ACCENT : XN_TEXT;
-        if ([c isEqualToString:_selectedCountry]) { cell.accessoryType = UITableViewCellAccessoryCheckmark; cell.tintColor = XN_ACCENT; }
+        cell.textLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightRegular];
+        BOOL sel = [c isEqualToString:_selectedCountry];
+        cell.textLabel.textColor = sel ? [UIColor systemBlueColor] : [UIColor labelColor];
+        if (sel) { cell.accessoryType = UITableViewCellAccessoryCheckmark; cell.tintColor = [UIColor systemBlueColor]; }
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"account_mgmt"]) {
         NSArray *a = [[AccountPool sharedPool] allAccounts];
         if (a.count == 0) {
-            cell.textLabel.text = @"暂无账号"; cell.textLabel.textColor = XN_DIM;
+            cell.textLabel.text = @"暂无账号";
+            cell.textLabel.textColor = [UIColor secondaryLabelColor];
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
         } else {
             NSDictionary *acc = a[ip.row];
-            cell.textLabel.text = [NSString stringWithFormat:@"昵称:%@ 号码:%@ 粉丝:%@ 关注:%@",
-                                   acc[@"nickname"]?:@"?", acc[@"aweme_number"]?:@"",
-                                   acc[@"followers"]?:@"0", acc[@"following_count"]?:@"0"];
-            cell.textLabel.font = [UIFont systemFontOfSize:10]; cell.textLabel.numberOfLines = 2;
+            cell.textLabel.text = acc[@"nickname"] ?: @"未知账号";
+            cell.textLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
+            cell.detailTextLabel.text = [NSString stringWithFormat:@"号码:%@  粉丝:%@  关注:%@",
+                                         acc[@"aweme_number"]?:@"", acc[@"followers"]?:@"0", acc[@"following_count"]?:@"0"];
+            cell.detailTextLabel.numberOfLines = 1;
         }
     }
     return cell;
 }
 
 - (CGFloat)tableView:(UITableView *)tv heightForRowAtIndexPath:(NSIndexPath *)ip {
-    if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"account_mgmt"]) return 44;
-    return 36;
+    if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"account_mgmt"]) return 60;
+    if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"set_country"]) return 44;
+    return 52;
 }
 
 - (void)tableView:(UITableView *)tv didSelectRowAtIndexPath:(NSIndexPath *)ip {
@@ -589,7 +727,6 @@ static NSArray *kCountries;
         [self _createLogWindow];
     }
 
-    _panelContainer.alpha = 1; _panelContainer.transform = CGAffineTransformMakeScale(0.3, 0.3);
     CGFloat ow = self.frame.size.width, oh = self.frame.size.height;
     // 展开时向左移动，确保面板完全在屏幕内
     CGFloat ex = self.frame.origin.x - (kExpandedWidth - ow) + 8; // 右对齐+右边距8
@@ -599,16 +736,54 @@ static NSArray *kCountries;
     CGFloat mh = [UIScreen mainScreen].bounds.size.height;
     if (ey + kExpandedHeight > mh - 20) ey = mh - kExpandedHeight - 20;
     self.frame = self.superview ? CGRectMake(ex, ey, kExpandedWidth, kExpandedHeight) : self.frame;
+    self.layer.cornerRadius = kCornerRadius;
+    [self _updateShadowPath];
+
     _badgeButton.alpha = 0;
-    [UIView animateWithDuration:0.4 delay:0 usingSpringWithDamping:0.7 initialSpringVelocity:0.8
+    _statusDot.alpha = 0; // 徽章圆点随徽章一起隐藏
+    _panelContainer.alpha = 1;
+    _panelContainer.transform = CGAffineTransformMakeScale(0.3, 0.3);
+    _panelContainer.transform = CGAffineTransformTranslate(_panelContainer.transform, 0, -10);
+    [UIView animateWithDuration:0.45 delay:0 usingSpringWithDamping:0.72 initialSpringVelocity:0.6
                         options:UIViewAnimationOptionCurveEaseOut animations:^{
-        self.panelContainer.transform = CGAffineTransformIdentity; self.layer.shadowOpacity = 0.5;
+        _panelContainer.transform = CGAffineTransformIdentity;
+        self.layer.shadowOpacity = 0.5;
+    } completion:nil];
+}
+
+/// 弹簧收起：展开面板缩回为折叠徽章（保留在窗口，可再次点开）
+- (void)_collapsePanel {
+    if (!_isExpanded) return;
+    _isExpanded = NO;
+    [self endEditing:YES];
+
+    CGFloat cx = self.center.x, cy = self.center.y;
+    self.frame = CGRectMake(0, 0, kCollapsedSize, kCollapsedSize);
+    self.center = CGPointMake(cx, cy);
+    CGFloat hw = kCollapsedSize/2, hh = kCollapsedSize/2;
+    self.center = CGPointMake(MAX(hw, MIN([UIScreen mainScreen].bounds.size.width-hw, self.center.x)),
+                              MAX(50+hh, MIN([UIScreen mainScreen].bounds.size.height-100-hh, self.center.y)));
+    self.layer.cornerRadius = kCollapsedSize * 0.3;
+    [self _updateShadowPath];
+
+    _badgeButton.alpha = 0;
+    [UIView animateWithDuration:0.35 delay:0 usingSpringWithDamping:0.85 initialSpringVelocity:0.4
+                        options:UIViewAnimationOptionCurveEaseOut animations:^{
+        _panelContainer.transform = CGAffineTransformMakeScale(0.3, 0.3);
+        _panelContainer.alpha = 0;
+        _badgeButton.alpha = 1;
+        _statusDot.alpha = 1;
+        self.layer.shadowOpacity = 0.35;
     } completion:nil];
 }
 
 - (void)dismiss {
-    [UIView animateWithDuration:0.2 animations:^{
-        self.alpha = 0; self.transform = CGAffineTransformMakeScale(0.3, 0.3);
+    if (!self.superview) return;
+    [self endEditing:YES];
+    [UIView animateWithDuration:0.25 delay:0 usingSpringWithDamping:0.7 initialSpringVelocity:0.5
+                        options:UIViewAnimationOptionCurveEaseIn animations:^{
+        self.alpha = 0;
+        self.transform = CGAffineTransformMakeScale(0.4, 0.4);
     } completion:^(BOOL f) { [self removeFromSuperview]; }];
 }
 
@@ -643,20 +818,35 @@ static NSArray *kCountries;
 - (void)setConnected:(BOOL)connected {
     _isConnected = connected;
     dispatch_async(dispatch_get_main_queue(), ^{
-        self.statusDot.backgroundColor = connected ? XN_ACCENT : UIColor.redColor;
+        [self _updateStatusUI];
     });
 }
-- (void)setDeviceId:(NSString *)deviceId { _panelDeviceId = deviceId; }
-- (void)setServerURL:(NSString *)serverURL { _panelServerURL = serverURL; }
-- (void)setAccountInfo:(NSDictionary *)account {}
-- (void)setConnectionQuality:(NSString *)quality {}
-#pragma mark - 日志窗口
 
-- (void)_setupLogView {
-    CGFloat logW = 240, logH = 120;
-    CGFloat logX = 8;
-    // 注意：日志窗口在 showInWindow 时添加到窗口，不添加到这里
+- (void)setDeviceId:(NSString *)deviceId { _panelDeviceId = deviceId; }
+- (void)setServerURL:(NSString *)serverURL { _panelServerURL = serverURL; dispatch_async(dispatch_get_main_queue(), ^{ [self _updateStatusUI]; }); }
+- (void)setAccountInfo:(NSDictionary *)account { _panelAccount = account; }
+- (void)setConnectionQuality:(NSString *)quality { _panelQuality = quality; }
+
+/// 统一刷新连接状态（折叠徽章圆点 + 面板状态胶囊）
+- (void)_updateStatusUI {
+    UIColor *c = _isConnected ? [UIColor systemGreenColor] : [UIColor systemRedColor];
+    _statusDot.backgroundColor = c;
+    if (!_statusPill) return;
+    _statusDotView.backgroundColor = c;
+    NSString *txt = _isConnected ? @"已连接" : @"未连接";
+    if (_isConnected && _panelServerURL.length > 0) {
+        txt = [txt stringByAppendingFormat:@" · %@", _panelServerURL];
+    }
+    _statusLabel.text = txt;
+    CGSize maxSize = CGSizeMake(kExpandedWidth - 72, 18);
+    CGSize s = [_statusLabel sizeThatFits:maxSize];
+    _statusLabel.frame = CGRectMake(12, 0, s.width, 18);
+    CGFloat pillW = 12 + s.width;
+    _statusPill.frame = CGRectMake((kExpandedWidth - pillW)/2, 40, pillW, 18);
+    _statusDotView.center = CGPointMake(6, 9);
 }
+
+#pragma mark - 日志窗口
 
 - (void)addLog:(NSString *)message {
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -666,7 +856,7 @@ static NSArray *kCountries;
         ts = [df stringFromDate:[NSDate date]];
         NSString *line = [NSString stringWithFormat:@"[%@] %@", ts, message];
         [self.logLines addObject:line];
-        if (self.logLines.count > 20) {
+        if (self.logLines.count > 40) {
             [self.logLines removeObjectAtIndex:0];
         }
         // 更新日志视图
@@ -682,20 +872,31 @@ static NSArray *kCountries;
 }
 
 - (void)_createLogWindow {
-    CGFloat logW = 220, logH = 140;
+    CGFloat logW = 230, logH = 150;
     self.logView = [[UIView alloc] initWithFrame:CGRectMake(8, 60, logW, logH)];
-    self.logView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.35];
-    self.logView.layer.cornerRadius = 8;
+    self.logView.backgroundColor = UIColor.clearColor;
+    self.logView.layer.cornerRadius = 16;
+    self.logView.clipsToBounds = YES;
+    self.logView.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+    self.logView.layer.borderWidth = kHairline;
+    self.logView.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.12].CGColor;
     self.logView.userInteractionEnabled = NO;
-    [self.superview addSubview:self.logView];
 
-    self.logTextView = [[UITextView alloc] initWithFrame:CGRectMake(4, 4, logW-8, logH-8)];
+    UIVisualEffectView *blur = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemMaterialDark]];
+    blur.frame = self.logView.bounds;
+    blur.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    blur.userInteractionEnabled = NO;
+    [self.logView addSubview:blur];
+
+    self.logTextView = [[UITextView alloc] initWithFrame:CGRectInset(self.logView.bounds, 8, 8)];
+    self.logTextView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.logTextView.backgroundColor = UIColor.clearColor;
-    self.logTextView.textColor = [UIColor colorWithWhite:1 alpha:0.7];
-    self.logTextView.font = [UIFont systemFontOfSize:9];
+    self.logTextView.textColor = [UIColor secondaryLabelColor];
+    self.logTextView.font = [UIFont monospacedSystemFontOfSize:10 weight:UIFontWeightRegular];
     self.logTextView.editable = NO;
     self.logTextView.scrollEnabled = YES;
     self.logTextView.userInteractionEnabled = NO;
+    self.logTextView.textContainerInset = UIEdgeInsetsMake(6, 6, 6, 6);
     self.logTextView.text = @"";
     [self.logView addSubview:self.logTextView];
 }

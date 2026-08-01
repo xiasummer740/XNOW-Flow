@@ -34,6 +34,8 @@ try:
             username="admin",
             password_hash=hashlib.sha256(init_pw.encode()).hexdigest(),
             is_active=True,
+            role="admin",
+            api_id="1",
         )
         db.add(admin)
         print(f"✅ 已创建 admin 用户（初始密码: {init_pw}，请立即修改）")
