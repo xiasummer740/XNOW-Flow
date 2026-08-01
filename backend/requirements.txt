@@ -6,3 +6,4 @@ pydantic==2.12.5
 pydantic-settings==2.13.1
 python-multipart==0.0.20
 aiofiles==24.1.0
+bcrypt==4.2.1
