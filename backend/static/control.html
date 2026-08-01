@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XNOW 手机控制台</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,'Microsoft YaHei',sans-serif; background:#0f1115; color:#e8eaed; padding:20px; }
+h1 { font-size:20px; margin-bottom:16px; }
+h2 { font-size:15px; margin:20px 0 10px; color:#9aa0a6; }
+.card { background:#1c1f26; border-radius:10px; padding:16px; margin-bottom:16px; }
+label { display:block; margin-bottom:6px; color:#9aa0a6; font-size:13px; }
+select, input[type=text] { width:100%; padding:10px; background:#2a2e37; border:1px solid #3c4048; border-radius:6px; color:#e8eaed; font-size:14px; margin-bottom:12px; }
+.btns { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:8px; }
+button { padding:12px 8px; border:none; border-radius:6px; font-size:14px; cursor:pointer; background:#3b4252; color:#e8eaed; transition:background .15s; }
+button:hover { background:#4b5263; }
+button:disabled { opacity:.4; cursor:not-allowed; }
+.btn-primary { background:#1a73e8; } .btn-primary:hover { background:#1765cc; }
+.btn-danger { background:#d93025; } .btn-danger:hover { background:#bb2e24; }
+#result { background:#0d1117; border:1px solid #2a2e37; border-radius:6px; padding:12px; font-size:13px; color:#8ab4f8; max-height:200px; overflow-y:auto; white-space:pre-wrap; }
+.status { color:#7d8590; font-size:13px; margin-top:8px; }
+.online { color:#4caf50; } .offline { color:#f44336; }
+</style>
+</head>
+<body>
+<h1>📱 XNOW 手机控制台</h1>
+
+<div class="card">
+  <label>选择设备（机器码）</label>
+  <select id="deviceSelect"><option value="">加载中...</option></select>
+  <div class="status" id="deviceStatus"></div>
+</div>
+
+<div class="card">
+  <h2>🎮 基本操作</h2>
+  <div class="btns">
+    <button class="btn-primary" onclick="cmd('scroll_down')">⬇️ 下滑</button>
+    <button class="btn-primary" onclick="cmd('scroll_up')">⬆️ 上滑</button>
+    <button onclick="cmd('like')">❤️ 点赞</button>
+    <button onclick="cmd('follow')">➕ 关注</button>
+    <button onclick="cmd('comment',{text:'赞！'})">💬 评论</button>
+    <button onclick="cmd('collect')">⭐ 收藏</button>
+    <button onclick="cmd('screenshot')">📸 截图</button>
+    <button onclick="cmd('smart_browse',{min_scrolls:5,max_scrolls:12})">🌐 智能浏览</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>📊 采集</h2>
+  <div class="btns">
+    <button onclick="cmd('collect_fans',{count:20})">👥 采集粉丝</button>
+    <button onclick="cmd('collect_videos',{count:10})">🎬 采集视频</button>
+    <button onclick="cmd('get_account_info')">👤 获取账号信息</button>
+    <button onclick="cmd('check_health')">💓 健康检查</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>🔄 批量操作</h2>
+  <div class="btns">
+    <button onclick="cmd('batch_like',{count:10,interval:1})">批量点赞(10)</button>
+    <button onclick="cmd('batch_follow',{count:5,interval:1})">批量关注(5)</button>
+    <button onclick="cmd('batch_comment',{count:5,interval:2,text:'不错'})">批量评论</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>⚙️ 参数指令（自定义 JSON）</h2>
+  <label>Action</label>
+  <input type="text" id="customAction" placeholder="如 switch_account">
+  <label>Params（JSON）</label>
+  <input type="text" id="customParams" placeholder='如 {"aweme_id":"123456"}'>
+  <button class="btn-danger" onclick="cmdCustom()">发送自定义指令</button>
+</div>
+
+<div class="card">
+  <h2>📋 执行结果</h2>
+  <div id="result">等待操作...</div>
+</div>
+
+<script>
+const API = '';  // 相对路径（同源）
+let token = localStorage.getItem('xn_token') || '';
+let deviceId = null;
+let pollTimer = null;
+
+// 自动登录（admin/admin，失败则提示手动登录）
+async function ensureLogin() {
+  if (token) return true;
+  const resp = await fetch(API + '/api/auth/login/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username:'admin', password:'admin'})
+  });
+  if (resp.ok) {
+    const d = await resp.json();
+    token = d.access || d.token || '';
+    if (token) { localStorage.setItem('xn_token', token); return true; }
+  }
+  const pw = prompt('登录: 输入 admin 密码（默认 admin）:');
+  if (pw === null) return false;
+  const resp2 = await fetch(API + '/api/auth/login/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username:'admin', password:pw})
+  });
+  if (resp2.ok) {
+    const d = await resp2.json();
+    token = d.access || d.token || '';
+    if (token) { localStorage.setItem('xn_token', token); return true; }
+  }
+  return false;
+}
+
+async function api(path, opts={}) {
+  const headers = {'Content-Type':'application/json'};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const resp = await fetch(API + path, {...opts, headers});
+  if (resp.status === 401) { log('⚠️ 登录失效，请刷新本页重新登录'); throw new Error('unauthorized'); }
+  return resp.json();
+}
+
+async function loadDevices() {
+  try {
+    const d = await api('/api/biz/v2/device-bindings/?limit=100');
+    const sel = document.getElementById('deviceSelect');
+    sel.innerHTML = '';
+    (d.results||[]).forEach(dev => {
+      const opt = document.createElement('option');
+      opt.value = dev.name;
+      opt.textContent = (dev.device_id || dev.name) + (dev.is_online ? ' ●在线' : ' ○离线');
+      sel.appendChild(opt);
+    });
+    deviceId = sel.value || null;
+    updateStatus();
+    // 自动轮询设备在线状态
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(() => {
+      api('/api/biz/v2/device-bindings/?limit=100').then(d => {
+        const dev = (d.results||[]).find(x => x.name === deviceId);
+        if (dev) document.getElementById('deviceStatus').innerHTML =
+          `<span class="${dev.is_online?'online':'offline'}">${dev.is_online?'● 在线':'○ 离线'}</span> 设备:${dev.device_id||dev.name} App:${dev.app_version||'—'}`;
+      }).catch(()=>{});
+    }, 5000);
+  } catch(e) { log('加载设备失败: ' + e.message); }
+}
+
+function updateStatus() {
+  document.getElementById('deviceStatus').textContent = deviceId ? '当前设备: ' + deviceId : '请选择设备';
+}
+
+function selectedDevice() { return document.getElementById('deviceSelect').value; }
+
+async function cmd(action, params={}) {
+  const dev = selectedDevice();
+  if (!dev) { log('⚠️ 请先选择设备'); return; }
+  log(`⏳ 发送指令: ${action} → ${dev}`);
+  try {
+    const r = await api('/api/biz/v2/device-bindings/batch/dispatch/', {
+      method:'POST',
+      body: JSON.stringify({device_ids:[dev], action, params})
+    });
+    log('✅ ' + (r.message || JSON.stringify(r)));
+  } catch(e) { log('❌ ' + e.message); }
+}
+
+async function cmdCustom() {
+  const action = document.getElementById('customAction').value.trim();
+  if (!action) { log('⚠️ 请输入 Action'); return; }
+  let params = {};
+  try { params = JSON.parse(document.getElementById('customParams').value || '{}'); }
+  catch(e) { log('❌ Params 不是合法 JSON'); return; }
+  await cmd(action, params);
+}
+
+function log(msg) {
+  const el = document.getElementById('result');
+  el.textContent = new Date().toLocaleTimeString() + ' ' + msg + '\n' + el.textContent;
+  if (el.textContent.length > 3000) el.textContent = el.textContent.slice(0, 3000);
+}
+
+document.getElementById('deviceSelect').addEventListener('change', () => {
+  deviceId = selectedDevice();
+  updateStatus();
+});
+
+ensureLogin().then(ok => {
+  if (ok) loadDevices();
+  else log('❌ 登录失败，请检查 admin 密码');
+});
+</script>
+</body>
+</html>
