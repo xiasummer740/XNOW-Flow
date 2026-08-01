@@ -1135,7 +1135,7 @@ static const CGFloat kAvatarRatioY = 0.82;
     [[AccountManager sharedManager] clearAccount];
 }
 
-#pragma mark - 辅助: 手势模拟 / 输入框查找
+#pragma mark - 辅助: 手势模拟
 
 /// 模拟滑动手势（通过 touchesBegan/Moved/Ended）
 - (void)_simulateSwipeFrom:(CGPoint)from to:(CGPoint)to {
@@ -1156,16 +1156,6 @@ static const CGFloat kAvatarRatioY = 0.82;
     } @catch (NSException *e) {
         NSLog(@"[XNOWER] 滑动失败: %@", e.reason);
     }
-}
-
-/// 查找输入框
-- (UITextField *)_findTextFieldInView:(UIView *)view {
-    if ([view isKindOfClass:[UITextField class]]) return (UITextField *)view;
-    for (UIView *sub in view.subviews) {
-        UITextField *tf = [self _findTextFieldInView:sub];
-        if (tf) return tf;
-    }
-    return nil;
 }
 
 @end
