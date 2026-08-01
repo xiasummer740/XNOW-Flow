@@ -288,7 +288,7 @@ static NSArray *kCountries;
 
     // 重要提示（警告卡片）
     UIView *noticeCard = [self _makeCardViewWithFrame:CGRectMake(m, y, w, 92)];
-    noticeCard.backgroundColor = [UIColor systemYellowColor colorWithAlphaComponent:0.10];
+    noticeCard.backgroundColor = [[UIColor systemYellowColor] colorWithAlphaComponent:0.10];
     UILabel *noticeTitle = [[UILabel alloc] initWithFrame:CGRectMake(14, 10, w - 28, 16)];
     noticeTitle.text = @"重要提示";
     noticeTitle.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
