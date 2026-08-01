@@ -1,96 +1,19 @@
 // WsClient.m
-// 全部走 syscall 绕过 BH hook + VPS/Cloudflare 多目标探测
-// connect/send/recv/socket/close 全部 syscall(0 符号依赖)
+// XNOW HTTP 客户端 — 基于 NSURLSession（借 TikTok 网络栈）
+// 直连 socket 全被运营商封锁，NSURLSession 走 TikTok 的 URL Loading System 可达
+// 连接到 VPS:8000（实测可达，Cloudflare 被封）
 
 #import "WsClient.h"
-#import <sys/socket.h>
-#import <sys/syscall.h>
-#import <sys/select.h>
-#import <sys/time.h>
-#import <arpa/inet.h>
-#import <errno.h>
-#import <fcntl.h>
 
-// ====== 内联汇编 syscall（不调用任何函数，svc 指令直接进内核） ======
-// BH 即使 hook 了 syscall() 函数也无法拦截直接 svc
-#define SYS_SOCKET   97
-#define SYS_CONNECT  98
-#define SYS_CLOSE    6
-#define SYS_FCNTL    92
-#define SYS_SELECT   93
-#define SYS_GETSOCKOPT 118
-#define SYS_SENDTO   290
-#define SYS_RECVFROM 291
-
-__attribute__((always_inline))
-static long asm_syscall(long n, long a1, long a2, long a3, long a4, long a5, long a6) {
-    register long x0 __asm__("x0") = n;
-    register long x1 __asm__("x1") = a1;
-    register long x2 __asm__("x2") = a2;
-    register long x3 __asm__("x3") = a3;
-    register long x4 __asm__("x4") = a4;
-    register long x5 __asm__("x5") = a5;
-    register long x6 __asm__("x6") = a6;
-    __asm__ volatile(
-        "mov x16, x0\n"
-        "mov x0, x1\n"
-        "mov x1, x2\n"
-        "mov x2, x3\n"
-        "mov x3, x4\n"
-        "mov x4, x5\n"
-        "mov x5, x6\n"
-        "svc #0x80\n"
-        : "+r"(x0)
-        : "r"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x5), "r"(x6)
-        : "x16", "memory", "cc"
-    );
-    return x0;
-}
-
-static long asm_sys(long n, long a1, long a2, long a3, long a4, long a5, long a6) {
-    register long x0 __asm__("x0") = n;
-    register long x1 __asm__("x1") = a1;
-    register long x2 __asm__("x2") = a2;
-    register long x3 __asm__("x3") = a3;
-    register long x4 __asm__("x4") = a4;
-    register long x5 __asm__("x5") = a5;
-    register long x6 __asm__("x6") = a6;
-    __asm__ volatile(
-        "mov x16, x0\n"
-        "mov x0, x1\n"
-        "mov x1, x2\n"
-        "mov x2, x3\n"
-        "mov x3, x4\n"
-        "mov x4, x5\n"
-        "mov x5, x6\n"
-        "svc #0x80\n"
-        : "+r"(x0)
-        : "r"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x5), "r"(x6)
-        : "x16", "memory", "cc"
-    );
-    return x0;
-}
-
-static int sys_sock(int d, int t, int p)      { return (int)asm_sys(SYS_SOCKET, d,t,p,0,0,0); }
-static int sys_con(int fd, const void *a, int l) { return (int)asm_sys(SYS_CONNECT, fd,(long)a,l,0,0,0); }
-static int sys_cls(int fd)                     { return (int)asm_sys(SYS_CLOSE, fd,0,0,0,0,0); }
-static int sys_snd(int fd, const void *b, long l, int f) { return (int)asm_sys(SYS_SENDTO, fd,(long)b,l,f,0,0); }
-static int sys_rcv(int fd, void *b, long l, int f)     { return (int)asm_sys(SYS_RECVFROM, fd,(long)b,l,f,0,0); }
-static int sys_fctl(int fd, int cmd, int v)   { return (int)asm_sys(SYS_FCNTL, fd,cmd,v,0,0,0); }
-static int sys_sel(int n, fd_set *r, fd_set *w, fd_set *e, struct timeval *t) { return (int)asm_sys(SYS_SELECT, n,(long)r,(long)w,(long)e,(long)t,0); }
-static int sys_gso(int fd, int lv, int on, void *v, socklen_t *len) { return (int)asm_sys(SYS_GETSOCKOPT, fd,lv,on,(long)v,(long)len,0); }
-
-// ====== 地址 ======
-#define VPS_IP  0xC081D234  // 192.129.210.52
-#define CF_IP1  0xAC43C2CA  // 172.67.194.202
-#define CF_IP2  0x68153525  // 104.21.52.37
+// 后端地址（VPS 直连，Cloudflare 被封）
+#define XN_BACKEND_HOST @"192.129.210.52"
+#define XN_BACKEND_PORT 8000
 
 // ====== 类扩展 ======
 @interface WsClient () {
     dispatch_queue_t _q;
 }
 @property (copy)   NSString *deviceId;
-@property (copy)   NSString *lastError;
 @property (assign) BOOL intentionalDisconnect;
 @property (strong) dispatch_source_t pollTimer;
 @end
@@ -105,136 +28,68 @@ static int sys_gso(int fd, int lv, int on, void *v, socklen_t *len) { return (in
     return self;
 }
 
-// 试一个 IP:PORT 组合（非阻塞 + select 5s）
-- (BOOL)_tryConn:(int)fd ip:(uint32_t)ip port:(int)port {
-    int flags = sys_fctl(fd, F_GETFL, 0);
-    if (flags >= 0) sys_fctl(fd, F_SETFL, flags | O_NONBLOCK);
-
-    struct sockaddr_in addr = {0};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = ip;
-
-    int ret = sys_con(fd, (struct sockaddr*)&addr, sizeof(addr));
-    if (ret == 0) { if (flags>=0) sys_fctl(fd, F_SETFL, flags); return YES; }
-    if (errno != EINPROGRESS) {
-        self.lastError = [NSString stringWithFormat:@"conn %d.%d.%d.%d:%d errno=%d",
-            (ip>>24)&0xFF, (ip>>16)&0xFF, (ip>>8)&0xFF, ip&0xFF, port, errno];
-        if (flags>=0) sys_fctl(fd, F_SETFL, flags);
-        return NO;
-    }
-
-    struct timeval tv = {5, 0};
-    fd_set wset;
-    FD_ZERO(&wset);
-    FD_SET(fd, &wset);
-    ret = sys_sel(fd+1, NULL, &wset, NULL, &tv);
-    if (ret <= 0) {
-        self.lastError = [NSString stringWithFormat:@"conn %d.%d.%d.%d:%d timeout",
-            (ip>>24)&0xFF, (ip>>16)&0xFF, (ip>>8)&0xFF, ip&0xFF, port];
-        if (flags>=0) sys_fctl(fd, F_SETFL, flags);
-        return NO;
-    }
-
-    int err = 0;
-    socklen_t elen = sizeof(err);
-    sys_gso(fd, SOL_SOCKET, SO_ERROR, &err, &elen);
-    if (flags>=0) sys_fctl(fd, F_SETFL, flags);
-    if (err != 0) {
-        self.lastError = [NSString stringWithFormat:@"conn %d.%d.%d.%d:%d err=%d",
-            (ip>>24)&0xFF, (ip>>16)&0xFF, (ip>>8)&0xFF, ip&0xFF, port, err];
-        return NO;
-    }
-    return YES;
-}
-
-// 连接 + 发 HTTP 请求
+// ★ 核心里程碑：NSURLSession 借 TikTok 网络栈通信（VPS:8000 实测可达）
 - (NSData *)_fetch:(NSString *)method path:(NSString *)path body:(NSData *)body {
-    // 目标: [ip, port] 组合
-    struct { uint32_t ip; int port; } targets[] = {
-        {VPS_IP, 8000},   // VPS 直连（绕过 BH hook）
-        {CF_IP1, 80},     // Cloudflare
-        {CF_IP1, 8080},
-        {CF_IP2, 80},
-        {CF_IP2, 8080},
-    };
-    int ntargets = sizeof(targets)/sizeof(targets[0]);
+    NSString *urlStr = [NSString stringWithFormat:@"http://%@:%d%@", XN_BACKEND_HOST, XN_BACKEND_PORT, path];
+    NSURL *url = [NSURL URLWithString:urlStr];
+    if (!url) return nil;
 
-    for (int i = 0; i < ntargets; i++) {
-        uint32_t ip = targets[i].ip;
-        int port = targets[i].port;
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
+    req.HTTPMethod = method;
+    if (body) {
+        req.HTTPBody = body;
+        [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    }
+    [req setValue:@"close" forHTTPHeaderField:@"Connection"];
+    req.timeoutInterval = 10;
 
-        int fd = sys_sock(AF_INET, SOCK_STREAM, 0);
-        if (fd < 0) continue;
+    __block NSData *result = nil;
+    dispatch_semaphore_t sema = dispatch_semaphore_create(0);
 
-        if (![self _tryConn:fd ip:ip port:port]) {
-            sys_cls(fd);
-            continue; // 连接失败，试下一个
-        }
+    // ephemeral session（同 XNURLProtocol 已验证可用）
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    config.timeoutIntervalForRequest = 10;
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
 
-        // ✅ connect 成功，发 HTTP
-        NSMutableData *req = [NSMutableData data];
-        [req appendData:[[NSString stringWithFormat:@"%@ %@ HTTP/1.1\r\nHost: yunkong.taikon.top\r\nConnection: close\r\n", method, path] dataUsingEncoding:NSUTF8StringEncoding]];
-        if (body) {
-            [req appendData:[[NSString stringWithFormat:@"Content-Type: application/json\r\nContent-Length: %lu\r\n", (unsigned long)body.length] dataUsingEncoding:NSUTF8StringEncoding]];
-        }
-        [req appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
-        if (body) [req appendData:body];
-
-        const uint8_t *p = req.bytes;
-        NSUInteger left = req.length;
-        BOOL bad = NO;
-        while (left > 0) {
-            int n = sys_snd(fd, p, left, 0);
-            if (n <= 0) { bad = YES; break; }
-            p += n; left -= n;
-        }
-        if (bad) { sys_cls(fd); continue; }
-
-        NSMutableData *resp = [NSMutableData data];
-        uint8_t buf[4096];
-        while (1) {
-            int n = sys_rcv(fd, buf, sizeof(buf), 0);
-            if (n <= 0) break;
-            [resp appendBytes:buf length:n];
-        }
-        sys_cls(fd);
-
-        const uint8_t *b = resp.bytes;
-        if (resp.length > 4) {
-            for (NSUInteger j = 0; j+3 < resp.length; j++) {
-                if (b[j]=='\r' && b[j+1]=='\n' && b[j+2]=='\r' && b[j+3]=='\n') {
-                    NSUInteger blen = resp.length - j - 4;
-                    return blen > 0 ? [resp subdataWithRange:NSMakeRange(j+4, blen)] : nil;
+    [[session dataTaskWithRequest:req
+        completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
+            if (data && !error) {
+                NSHTTPURLResponse *hr = (NSHTTPURLResponse *)resp;
+                if (hr.statusCode == 200) {
+                    result = data;
                 }
             }
-        }
-        // 连上了但响应不对，标记然后重试
-    }
-    return nil;
+            dispatch_semaphore_signal(sema);
+            [session finishTasksAndInvalidate];
+    }] resume];
+
+    dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 15 * NSEC_PER_SEC));
+    return result;
 }
+
+#pragma mark - 接口
 
 - (void)connectToServer:(NSString *)url deviceId:(NSString *)deviceId {
     self.deviceId = deviceId;
     self.intentionalDisconnect = NO;
-    self.lastError = nil;
 
     __weak typeof(self) ws = self;
     dispatch_async(_q, ^{
         typeof(self) s = ws;
         if (!s || s.intentionalDisconnect) return;
 
+        // 健康检查
         NSData *r = [s _fetch:@"GET" path:@"/health" body:nil];
         if (!r) {
-            NSString *msg = s.lastError ?: @"全部连接尝试均失败";
-            NSLog(@"[WsClient] ❌ %@", msg);
+            NSLog(@"[WsClient] ❌ 连接失败");
             s->_isConnected = NO;
             dispatch_async(dispatch_get_main_queue(), ^{
                 [ws.delegate wsClientDidDisconnect:ws error:
-                    [NSError errorWithDomain:@"Ws" code:1 userInfo:@{NSLocalizedDescriptionKey: msg}]];
+                    [NSError errorWithDomain:@"Ws" code:1 userInfo:@{NSLocalizedDescriptionKey:@"连接失败"}]];
             });
             return;
         }
+
         NSLog(@"[WsClient] ✅ 连接成功");
         s->_isConnected = YES;
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -254,7 +109,7 @@ static int sys_gso(int fd, int lv, int on, void *v, socklen_t *len) { return (in
         _isConnected = NO;
         dispatch_async(dispatch_get_main_queue(), ^{
             [self.delegate wsClientDidDisconnect:self error:
-                [NSError errorWithDomain:@"Ws" code:2 userInfo:@{NSLocalizedDescriptionKey: self.lastError ?: @"通信中断"}]];
+                [NSError errorWithDomain:@"Ws" code:2 userInfo:@{NSLocalizedDescriptionKey:@"通信中断"}]];
         });
         return;
     }
@@ -278,23 +133,27 @@ static int sys_gso(int fd, int lv, int on, void *v, socklen_t *len) { return (in
 }
 
 - (void)sendString:(NSString *)string {}
+
 - (void)disconnect {
     self.intentionalDisconnect = YES; _isConnected = NO;
     [self _stopPolling];
 }
 
 #pragma mark - 轮询
+
 - (void)_startPolling {
     [self _stopPolling];
-    dispatch_source_t t = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER,0,0,dispatch_get_main_queue());
-    dispatch_source_set_timer(t, dispatch_time(DISPATCH_TIME_NOW,8*NSEC_PER_SEC), 8*NSEC_PER_SEC, 2*NSEC_PER_SEC);
+    dispatch_source_t t = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+    dispatch_source_set_timer(t, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), 5 * NSEC_PER_SEC, 2 * NSEC_PER_SEC);
     __weak typeof(self) ws = self;
     dispatch_source_set_event_handler(t, ^{ [ws _pollTick]; });
     _pollTimer = t; dispatch_resume(t);
 }
+
 - (void)_stopPolling {
     if (_pollTimer) { dispatch_source_cancel(_pollTimer); _pollTimer = nil; }
 }
+
 - (void)_pollTick {
     if (self.intentionalDisconnect || !self.isConnected) return;
     __weak typeof(self) ws = self;
@@ -304,10 +163,14 @@ static int sys_gso(int fd, int lv, int on, void *v, socklen_t *len) { return (in
         NSData *r = [s _fetch:@"GET" path:[NSString stringWithFormat:@"/ws/%@/poll", s.deviceId?:@"unknown"] body:nil];
         if (!r) return;
         id obj = [NSJSONSerialization JSONObjectWithData:r options:0 error:nil];
-        if ([obj isKindOfClass:[NSDictionary class]] && (((NSDictionary*)obj)[@"action"]||((NSDictionary*)obj)[@"type"]))
-            dispatch_async(dispatch_get_main_queue(), ^{ [ws.delegate wsClient:ws didReceiveMessage:obj]; });
+        if ([obj isKindOfClass:[NSDictionary class]]) {
+            NSDictionary *dict = (NSDictionary *)obj;
+            if (dict[@"action"] || dict[@"type"])
+                dispatch_async(dispatch_get_main_queue(), ^{ [ws.delegate wsClient:ws didReceiveMessage:dict]; });
+        }
     });
 }
+
 - (void)dealloc {
     self.intentionalDisconnect = YES;
     [self _stopPolling];

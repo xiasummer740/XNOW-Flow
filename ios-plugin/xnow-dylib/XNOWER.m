@@ -515,24 +515,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapConnectServer:(XNFloatingPanel *)panel {
-    // 用户手动点击"连接到服务器" → 借TikTok网络栈检测后端（piggyback）
-    [self addLog:@"正在检测服务器…"];
-    __weak typeof(self) weakSelf = self;
-    [XNURLProtocol checkBackendNow:^(BOOL ok) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            typeof(self) s = weakSelf;
-            if (!s) return;
-            if (ok) {
-                s->_isConnected = YES;
-                [s addLog:@"✅ 服务器可达！"];
-                [s.floatingPanel setConnected:YES];
-            } else {
-                s->_isConnected = NO;
-                [s addLog:@"❌ 服务器不可达"];
-                [s.floatingPanel setConnected:NO];
-            }
-        });
-    }];
+    // 用户手动点击"连接到服务器"
+    [self addLog:@"正在连接服务器…"];
+    [self connectWebSocket];
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
