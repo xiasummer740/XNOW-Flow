@@ -31,6 +31,9 @@ class DeviceBinding(Base):
     # Group
     group_name = Column(String(100), default="未分组")  # 所属分组
     tags = Column(Text, default="[]")                   # JSON tags
+    # 设备鉴权
+    device_secret = Column(String(64), default="")        # 每设备共享密钥（设备请求鉴权）
+
     # Meta
     api_id = Column(String(20), default="")               # API ID（关联用户）
     last_seen = Column(DateTime(timezone=True))          # 最后在线时间

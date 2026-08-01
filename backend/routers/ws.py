@@ -133,6 +133,58 @@ def _handle_device_message(device_id: str, msg: dict):
         logger.info(f"Device {device_id} unknown message type: {msg_type}")
 
 
+def _verify_device_auth(device_id: str, secret: str) -> bool:
+    """验证设备请求的共享密钥（宽松迁移）
+
+    - 设备不存在: 必须带 secret 才能自动注册（secret 作为该设备密钥）
+    - 设备存在但未绑定 secret（老设备）: 迁移期放行；若带 secret 则绑定
+    - 设备存在且已绑定 secret: 必须匹配，否则拒绝
+    """
+    if not device_id:
+        return False
+    try:
+        db = SessionLocal()
+        device = db.query(DeviceBinding).filter(
+            DeviceBinding.name == device_id
+        ).first()
+        if not device:
+            # 新设备必须带 secret 注册
+            if not secret:
+                db.close()
+                return False
+            device = DeviceBinding(
+                name=device_id,
+                device_name=device_id,
+                device_id=device_id,
+                status="online",
+                online=True,
+                is_online=True,
+                account_count=0,
+                device_secret=secret,
+                last_online=datetime.utcnow(),
+                app_version="—",
+            )
+            db.add(device)
+            db.commit()
+            db.close()
+            logger.info(f"Device {device_id} auto-registered with secret")
+            return True
+        if not device.device_secret:
+            # 老设备未绑定密钥：迁移期放行，带 secret 则绑定
+            if secret:
+                device.device_secret = secret
+                db.commit()
+                logger.info(f"Device {device_id} secret bound on first auth")
+            db.close()
+            return True
+        ok = (device.device_secret == secret)
+        db.close()
+        return ok
+    except Exception as e:
+        logger.error(f"_verify_device_auth error: {e}")
+        return False
+
+
 def _mark_device_online(device_id: str, api_id: str = "", device_code: str = ""):
     """标记设备在线（用于 HTTP 轮询设备）"""
     try:
@@ -173,14 +225,19 @@ def _mark_device_online(device_id: str, api_id: str = "", device_code: str = "")
 
 # ========== WebSocket 端点（向后兼容） ==========
 @router.websocket("/ws/{device_id}")
-async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", device_code: str = ""):
+async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", device_code: str = "", secret: str = ""):
     """设备 WebSocket 连接端点
 
     设备（iOS 插件）通过这个端点连接到后端。
     连接后保持长连接，接收指令并回传状态。
     api_id: 用户 API 标识
     device_code: 设备编号（1-20）
+    secret: 设备共享密钥（鉴权）
     """
+    # 设备鉴权
+    if not _verify_device_auth(device_id, secret):
+        await ws.close(code=4001, reason="unauthorized")
+        return
     await manager.connect(device_id, ws, api_id=api_id, device_code=device_code)
     try:
         while True:
@@ -259,12 +316,18 @@ async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", devi
 # ========== HTTP 轮询端点（避开 BH TikTok 长连接检测） ==========
 
 @router.post("/ws/{device_id}")
-async def device_http_post(device_id: str, request: Request):
+async def device_http_post(device_id: str, request: Request, secret: str = ""):
     """设备通过 HTTP POST 上报数据
 
     替代 WebSocket 的消息通道，每次请求短连接。
     设备定时 POST 上报状态/账号/结果，同时带回积压指令。
+    需携带设备共享密钥（secret 查询参数）鉴权。
     """
+    # 设备鉴权
+    if not _verify_device_auth(device_id, secret):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+
     try:
         body = await request.json()
     except Exception:
@@ -304,12 +367,18 @@ async def device_http_post(device_id: str, request: Request):
 
 
 @router.get("/ws/{device_id}/poll")
-async def device_http_poll(device_id: str):
+async def device_http_poll(device_id: str, secret: str = ""):
     """设备轮询获取积压指令
 
     设备定时（每 5 秒）GET 此端点，获取服务端下发的指令。
     无指令时返回 204 No Content。
+    需携带设备共享密钥（secret 查询参数）鉴权。
     """
+    # 设备鉴权
+    if not _verify_device_auth(device_id, secret):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+
     # 轮询也更新在线状态（前端用 is_online/last_online 判断设备在线）
     _mark_device_online(device_id)
 
