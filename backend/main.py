@@ -79,7 +79,18 @@ async def serve_spa(full_path: str):
     if full_path.startswith("api/") or full_path.startswith("uploads/") or full_path.startswith("ws/"):
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=404, content={"detail": "Not found"})
-    file_path = os.path.join(static_dir, full_path)
+
+    # 防路径穿越：拒绝任何含 ../ 或绝对路径的请求
+    if not full_path or ".." in full_path or full_path.startswith("/") or "\\" in full_path:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
+
+    file_path = os.path.abspath(os.path.join(static_dir, full_path))
+    # 确保解析后的路径仍在 static 目录内
+    if not file_path.startswith(os.path.abspath(static_dir)):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
+
     if not os.path.exists(file_path) or os.path.isdir(file_path):
         file_path = os.path.join(static_dir, "index.html")
     return FileResponse(file_path)
