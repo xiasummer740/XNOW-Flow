@@ -26,18 +26,19 @@ Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 
 try:
-    # 1. 管理员用户 (admin / admin)
+    # 1. 管理员用户 (仅在不存在时创建，绝不重置已有密码)
+    # 初始密码来自环境变量 ADMIN_INITIAL_PASSWORD（默认 admin，部署后应立即修改）
     if not db.query(User).filter(User.username == "admin").first():
+        init_pw = os.environ.get("ADMIN_INITIAL_PASSWORD", "admin")
         admin = User(
             username="admin",
-            password_hash=hashlib.sha256("admin".encode()).hexdigest(),
+            password_hash=hashlib.sha256(init_pw.encode()).hexdigest(),
             is_active=True,
         )
         db.add(admin)
+        print(f"✅ 已创建 admin 用户（初始密码: {init_pw}，请立即修改）")
     else:
-        # 已有 admin 用户，更新密码
-        user = db.query(User).filter(User.username == "admin").first()
-        user.password_hash = hashlib.sha256("admin".encode()).hexdigest()
+        print("⚠️ admin 用户已存在，跳过创建（不重置密码）")
 
     # 兼容旧版 yk0417 用户
     if db.query(User).filter(User.username == "yk0417").first():
