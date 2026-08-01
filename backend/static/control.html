@@ -43,7 +43,29 @@ button:disabled { opacity:.4; cursor:not-allowed; }
     <button onclick="cmd('collect')">⭐ 收藏</button>
     <button onclick="cmd('screenshot')">📸 截图</button>
     <button onclick="cmd('smart_browse',{min_scrolls:5,max_scrolls:12})">🌐 智能浏览</button>
+    <button onclick="cmd('go_back')">↩️ 返回</button>
+    <button onclick="cmd('go_home')">🏠 首页</button>
+    <button onclick="cmd('open_tab',{tab:'discover'})">🔍 发现页</button>
+    <button onclick="cmd('open_tab',{tab:'inbox'})">✉️ 消息页</button>
+    <button onclick="cmd('open_tab',{tab:'profile'})">👤 我的页</button>
+    <button onclick="cmd('open_search')">🔎 打开搜索</button>
+    <button onclick="cmd('refresh')">🔄 下拉刷新</button>
+    <button onclick="cmd('share')">📤 分享</button>
+    <button onclick="cmd('save_video')">💾 保存视频</button>
   </div>
+</div>
+
+<div class="card">
+  <h2>🔗 打开指定内容</h2>
+  <label>搜索关键词</label>
+  <input type="text" id="kw" placeholder="如 美食 或 用户名">
+  <button onclick="cmd('search_keyword',{keyword:document.getElementById('kw').value})">搜索关键词</button>
+  <label>用户 UID / unique_id</label>
+  <input type="text" id="uid" placeholder="如 1234567890">
+  <button onclick="cmd('open_user',{uid:document.getElementById('uid').value})">打开用户主页</button>
+  <label>视频 aweme_id</label>
+  <input type="text" id="avid" placeholder="如 7123456789012345678">
+  <button onclick="cmd('open_video',{aweme_id:document.getElementById('avid').value})">打开视频</button>
 </div>
 
 <div class="card">
@@ -62,6 +84,15 @@ button:disabled { opacity:.4; cursor:not-allowed; }
     <button onclick="cmd('batch_like',{count:10,interval:1})">批量点赞(10)</button>
     <button onclick="cmd('batch_follow',{count:5,interval:1})">批量关注(5)</button>
     <button onclick="cmd('batch_comment',{count:5,interval:2,text:'不错'})">批量评论</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>👤 账号操作</h2>
+  <div class="btns">
+    <button onclick="cmd('switch_account',{aweme_id:''})">🔄 切换账号</button>
+    <button onclick="cmd('logout')">🚪 退出登录</button>
+    <button onclick="cmd('report_account')">📮 上报账号</button>
   </div>
 </div>
 

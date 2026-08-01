@@ -73,6 +73,20 @@ static const CGFloat kAvatarRatioY = 0.82;
             // 智能任务
             @"smart_browse":      @(CommandActionSmartBrowse),
             @"check_health":      @(CommandActionCheckHealth),
+            // 导航
+            @"go_back":           @(CommandActionGoBack),
+            @"go_home":           @(CommandActionGoHome),
+            @"open_tab":          @(CommandActionOpenTab),
+            @"open_search":       @(CommandActionOpenSearch),
+            @"search_keyword":    @(CommandActionSearchKeyword),
+            @"open_user":         @(CommandActionOpenUser),
+            @"open_video":        @(CommandActionOpenVideo),
+            // 视频操作
+            @"refresh":           @(CommandActionRefresh),
+            @"share":             @(CommandActionShare),
+            @"save_video":        @(CommandActionSaveVideo),
+            // 账号
+            @"logout":            @(CommandActionLogout),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -196,6 +210,53 @@ static const CGFloat kAvatarRatioY = 0.82;
                 hasResult = YES;
                 break;
             }
+
+            // === 导航 ===
+            case CommandActionGoBack:
+                [self _performGoBack];
+                break;
+            case CommandActionGoHome:
+                [self _tapTab:@"home"];
+                break;
+            case CommandActionOpenTab: {
+                NSString *tab = params[@"tab"] ?: @"home";
+                [self _tapTab:tab];
+                break;
+            }
+            case CommandActionOpenSearch:
+                [self _performOpenSearch];
+                break;
+            case CommandActionSearchKeyword: {
+                NSString *keyword = params[@"keyword"] ?: @"";
+                [self _performSearchKeyword:keyword];
+                break;
+            }
+            case CommandActionOpenUser: {
+                NSString *uid = params[@"uid"] ?: params[@"unique_id"] ?: @"";
+                [self _performOpenUser:uid];
+                break;
+            }
+            case CommandActionOpenVideo: {
+                NSString *awemeId = params[@"aweme_id"] ?: @"";
+                [self _performOpenVideo:awemeId];
+                break;
+            }
+
+            // === 视频操作 ===
+            case CommandActionRefresh:
+                [self _performPullToRefresh];
+                break;
+            case CommandActionShare:
+                [self _performShare];
+                break;
+            case CommandActionSaveVideo:
+                [self _performSaveVideo];
+                break;
+
+            // === 账号 ===
+            case CommandActionLogout:
+                [self _performLogout];
+                break;
 
             default:
                 break;
@@ -905,6 +966,206 @@ static const CGFloat kAvatarRatioY = 0.82;
     }
 
     return result;
+}
+
+#pragma mark - 导航 (Phase 3)
+
+/// 返回上一页（左边缘右滑或点返回按钮）
+- (void)_performGoBack {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        // 找返回按钮
+        UIButton *backBtn = [self _findButtonWithAnyLabel:@[@"Back", @"back", @"返回", @"‹", @"chevron"]
+                                                   inView:XN_ActiveWindow()];
+        if (backBtn) {
+            [self _safeTapAtPoint:[backBtn.superview convertPoint:backBtn.center toView:nil]];
+            return;
+        }
+        // 回退：左边缘右滑手势
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        CGPoint from = CGPointMake(5, screen.height * 0.5);
+        CGPoint to = CGPointMake(screen.width * 0.6, screen.height * 0.5);
+        [self _simulateSwipeFrom:from to:to];
+    });
+}
+
+/// 点击底部 Tab（home/discover/inbox/profile）
+- (void)_tapTab:(NSString *)tab {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        CGFloat tabY = screen.height - 40;
+        CGFloat ratioX;
+        if ([tab isEqualToString:@"discover"]) ratioX = 0.35;
+        else if ([tab isEqualToString:@"inbox"]) ratioX = 0.62;
+        else if ([tab isEqualToString:@"profile"]) ratioX = 0.88;
+        else ratioX = 0.12;  // home 默认
+        [self _safeTapAtPoint:CGPointMake(screen.width * ratioX, tabY)];
+        self->_currentPage = tab;
+    });
+}
+
+/// 打开搜索（点右上角搜索图标，或 URL scheme）
+- (void)_performOpenSearch {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        // 首页右上角搜索图标
+        [self _safeTapAtPoint:CGPointMake(screen.width - 30, 65)];
+    });
+}
+
+/// 搜索关键词（打开搜索 → 输入 → 提交）
+- (void)_performSearchKeyword:(NSString *)keyword {
+    if (keyword.length == 0) return;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        [self _performOpenSearch];
+    });
+    [NSThread sleepForTimeInterval:1.5];
+
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        // 找输入框输入
+        UITextField *tf = [self _findTextFieldInView:XN_ActiveWindow()];
+        if (tf) {
+            [tf becomeFirstResponder];
+            tf.text = keyword;
+            // 触发搜索提交
+            [[NSNotificationCenter defaultCenter] postNotificationName:UITextFieldTextDidChangeNotification object:tf];
+            // 找搜索/确认按钮
+            UIButton *searchBtn = [self _findButtonWithAnyLabel:@[@"Search", @"search", @"搜索", @"确定", @"Go"]
+                                                         inView:XN_ActiveWindow()];
+            if (searchBtn) {
+                [self _safeTapAtPoint:[searchBtn.superview convertPoint:searchBtn.center toView:nil]];
+            } else {
+                // 回车提交
+                if ([tf canPerformAction:@selector(insertText:) withSender:nil]) {
+                    [tf.delegate textFieldShouldReturn:tf];
+                }
+            }
+        }
+    });
+}
+
+/// 通过 URL scheme 打开用户主页
+- (void)_performOpenUser:(NSString *)uid {
+    if (uid.length == 0) return;
+    NSString *scheme = [NSString stringWithFormat:@"snssdk1233://user/%@", uid];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSURL *url = [NSURL URLWithString:scheme];
+        [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+    });
+}
+
+/// 通过 URL scheme 打开视频详情
+- (void)_performOpenVideo:(NSString *)awemeId {
+    if (awemeId.length == 0) return;
+    NSString *scheme = [NSString stringWithFormat:@"snssdk1233://aweme/detail/%@", awemeId];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSURL *url = [NSURL URLWithString:scheme];
+        [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+    });
+}
+
+#pragma mark - 视频操作 (Phase 3)
+
+/// 下拉刷新
+- (void)_performPullToRefresh {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        CGPoint from = CGPointMake(screen.width * 0.5, screen.height * 0.3);
+        CGPoint to = CGPointMake(screen.width * 0.5, screen.height * 0.7);
+        [self _simulateSwipeFrom:from to:to];
+    });
+}
+
+/// 分享当前视频（点分享按钮）
+- (void)_performShare {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        // 分享按钮通常在右侧下部
+        [self _safeTapAtPoint:CGPointMake(screen.width * 0.91, screen.height * 0.55)];
+    });
+}
+
+/// 保存视频（点分享 → 保存）
+- (void)_performSaveVideo {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        [self _performShare];
+    });
+    [NSThread sleepForTimeInterval:1.5];
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *saveBtn = [self _findButtonWithAnyLabel:@[@"Save", @"save", @"保存", @"Download", @"下载"]
+                                                   inView:XN_ActiveWindow()];
+        if (saveBtn) {
+            [self _safeTapAtPoint:[saveBtn.superview convertPoint:saveBtn.center toView:nil]];
+        }
+    });
+}
+
+#pragma mark - 账号 (Phase 3)
+
+/// 退出登录（个人主页 → 设置 → 退出）
+- (void)_performLogout {
+    // 导航到个人主页
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        [self _navigateToProfile];
+    });
+    [NSThread sleepForTimeInterval:2.0];
+
+    // 点右上角设置
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        [self _tapTopRightCorner];
+    });
+    [NSThread sleepForTimeInterval:1.5];
+
+    // 找退出登录
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *logoutBtn = [self _findButtonWithAnyLabel:@[@"Log out", @"Log Out", @"退出登录", @"退出", @"Sign out"]
+                                                     inView:XN_ActiveWindow()];
+        if (logoutBtn) {
+            [self _safeTapAtPoint:[logoutBtn.superview convertPoint:logoutBtn.center toView:nil]];
+            [NSThread sleepForTimeInterval:1.0];
+            // 确认弹窗
+            UIButton *confirmBtn = [self _findButtonWithAnyLabel:@[@"Confirm", @"Log out", @"退出", @"确定"]
+                                                          inView:XN_ActiveWindow()];
+            if (confirmBtn) {
+                [self _safeTapAtPoint:[confirmBtn.superview convertPoint:confirmBtn.center toView:nil]];
+            }
+        }
+    });
+
+    // 清除本地账号缓存
+    [[AccountManager sharedManager] clearAccount];
+}
+
+#pragma mark - 辅助: 手势模拟 / 输入框查找
+
+/// 模拟滑动手势（通过 touchesBegan/Moved/Ended）
+- (void)_simulateSwipeFrom:(CGPoint)from to:(CGPoint)to {
+    UIWindow *window = XN_ActiveWindow();
+    if (!window) return;
+    UIView *target = [window hitTest:from withEvent:nil];
+    if (!target) return;
+    @try {
+        [target touchesBegan:[NSSet set] withEvent:nil];
+        [target touchesMoved:[NSSet set] withEvent:nil];
+        [target touchesEnded:[NSSet set] withEvent:nil];
+        // 发滚动通知
+        CGFloat deltaY = to.y - from.y;
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"XNOWER_ScrollRequest"
+                                                            object:nil
+                                                          userInfo:@{@"delta": @(deltaY)}];
+        NSLog(@"[XNOWER] 模拟滑动 %.0fpt", deltaY);
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] 滑动失败: %@", e.reason);
+    }
+}
+
+/// 查找输入框
+- (UITextField *)_findTextFieldInView:(UIView *)view {
+    if ([view isKindOfClass:[UITextField class]]) return (UITextField *)view;
+    for (UIView *sub in view.subviews) {
+        UITextField *tf = [self _findTextFieldInView:sub];
+        if (tf) return tf;
+    }
+    return nil;
 }
 
 @end

@@ -30,6 +30,23 @@ typedef NS_ENUM(NSInteger, CommandAction) {
     // 智能任务 (Phase 2)
     CommandActionSmartBrowse,
     CommandActionCheckHealth,
+
+    // 导航 (Phase 3)
+    CommandActionGoBack,
+    CommandActionGoHome,
+    CommandActionOpenTab,       // params: tab = home/discover/inbox/profile
+    CommandActionOpenSearch,
+    CommandActionSearchKeyword, // params: keyword
+    CommandActionOpenUser,      // params: uid / unique_id
+    CommandActionOpenVideo,     // params: aweme_id
+
+    // 视频操作 (Phase 3)
+    CommandActionRefresh,       // 下拉刷新
+    CommandActionShare,         // 分享当前视频
+    CommandActionSaveVideo,     // 保存视频
+
+    // 账号 (Phase 3)
+    CommandActionLogout,        // 退出登录
 };
 
 @interface CommandEngine : NSObject
