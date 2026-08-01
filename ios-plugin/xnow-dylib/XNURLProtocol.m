@@ -72,11 +72,24 @@ static volatile CFAbsoluteTime sLastPing = 0;
     }] resume];
 }
 
+/// 读取设备共享密钥（NSUserDefaults，由 XNOWER 初始化）
++ (NSString *)_deviceSecret {
+    return [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_DeviceSecret"] ?: @"";
+}
+
 /// 通用请求（纯完成回调，无 semaphore）
 + (void)_sendRequest:(NSString *)method path:(NSString *)path body:(NSData *)body
           completion:(void (^)(NSData *data, NSError *error))completion {
+    // 附加设备密钥鉴权
+    NSString *secret = [self _deviceSecret];
+    NSString *authPath = path;
+    if (secret.length > 0) {
+        authPath = [path containsString:@"?"] ?
+            [NSString stringWithFormat:@"%@&secret=%@", path, secret] :
+            [NSString stringWithFormat:@"%@?secret=%@", path, secret];
+    }
     NSString *urlStr = [NSString stringWithFormat:@"http://%@:%d%@",
-                         XN_BACKEND_HOST, XN_BACKEND_PORT, path];
+                         XN_BACKEND_HOST, XN_BACKEND_PORT, authPath];
     NSURL *url = [NSURL URLWithString:urlStr];
     if (!url) { if (completion) completion(nil, [NSError errorWithDomain:@"XN" code:9 userInfo:nil]); return; }
 

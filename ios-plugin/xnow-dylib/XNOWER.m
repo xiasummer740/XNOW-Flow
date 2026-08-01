@@ -42,6 +42,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
 @property (nonatomic, strong) dispatch_queue_t workerQueue;
 @property (nonatomic, assign) BOOL floatingPanelVisible;
 @property (nonatomic, strong) dispatch_source_t piggybackTimer;
+@property (nonatomic, copy) NSString *deviceSecret;
 @end
 
 @implementation XNOWER
@@ -86,6 +87,14 @@ __attribute__((destructor)) static void XNOWERUnload() {
                 [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
             }
         }
+
+        // 生成/恢复设备共享密钥（设备端点鉴权用）
+        NSString *savedSecret = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_DeviceSecret"];
+        if (savedSecret.length == 0) {
+            savedSecret = [NSUUID UUID].UUIDString;
+            [[NSUserDefaults standardUserDefaults] setObject:savedSecret forKey:@"XN_DeviceSecret"];
+        }
+        _deviceSecret = savedSecret;
 
         // 开发者模式（发布时注释掉此行）
         [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"XN_DevMode"];
