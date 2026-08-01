@@ -148,18 +148,25 @@ static volatile CFAbsoluteTime sLastPing = 0;
 }
 
 /// 解析响应中的指令并派发
+/// 兼容两种格式:
+///   - POST 响应: {"status":"ok", "command": {...}}   → 取 d[@"command"]
+///   - poll 响应: {"type":"command","action":"..."}     → 响应本身就是指令
 + (void)_handleResponseData:(NSData *)data {
     if (!data) return;
     NSDictionary *d = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
     if (![d isKindOfClass:[NSDictionary class]]) return;
-    if (d[@"command"]) {
-        NSDictionary *cmd = d[@"command"];
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [[NSNotificationCenter defaultCenter] postNotificationName:@"XNPiggybackCommand"
-                                                                object:nil
-                                                              userInfo:@{@"command": cmd}];
-        });
+
+    NSDictionary *cmd = d[@"command"];
+    if (![cmd isKindOfClass:[NSDictionary class]] && (d[@"type"] || d[@"action"])) {
+        cmd = d;  // poll 响应直接就是指令本体
     }
+    if (![cmd isKindOfClass:[NSDictionary class]]) return;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"XNPiggybackCommand"
+                                                            object:nil
+                                                          userInfo:@{@"command": cmd}];
+    });
 }
 
 #pragma mark - NSURLProtocol 拦截判定
