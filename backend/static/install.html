@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XNOW 安装与激活</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif; background:linear-gradient(135deg,#0f1115 0%,#1a1d27 100%); color:#e8eaed; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+.card { background:#1c1f26; border-radius:20px; padding:30px; max-width:420px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+h1 { font-size:22px; margin-bottom:6px; }
+.sub { color:#8a90a0; font-size:13px; margin-bottom:24px; }
+label { display:block; margin:16px 0 6px; color:#9aa0a6; font-size:13px; }
+input,select { width:100%; padding:12px; background:#2a2e37; border:1px solid #3c4048; border-radius:10px; color:#e8eaed; font-size:14px; }
+button { width:100%; padding:14px; border:none; border-radius:10px; font-size:15px; font-weight:600; cursor:pointer; margin-top:20px; }
+.btn-blue { background:#1a73e8; color:#fff; } .btn-blue:hover { background:#1765cc; }
+.btn-green { background:#188038; color:#fff; }
+.hidden { display:none; }
+.status { margin-top:16px; padding:12px; border-radius:10px; font-size:13px; }
+.ok { background:rgba(24,128,56,.15); color:#4caf50; }
+.err { background:rgba(217,48,37,.15); color:#f44336; }
+.info { background:rgba(26,115,232,.12); color:#8ab4f8; }
+#qr { margin-top:16px; text-align:center; }
+#qr img { width:200px; height:200px; border-radius:10px; background:#fff; padding:10px; }
+.download-btn { background:#188038; color:#fff; text-decoration:none; text-align:center; display:block; padding:14px; border-radius:10px; font-size:15px; font-weight:600; margin-top:16px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📱 XNOW 安装助手</h1>
+  <div class="sub">提交 UDID → 管理员签名 → 扫码安装 → 输入卡密激活</div>
+
+  <!-- 步骤1: 提交 UDID -->
+  <div id="step1">
+    <label>您的手机 UDID</label>
+    <input type="text" id="udidInput" placeholder="40位 UDID（或点下面获取）">
+    <label>设备型号（可选）</label>
+    <input type="text" id="deviceNameInput" placeholder="如 iPhone 13 Pro">
+    <label>联系方式（可选）</label>
+    <input type="text" id="emailInput" placeholder="微信/邮箱">
+    <button class="btn-blue" onclick="submitUdid()">提交 UDID 申请</button>
+    <div class="status info" style="margin-top:16px;">💡 获取 UDID：用 Safari 打开 <b>udid.in</b> 或安装描述文件查看</div>
+  </div>
+
+  <!-- 步骤2: 查询状态 -->
+  <div id="step2" class="hidden">
+    <label>输入 UDID 查询签名状态</label>
+    <input type="text" id="udidCheckInput" placeholder="40位 UDID">
+    <button class="btn-blue" onclick="checkStatus()">查询状态</button>
+    <div id="statusArea"></div>
+  </div>
+
+  <button class="btn-blue" style="background:#2a2e37;" onclick="toggleSteps()">已有申请？查询状态</button>
+</div>
+
+<script>
+const API = '';
+
+function toggleSteps() {
+  document.getElementById('step1').classList.toggle('hidden');
+  document.getElementById('step2').classList.toggle('hidden');
+}
+
+async function submitUdid() {
+  const udid = document.getElementById('udidInput').value.trim();
+  if (!udid) { alert('请输入 UDID'); return; }
+  const r = await fetch(API + '/api/biz/v2/udid/requests/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      udid,
+      device_name: document.getElementById('deviceNameInput').value.trim(),
+      email: document.getElementById('emailInput').value.trim(),
+    })
+  });
+  const d = await r.json();
+  alert(d.id ? '✅ 申请已提交，请等待管理员签名' : '提交失败: ' + JSON.stringify(d));
+}
+
+async function checkStatus() {
+  const udid = document.getElementById('udidCheckInput').value.trim();
+  if (!udid) { alert('请输入 UDID'); return; }
+  const area = document.getElementById('statusArea');
+  try {
+    const d = await (await fetch(API + '/api/biz/v2/udid/requests/check/?udid=' + encodeURIComponent(udid))).json();
+    if (d.status === 'not_found') {
+      area.innerHTML = '<div class="status err">未找到申请，请先提交 UDID</div>';
+    } else if (d.status === 'pending') {
+      area.innerHTML = '<div class="status info">⏳ 申请已提交，等待管理员签名...</div>';
+    } else if (d.status === 'signed' && d.ipa_url) {
+      area.innerHTML = '<div class="status ok">✅ 已签名！点击下方下载安装</div>' +
+        '<a class="download-btn" href="' + d.ipa_url + '" download>📲 下载安装 TikTok_XNOW.ipa</a>' +
+        '<div id="qr"></div>';
+      // 生成下载 QR 码
+      const absUrl = new URL(d.ipa_url, location.href).href;
+      document.getElementById('qr').innerHTML = '<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(absUrl) + '" alt="QR">';
+      area.innerHTML += '<div style="font-size:12px;color:#8a90a0;margin-top:8px;">扫码下载</div>';
+    } else if (d.status === 'rejected') {
+      area.innerHTML = '<div class="status err">❌ 申请被拒绝，请联系管理员</div>';
+    }
+  } catch(e) { area.innerHTML = '<div class="status err">查询失败: ' + e.message + '</div>'; }
+}
+</script>
+</body>
+</html>
