@@ -649,30 +649,30 @@ static NSArray *kCountries;
         [self addLog:[NSString stringWithFormat:@"已复制设备码: %@", _panelDeviceId?:@""]];
         return;
     }
-    // 映射到 CommandEngine 动作
+    // 映射到 CommandEngine 动作（正确回调）
     if ([action isEqualToString:@"clear_data"]) {
         [self addLog:@"清理数据中..."];
-        [self.delegate floatingPanelDidTapScrollDown:self];
+        [self.delegate floatingPanelDidTapClearData:self];
         return;
     }
     if ([action isEqualToString:@"disconnect"]) {
         [self addLog:@"断开服务器连接"];
-        [self.delegate floatingPanelDidTapScrollDown:self];
+        [self.delegate floatingPanelDidTapDisconnect:self];
         return;
     }
     if ([action isEqualToString:@"collect_likes"]) {
         [self addLog:@"开始采集点赞..."];
-        [self.delegate floatingPanelDidTapCollectFans:self];
+        [self.delegate floatingPanelDidTapCollectLikes:self];
         return;
     }
     if ([action isEqualToString:@"nurture"]) {
         [self addLog:@"启动养号任务..."];
-        [self.delegate floatingPanelDidTapSmartBrowse:self];
+        [self.delegate floatingPanelDidTapNurture:self];
         return;
     }
     if ([action isEqualToString:@"dl_video"]) {
         [self addLog:@"下载无水印视频..."];
-        [self.delegate floatingPanelDidTapSmartBrowse:self];
+        [self.delegate floatingPanelDidTapDownloadVideo:self];
         return;
     }
     if ([action isEqualToString:@"toggle_log"]) {

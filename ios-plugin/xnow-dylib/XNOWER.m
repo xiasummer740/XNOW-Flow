@@ -42,6 +42,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
 @property (nonatomic, strong) dispatch_queue_t workerQueue;
 @property (nonatomic, assign) BOOL floatingPanelVisible;
 @property (nonatomic, strong) dispatch_source_t piggybackTimer;
+@property (nonatomic, strong) dispatch_source_t heartbeatTimer;
 @property (nonatomic, copy) NSString *deviceSecret;
 @end
 
@@ -136,6 +137,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
 
 - (void)stop {
     [self stopPiggybackPolling];
+    [self stopHeartbeat];
     dispatch_async(_workerQueue, ^{
         [self.wsClient disconnect];
         [self.deviceStatus stopMonitoring];
@@ -438,8 +440,10 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)startHeartbeat {
+    // 先取消旧的心跳（防泄漏：每次重连不叠加多个timer）
+    [self stopHeartbeat];
+
     dispatch_async(self.workerQueue, ^{
-        // 每 30 秒发一次心跳
         dispatch_source_t timer = dispatch_source_create(
             DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
             dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_BACKGROUND, 0));
@@ -447,25 +451,28 @@ __attribute__((destructor)) static void XNOWERUnload() {
             dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC),
             30 * NSEC_PER_SEC, 5 * NSEC_PER_SEC);
 
+        __weak typeof(self) ws = self;
         dispatch_source_set_event_handler(timer, ^{
-            if (self.isConnected) {
-                [self.wsClient sendMessage:@{@"type": @"ping"}];
-                // 顺便上报状态（含账号信息）
-                NSMutableDictionary *status = [[self.deviceStatus collectStatus] mutableCopy];
-                if ([AccountManager sharedManager].currentAccount) {
-                    status[@"current_account"] = [AccountManager sharedManager].currentAccount;
-                }
-                [self.wsClient sendMessage:@{
-                    @"type": @"status",
-                    @"data": status
-                }];
+            typeof(self) s = ws;
+            if (!s || !s.isConnected) return;
+            // 走 piggyback 通道上报心跳 + 状态
+            [XNURLProtocol sendMessage:@{@"type": @"ping"} deviceId:s.deviceId];
+            NSMutableDictionary *status = [[s.deviceStatus collectStatus] mutableCopy];
+            if ([AccountManager sharedManager].currentAccount) {
+                status[@"current_account"] = [AccountManager sharedManager].currentAccount;
             }
+            [XNURLProtocol sendMessage:@{@"type": @"status", @"data": status} deviceId:s.deviceId];
         });
         dispatch_resume(timer);
-        // 保存 timer 防止释放
-        objc_setAssociatedObject(self, @selector(startHeartbeat), timer,
-                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        self.heartbeatTimer = timer;
     });
+}
+
+- (void)stopHeartbeat {
+    if (_heartbeatTimer) {
+        dispatch_source_cancel(_heartbeatTimer);
+        _heartbeatTimer = nil;
+    }
 }
 
 // ======== 浮动控制面板 ========
@@ -715,6 +722,37 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
     [self addLog:@"🌐 智能浏览"];
     [self _sendCommandToBackend:@"smart_browse" params:@{@"min_scrolls": @5, @"max_scrolls": @12}];
+}
+
+// H4: 独立回调（之前错误映射到下滑/智能浏览）
+- (void)floatingPanelDidTapClearData:(XNFloatingPanel *)panel {
+    [self addLog:@"🗑️ 清理本地缓存数据…"];
+    [[AccountPool sharedPool] clearAll];
+    [[AccountManager sharedManager] clearAccount];
+    [self addLog:@"✅ 数据已清理"];
+}
+
+- (void)floatingPanelDidTapDisconnect:(XNFloatingPanel *)panel {
+    [self addLog:@"🔌 断开服务器连接"];
+    [self stopPiggybackPolling];
+    [self stopHeartbeat];
+    _isConnected = NO;
+    [self.floatingPanel setConnected:NO];
+}
+
+- (void)floatingPanelDidTapCollectLikes:(XNFloatingPanel *)panel {
+    [self addLog:@"❤️ 采集点赞"];
+    [self _sendCommandToBackend:@"collect_likes" params:@{@"count": @20}];
+}
+
+- (void)floatingPanelDidTapNurture:(XNFloatingPanel *)panel {
+    [self addLog:@"🌱 养号"];
+    [self _sendCommandToBackend:@"nurture_tick" params:@{@"min_scrolls": @5, @"max_scrolls": @12}];
+}
+
+- (void)floatingPanelDidTapDownloadVideo:(XNFloatingPanel *)panel {
+    [self addLog:@"💾 下载无水印视频（需在视频页）"];
+    [self _sendCommandToBackend:@"save_video" params:nil];
 }
 
 #pragma mark - 自动任务开关

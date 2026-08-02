@@ -17,6 +17,11 @@
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapConnectServer:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel;
+- (void)floatingPanelDidTapClearData:(XNFloatingPanel *)panel;
+- (void)floatingPanelDidTapDisconnect:(XNFloatingPanel *)panel;
+- (void)floatingPanelDidTapCollectLikes:(XNFloatingPanel *)panel;
+- (void)floatingPanelDidTapNurture:(XNFloatingPanel *)panel;
+- (void)floatingPanelDidTapDownloadVideo:(XNFloatingPanel *)panel;
 // 自动任务开关
 - (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoLike:(BOOL)on;
 - (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoFollow:(BOOL)on;
