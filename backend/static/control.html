@@ -202,6 +202,12 @@ button:disabled { opacity:.4; cursor:not-allowed; }
 </div>
 
 <div class="card">
+  <h2>🆔 UDID 签名管理</h2>
+  <button onclick="loadUdidRequests()">刷新 UDID 申请</button>
+  <div id="udidList" style="margin-top:10px;font-size:12px;"></div>
+</div>
+
+<div class="card">
   <h2>⚙️ 参数指令（自定义 JSON）</h2>
   <label>Action</label>
   <input type="text" id="customAction" placeholder="如 switch_account">
@@ -543,8 +549,44 @@ document.getElementById('deviceSelect').addEventListener('change', () => {
   updateStatus();
 });
 
+// ========== UDID 签名管理 ==========
+async function loadUdidRequests() {
+  try {
+    const d = await api('/api/biz/v2/udid/admin/?limit=50');
+    const el = document.getElementById('udidList');
+    if (!d.results || !d.results.length) { el.textContent = '暂无申请'; return; }
+    el.innerHTML = '';
+    d.results.forEach(r => {
+      const row = document.createElement('div');
+      row.style.cssText = 'margin-bottom:8px;padding:8px;background:#2a2e37;border-radius:6px;';
+      const info = document.createElement('div');
+      info.textContent = `${r.device_name||'设备'} | ${r.udid} | ${r.status} | ${r.created_at||''}`;
+      row.appendChild(info);
+      if (r.status === 'pending') {
+        const input = document.createElement('input');
+        input.placeholder = '签名后 IPA 下载链接';
+        input.style.cssText = 'width:100%;margin-top:6px;padding:6px;';
+        row.appendChild(input);
+        const btn = document.createElement('button');
+        btn.textContent = '✅ 标记已签名';
+        btn.onclick = async () => {
+          await api('/api/biz/v2/udid/admin/' + r.id + '/sign/', {method:'POST', body: JSON.stringify({ipa_url: input.value})});
+          loadUdidRequests();
+        };
+        row.appendChild(btn);
+      } else if (r.status === 'signed' && r.ipa_url) {
+        const a = document.createElement('div');
+        a.textContent = '📲 ' + r.ipa_url;
+        a.style.cssText = 'color:#8ab4f8;font-size:11px;margin-top:4px;word-break:break-all;';
+        row.appendChild(a);
+      }
+      el.appendChild(row);
+    });
+  } catch(e) { log('UDID加载失败: ' + e.message); }
+}
+
 ensureLogin().then(ok => {
-  if (ok) loadDevices();
+  if (ok) { loadDevices(); loadUdidRequests(); }
   else log('❌ 登录失败，请检查 admin 密码');
 });
 </script>
