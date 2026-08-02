@@ -91,6 +91,8 @@ static const CGFloat kAvatarRatioY = 0.82;
             @"logout":            @(CommandActionLogout),
             // 修改资料
             @"edit_profile":      @(CommandActionEditProfile),
+            // 自动发视频
+            @"post_video":        @(CommandActionPostVideo),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -280,6 +282,13 @@ static const CGFloat kAvatarRatioY = 0.82;
             case CommandActionEditProfile:
                 [self _performEditProfile:params];
                 break;
+
+            // === 自动发视频 ===
+            case CommandActionPostVideo: {
+                result = [self _performPostVideo:params];
+                hasResult = YES;
+                break;
+            }
 
             default:
                 break;
@@ -1358,6 +1367,139 @@ static const CGFloat kAvatarRatioY = 0.82;
         if (tf) return tf;
     }
     return nil;
+}
+
+#pragma mark - 自动发视频 (Phase 5)
+
+/// 自动发视频：点 "+" → 上传 → 选第一个媒体 → 下一步 → 填文案 → 发布
+/// params: {title, video_url}
+/// 说明：UI 自动化无法按 URL 精确定位相册素材，video_url 为 best-effort，
+///       实际选取相册中第一张媒体（后续有精确素材注入方案时再升级）。
+- (NSDictionary *)_performPostVideo:(NSDictionary *)params {
+    NSString *title = params[@"title"] ?: @"";
+    NSString *videoUrl = params[@"video_url"] ?: @"";
+
+    // Step 1: 点底部 "+" 发视频按钮
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *postBtn = [self _findButtonWithAnyLabel:@[@"post", @"Post", @"create", @"Create",
+                                                             @"发布", @"上传", @"+"]
+                                                    inView:XN_ActiveWindow()];
+        if (postBtn) {
+            [self _safeTapAtPoint:[postBtn.superview convertPoint:postBtn.center toView:nil]];
+        } else {
+            // 坐标回退：底部中间 "+"
+            CGSize screen = [UIScreen mainScreen].bounds.size;
+            [self _safeTapAtPoint:CGPointMake(screen.width * 0.5, screen.height - 50)];
+        }
+    });
+    [NSThread sleepForTimeInterval:2.0];
+
+    // Step 2: 点 "上传"（从相册/本地上传）
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *uploadBtn = [self _findButtonWithAnyLabel:@[@"Upload", @"upload", @"上传", @"相册",
+                                                               @"Album", @"Gallery", @"照片"]
+                                                      inView:XN_ActiveWindow()];
+        if (uploadBtn) {
+            [self _safeTapAtPoint:[uploadBtn.superview convertPoint:uploadBtn.center toView:nil]];
+        } else {
+            // 坐标回退：上传入口通常在顶部区域
+            CGSize screen = [UIScreen mainScreen].bounds.size;
+            [self _safeTapAtPoint:CGPointMake(screen.width * 0.5, screen.height * 0.18)];
+        }
+    });
+    [NSThread sleepForTimeInterval:2.5];
+
+    // Step 3: 相册选择第一个媒体（best-effort，无素材库精确注入时选第一张）
+    [self _tapFirstMediaCell];
+    [NSThread sleepForTimeInterval:1.5];
+
+    // Step 4: 点 "下一步"（Next）
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *nextBtn = [self _findButtonWithAnyLabel:@[@"Next", @"next", @"下一步", @"完成", @"Done"]
+                                                    inView:XN_ActiveWindow()];
+        if (nextBtn) {
+            [self _safeTapAtPoint:[nextBtn.superview convertPoint:nextBtn.center toView:nil]];
+        } else {
+            // 坐标回退：右上角
+            CGSize screen = [UIScreen mainScreen].bounds.size;
+            [self _safeTapAtPoint:CGPointMake(screen.width - 40, 60)];
+        }
+    });
+    [NSThread sleepForTimeInterval:2.0];
+
+    // Step 5: 填文案/标题
+    if (title.length > 0) {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            UITextView *textView = [self _findTextViewInView:XN_ActiveWindow()];
+            UITextField *textField = [self _findTextFieldInView:XN_ActiveWindow()];
+            if (textView) {
+                textView.text = title;
+                [[NSNotificationCenter defaultCenter]
+                 postNotificationName:UITextViewTextDidChangeNotification object:textView];
+            } else if (textField) {
+                textField.text = title;
+                [[NSNotificationCenter defaultCenter]
+                 postNotificationName:UITextFieldTextDidChangeNotification object:textField];
+            }
+        });
+        [NSThread sleepForTimeInterval:0.5];
+    }
+
+    // Step 6: 点 "发布"（Publish）
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *publishBtn = [self _findButtonWithAnyLabel:@[@"Publish", @"publish", @"发布", @"Post", @"Share"]
+                                                       inView:XN_ActiveWindow()];
+        if (publishBtn) {
+            [self _safeTapAtPoint:[publishBtn.superview convertPoint:publishBtn.center toView:nil]];
+        } else {
+            // 坐标回退：右下角/底部
+            CGSize screen = [UIScreen mainScreen].bounds.size;
+            [self _safeTapAtPoint:CGPointMake(screen.width * 0.5, screen.height - 50)];
+        }
+    });
+    [NSThread sleepForTimeInterval:1.0];
+
+    return @{
+        @"status": @"success",
+        @"message": @"已触发发视频流程（best-effort UI 自动化）",
+        @"title": title.length ? title : @"",
+        @"video_url": videoUrl,
+        @"note": @"UI自动化无法精确定位指定 URL 素材，实际选择了相册第一张媒体",
+    };
+}
+
+/// 点击相册选择器中的第一个媒体 cell
+- (void)_tapFirstMediaCell {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        if (!window) return;
+        __block UIView *firstCell = nil;
+        [self _findFirstMediaCellInView:window result:&firstCell];
+        if (firstCell) {
+            [self _safeTapAtPoint:[firstCell.superview convertPoint:firstCell.center toView:nil]];
+        } else {
+            // 坐标回退：左上角第一个格
+            CGSize screen = [UIScreen mainScreen].bounds.size;
+            [self _safeTapAtPoint:CGPointMake(screen.width * 0.1, screen.height * 0.2)];
+        }
+    });
+}
+
+/// 递归查找第一个可见的相册媒体 cell（UICollectionViewCell）
+- (void)_findFirstMediaCellInView:(UIView *)view result:(UIView **)result {
+    if (*result) return;
+    if ([view isKindOfClass:[UICollectionViewCell class]]) {
+        UIView *target = view;
+        CGRect globalRect = [target.superview convertRect:target.frame toView:nil];
+        if (CGRectIntersectsRect(globalRect, [UIScreen mainScreen].bounds)) {
+            *result = view;
+        }
+        return;
+    }
+    for (UIView *sub in view.subviews) {
+        [self _findFirstMediaCellInView:sub result:result];
+        if (*result) return;
+    }
 }
 
 #pragma mark - 辅助: 手势模拟

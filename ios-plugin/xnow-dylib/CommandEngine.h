@@ -52,6 +52,9 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 
     // 修改资料 (Phase 4)
     CommandActionEditProfile,   // params: nickname/signature/link
+
+    // 自动发视频 (Phase 5)
+    CommandActionPostVideo,     // params: title/video_url（best-effort UI 自动化）
 };
 
 @interface CommandEngine : NSObject

@@ -3,6 +3,7 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Optional
 import logging
 
@@ -189,3 +190,71 @@ def delete_material(
     db.delete(mat)
     db.commit()
     return {"message": "删除成功"}
+
+
+# ============ 随机取素材（自动发视频用） ============
+
+@router.get("/materials/random/")
+def random_material(
+    category: Optional[str] = Query("title"),
+    group_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """随机取一条激活素材（用于自动发视频选标题/文案）"""
+    _ensure_category(category)
+    query = db.query(Material).filter(
+        Material.status == "active", Material.category == category
+    )
+    scope = tenant_scope(Material, current_user)
+    if scope is not None:
+        query = query.filter(scope)
+    if group_id:
+        query = query.filter(Material.group_id == group_id)
+    mat = query.order_by(func.random()).first()
+    if not mat:
+        raise HTTPException(status_code=404, detail=f"类别 {category} 暂无可用素材")
+    mat.used_count = (mat.used_count or 0) + 1
+    db.commit()
+    return {"id": mat.id, "category": mat.category, "content": mat.content, "group_id": mat.group_id}
+
+
+@router.post("/materials/random-batch/")
+def random_materials_batch(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """批量随机取素材（用于自动发视频队列）
+    body: {category, count, group_id?}
+    """
+    category = body.get("category", "title")
+    _ensure_category(category)
+    try:
+        count = int(body.get("count") or 1)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="count 需为整数")
+    if count < 1:
+        count = 1
+    if count > 100:
+        count = 100
+
+    query = db.query(Material).filter(
+        Material.status == "active", Material.category == category
+    )
+    scope = tenant_scope(Material, current_user)
+    if scope is not None:
+        query = query.filter(scope)
+    if body.get("group_id"):
+        try:
+            query = query.filter(Material.group_id == int(body["group_id"]))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="group_id 需为整数")
+
+    mats = query.order_by(func.random()).limit(count).all()
+    results = []
+    for m in mats:
+        m.used_count = (m.used_count or 0) + 1
+        results.append({"id": m.id, "category": m.category, "content": m.content, "group_id": m.group_id})
+    db.commit()
+    return {"count": len(results), "results": results}
