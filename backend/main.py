@@ -35,10 +35,11 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="XNOW Cloud Control API", version="1.3.0")
 
+# M7: CORS 收紧 — 认证用 Bearer header(非cookie)，不需 credentials
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -103,8 +104,12 @@ async def serve_spa(full_path: str):
         return JSONResponse(status_code=404, content={"detail": "Not found"})
 
     file_path = os.path.abspath(os.path.join(static_dir, full_path))
-    # 确保解析后的路径仍在 static 目录内
-    if not file_path.startswith(os.path.abspath(static_dir)):
+    # M10: 确保解析后的路径仍在 static 目录内（commonpath 路径分量校验）
+    try:
+        if os.path.commonpath([file_path, os.path.abspath(static_dir)]) != os.path.abspath(static_dir):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=404, content={"detail": "Not found"})
+    except ValueError:
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=404, content={"detail": "Not found"})
 

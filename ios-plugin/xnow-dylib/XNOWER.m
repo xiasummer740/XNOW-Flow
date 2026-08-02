@@ -621,7 +621,12 @@ __attribute__((destructor)) static void XNOWERUnload() {
 /// 通过 HTTP API 向后端发送指令（VPS 直连，Cloudflare 被封）
 - (void)_sendCommandToBackend:(NSString *)action params:(NSDictionary *)params {
     NSString *baseURL = @"http://192.129.210.52:8000";
-    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@/api/biz/v2/commands/report/", baseURL]];
+    // M5: 上报带设备密钥鉴权
+    NSString *sec = self.deviceSecret ?: @"";
+    NSString *reportPath = sec.length > 0 ?
+        [NSString stringWithFormat:@"%@/api/biz/v2/commands/report/?secret=%@", baseURL, sec] :
+        [NSString stringWithFormat:@"%@/api/biz/v2/commands/report/", baseURL];
+    NSURL *url = [NSURL URLWithString:reportPath];
     if (!url) { NSLog(@"[XNOWER] 无效URL: %@", baseURL); return; }
 
     NSDictionary *payload = @{

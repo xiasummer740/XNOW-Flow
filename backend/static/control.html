@@ -245,7 +245,15 @@ async function api(path, opts={}) {
   const headers = {'Content-Type':'application/json'};
   if (token) headers['Authorization'] = 'Bearer ' + token;
   const resp = await fetch(API + path, {...opts, headers});
-  if (resp.status === 401) { log('⚠️ 登录失效，请刷新本页重新登录'); throw new Error('unauthorized'); }
+  if (resp.status === 401) {
+    // M15: 清 token + 停止轮询 + 重新登录
+    localStorage.removeItem('xn_token');
+    token = '';
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    log('⚠️ 登录已失效，请重新登录');
+    await ensureLogin().then(ok => { if (ok) location.reload(); });
+    throw new Error('unauthorized');
+  }
   return resp.json();
 }
 
@@ -363,7 +371,7 @@ async function dispatchLatestVideoPost() {
   const devCode = selectedDeviceCode();
   if (!devCode) { log('⚠️ 请先选择设备'); return; }
   try {
-    const d = await api('/api/biz/v2/video-posts/?device_id=' + encodeURIComponent(devCode) + '&limit=5');
+    const d = await api('/api/biz/v2/video-posts/?device_id=' + encodeURIComponent(devCode) + '&status=pending&limit=5');
     const rows = d.results || [];
     if (!rows.length) { log('📋 该设备暂无视频发布任务，请先「创建视频发布任务」'); return; }
     const post = rows[0];
@@ -393,7 +401,7 @@ async function dispatchLatestDm() {
   const devCode = selectedDeviceCode();
   if (!devCode) { log('⚠️ 请先选择设备'); return; }
   try {
-    const d = await api('/api/biz/v2/dm-tasks/?device_id=' + encodeURIComponent(devCode) + '&limit=5');
+    const d = await api('/api/biz/v2/dm-tasks/?device_id=' + encodeURIComponent(devCode) + '&status=pending&limit=5');
     const rows = d.results || [];
     if (!rows.length) { log('📋 该设备暂无待发私信任务，请先「创建私信任务」'); return; }
     const task = rows[0];
@@ -439,10 +447,15 @@ async function createNurturePlan() {
 }
 
 async function _latestNurturePlanId() {
-  if (lastNurturePlanId) return lastNurturePlanId;
+  const devCode = selectedDeviceCode();
   try {
-    const d = await api('/api/biz/v2/nurture-plans/?limit=1');
-    if (d.results && d.results.length) { lastNurturePlanId = d.results[0].id; return lastNurturePlanId; }
+    // M13: 查选中设备的养号计划（不取全局最新）
+    const url = devCode
+      ? '/api/biz/v2/nurture-plans/?limit=50'
+      : '/api/biz/v2/nurture-plans/?limit=1';
+    const d = await api(url);
+    const rows = (d.results || []).filter(p => !devCode || (p.device_ids || []).includes(devCode));
+    if (rows.length) { lastNurturePlanId = rows[0].id; return lastNurturePlanId; }
   } catch(e) {}
   return null;
 }

@@ -77,11 +77,16 @@ async def send_device_command(
 
 
 @router.post("/commands/report/")
-async def report_command(data: Dict[str, Any]):
+async def report_command(data: Dict[str, Any], secret: str = ""):
     """手机端浮窗上报指令（替代 WebSocket，兼容 HTTP）"""
+    from routers.ws import _verify_device_auth
     action = data.get("action", "unknown")
     device_id = data.get("device_id", "unknown")
     params = data.get("params", {})
+    # M5: 设备密钥鉴权（防止伪造上报）
+    if not _verify_device_auth(device_id, secret):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="unauthorized")
     logger.info(f"📱 Phone command [{action}] from {device_id}: {params}")
     # 记录到 task 表
     db = SessionLocal()

@@ -127,6 +127,23 @@ def dispatch_tick_for_active_plans():
                 db.close()
             if not plan or plan.status != "active":
                 continue
+            # M8: 超过 end_date 的计划标记完成并跳过
+            if plan.end_date:
+                from datetime import timezone
+                end = plan.end_date
+                if end.tzinfo is None:
+                    end = end.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) > end:
+                    plan.status = "completed"
+                    db = SessionLocal()
+                    try:
+                        p = db.query(NurturePlan).filter(NurturePlan.id == plan.id).first()
+                        if p:
+                            p.status = "completed"
+                            db.commit()
+                    finally:
+                        db.close()
+                    continue
             loop = asyncio.new_event_loop()
             try:
                 stats = loop.run_until_complete(_dispatch_to_plan(plan, "nurture_tick"))

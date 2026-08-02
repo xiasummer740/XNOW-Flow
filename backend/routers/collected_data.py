@@ -86,10 +86,14 @@ def batch_insert_collected_data(
     api_id = current_user.api_id or ""
     inserted = 0
     skipped = 0
+    seen = set()  # M1: 同请求内去重（DB未flush看不到本批已插）
     for item in req.items:
         if not item.author and not item.aweme_id:
             continue
         dedupe_key = item.dedupe_key or _build_dedupe_key(item.model_dump())
+        if dedupe_key in seen:
+            skipped += 1
+            continue
         exists = db.query(CollectedData).filter(
             CollectedData.dedupe_key == dedupe_key,
             CollectedData.api_id == api_id,
@@ -97,6 +101,7 @@ def batch_insert_collected_data(
         if exists:
             skipped += 1
             continue
+        seen.add(dedupe_key)
         db.add(CollectedData(
             source=item.source or "device",
             source_type=item.source_type or "fans",

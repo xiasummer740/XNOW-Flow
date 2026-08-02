@@ -793,6 +793,12 @@ static NSArray *kCountries;
 }
 
 - (void)_handlePan:(UIPanGestureRecognizer *)pan {
+    // M16: 展开时不拖拽（避免抢菜单滚动）
+    if (_isExpanded) {
+        pan.enabled = NO;
+        pan.enabled = YES;
+        return;
+    }
     CGPoint t = [pan translationInView:self.superview];
     switch (pan.state) {
         case UIGestureRecognizerStateBegan: _isDragging = YES; _dragStart = self.center; break;
