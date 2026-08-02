@@ -73,10 +73,15 @@ __attribute__((destructor)) static void XNOWERUnload() {
         _serverURL = savedURL ?: kXnowDefaultServerURL;
 
         // 生成或恢复设备 ID（优先使用绑定时设置的）
-        NSString *bindId = [[NSUserDefaults standardUserDefaults]
+        // 注意：XN_BindDeviceID 存的是"手机序号"(code，如 "1")，不是完整设备ID，
+        // 必须拼上机器码短码，否则 device_id 会退化成纯 "1" 导致激活错绑。
+        NSString *bindCode = [[NSUserDefaults standardUserDefaults]
                              stringForKey:@"XN_BindDeviceID"];
-        if (bindId.length > 0) {
-            _deviceId = bindId;
+        if (bindCode.length > 0) {
+            NSString *vendorID = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
+            NSString *shortID = vendorID.length >= 8 ? [vendorID substringToIndex:8] :
+                                 [NSUUID UUID].UUIDString;
+            _deviceId = [NSString stringWithFormat:@"iphone_%@_%@", bindCode, shortID];
         } else {
             NSString *savedId = [[NSUserDefaults standardUserDefaults]
                                   stringForKey:kXnowDeviceIdKey];
