@@ -1,6 +1,7 @@
 # TODO(tenant-isolation): ReplyTemplate 模型缺少 api_id 列，当前无租户隔离，任何已登录用户可查看/修改他人模板。需加列 + 过滤。
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from database import get_db
 from models.reply_template import ReplyTemplate
@@ -27,6 +28,23 @@ def list_templates(
         .all()
     )
     return [ReplyTemplateResponse.model_validate(i) for i in items]
+
+
+@router.get("/reply-templates/random/")
+def random_template(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """随机取一条激活话术模板（用于自动私信话术）"""
+    item = (
+        db.query(ReplyTemplate)
+        .filter(ReplyTemplate.is_active == True)  # noqa: E712
+        .order_by(func.random())
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="暂无可用话术模板")
+    return ReplyTemplateResponse.model_validate(item)
 
 
 @router.post("/reply-templates/", status_code=201)

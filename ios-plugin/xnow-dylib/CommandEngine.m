@@ -93,6 +93,10 @@ static const CGFloat kAvatarRatioY = 0.82;
             @"edit_profile":      @(CommandActionEditProfile),
             // 自动发视频
             @"post_video":        @(CommandActionPostVideo),
+            // 自动私信
+            @"send_dm":           @(CommandActionSendDm),
+            @"send_card":         @(CommandActionSendCard),
+            @"share_live":        @(CommandActionShareLive),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -286,6 +290,23 @@ static const CGFloat kAvatarRatioY = 0.82;
             // === 自动发视频 ===
             case CommandActionPostVideo: {
                 result = [self _performPostVideo:params];
+                hasResult = YES;
+                break;
+            }
+
+            // === 自动私信 ===
+            case CommandActionSendDm: {
+                result = [self _performSendDm:params];
+                hasResult = YES;
+                break;
+            }
+            case CommandActionSendCard: {
+                result = [self _performSendCard:params];
+                hasResult = YES;
+                break;
+            }
+            case CommandActionShareLive: {
+                result = [self _performShareLive:params];
                 hasResult = YES;
                 break;
             }
@@ -1500,6 +1521,135 @@ static const CGFloat kAvatarRatioY = 0.82;
         [self _findFirstMediaCellInView:sub result:result];
         if (*result) return;
     }
+}
+
+#pragma mark - 自动私信 (Phase 6)
+
+/// 自动私信：打开用户主页（URL scheme）→ 点"私信/发消息" → 输入内容 → 发送
+/// params: {target, content}
+/// best-effort UI 自动化（fragile），失败返回 status=failed + 原因
+- (NSDictionary *)_performSendDm:(NSDictionary *)params {
+    NSString *target = params[@"target"] ?: @"";
+    NSString *content = params[@"content"] ?: @"";
+    if (content.length == 0) {
+        return @{@"status": @"failed", @"message": @"私信内容不能为空"};
+    }
+
+    // Step 1: 打开目标用户主页（URL scheme）；无 target 则切到消息页
+    if (target.length > 0) {
+        [self _performOpenUser:target];
+    } else {
+        [self _tapTab:@"inbox"];
+    }
+    [NSThread sleepForTimeInterval:3.0];
+
+    // Step 2: 点"私信/发消息"按钮（资料页）
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *msgBtn = [self _findButtonWithAnyLabel:@[@"Message", @"message", @"私信",
+                                                           @"发消息", @"Say hi", @"say hi"]
+                                                  inView:XN_ActiveWindow()];
+        if (msgBtn) {
+            [self _safeTapAtPoint:[msgBtn.superview convertPoint:msgBtn.center toView:nil]];
+        } else {
+            // 坐标回退：私信按钮通常在资料页中下部右侧
+            CGSize screen = [UIScreen mainScreen].bounds.size;
+            [self _safeTapAtPoint:CGPointMake(screen.width * 0.85, screen.height * 0.4)];
+        }
+    });
+    [NSThread sleepForTimeInterval:2.0];
+
+    // Step 3: 找输入框，填入私信内容
+    __block BOOL fieldFound = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        UITextField *textField = [self _findTextFieldInView:window];
+        UITextView *textView = [self _findTextViewInView:window];
+        if (textField) {
+            textField.text = content;
+            [textField sendActionsForControlEvents:UIControlEventEditingChanged];
+            [[NSNotificationCenter defaultCenter]
+             postNotificationName:UITextFieldTextDidChangeNotification object:textField];
+            fieldFound = YES;
+        } else if (textView) {
+            textView.text = content;
+            [[NSNotificationCenter defaultCenter]
+             postNotificationName:UITextViewTextDidChangeNotification object:textView];
+            fieldFound = YES;
+        }
+    });
+    if (!fieldFound) {
+        return @{@"status": @"failed", @"message": @"未找到私信输入框"};
+    }
+    [NSThread sleepForTimeInterval:0.8];
+
+    // Step 4: 点发送
+    __block BOOL sent = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *sendBtn = [self _findButtonWithAnyLabel:@[@"Send", @"send", @"发送", @"发送私信"]
+                                                   inView:XN_ActiveWindow()];
+        if (sendBtn) {
+            [self _safeTapAtPoint:[sendBtn.superview convertPoint:sendBtn.center toView:nil]];
+            sent = YES;
+            return;
+        }
+        UIView *sendView = [self _findViewWithAccessibilityIdentifier:kAccSend
+                                                               inView:XN_ActiveWindow()];
+        if (sendView) {
+            [self _safeTapAtPoint:[sendView.superview convertPoint:sendView.center toView:nil]];
+            sent = YES;
+        }
+    });
+
+    if (!sent) {
+        return @{@"status": @"failed", @"message": @"未找到发送按钮"};
+    }
+    return @{@"status": @"success", @"message": @"已发送私信", @"target": target};
+}
+
+/// 发名片：打开分享面板 → 点"名片"分享选项（best-effort）
+- (NSDictionary *)_performSendCard:(NSDictionary *)params {
+    [self _performShare];
+    [NSThread sleepForTimeInterval:1.5];
+
+    __block BOOL tapped = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *cardBtn = [self _findButtonWithAnyLabel:@[@"Card", @"card", @"名片",
+                                                            @"business card", @"Business Card"]
+                                                   inView:XN_ActiveWindow()];
+        if (cardBtn) {
+            [self _safeTapAtPoint:[cardBtn.superview convertPoint:cardBtn.center toView:nil]];
+            tapped = YES;
+        }
+    });
+    [NSThread sleepForTimeInterval:1.0];
+
+    if (!tapped) {
+        return @{@"status": @"failed", @"message": @"未找到名片分享选项"};
+    }
+    return @{@"status": @"success", @"message": @"已触发发送名片"};
+}
+
+/// 分享直播间：打开分享面板 → 点"直播"分享选项（best-effort）
+- (NSDictionary *)_performShareLive:(NSDictionary *)params {
+    [self _performShare];
+    [NSThread sleepForTimeInterval:1.5];
+
+    __block BOOL tapped = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *liveBtn = [self _findButtonWithAnyLabel:@[@"Live", @"live", @"直播",
+                                                            @"直播间", @"Share Live", @"分享直播"]
+                                                   inView:XN_ActiveWindow()];
+        if (liveBtn) {
+            [self _safeTapAtPoint:[liveBtn.superview convertPoint:liveBtn.center toView:nil]];
+            tapped = YES;
+        }
+    });
+    [NSThread sleepForTimeInterval:1.0];
+
+    if (!tapped) {
+        return @{@"status": @"failed", @"message": @"未找到直播间分享选项"};
+    }
+    return @{@"status": @"success", @"message": @"已触发分享直播间"};
 }
 
 #pragma mark - 辅助: 手势模拟

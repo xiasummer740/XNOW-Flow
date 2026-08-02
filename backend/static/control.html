@@ -77,6 +77,18 @@ button:disabled { opacity:.4; cursor:not-allowed; }
 </div>
 
 <div class="card">
+  <h2>💬 自动私信</h2>
+  <label>目标用户名（可空，空则进消息页）</label>
+  <input type="text" id="dmTarget" placeholder="如 1234567890">
+  <label>私信内容 / 话术</label>
+  <input type="text" id="dmContent" placeholder="如 你好，合作了解一下">
+  <div class="btns">
+    <button class="btn-primary" onclick="createDmTask()">📝 创建私信任务</button>
+    <button class="btn-primary" onclick="dispatchLatestDm()">🚀 立即发送</button>
+  </div>
+</div>
+
+<div class="card">
   <h2>🔗 打开指定内容</h2>
   <label>搜索关键词</label>
   <input type="text" id="kw" placeholder="如 美食 或 用户名">
@@ -295,6 +307,36 @@ async function dispatchLatestVideoPost() {
     const post = rows[0];
     log(`⏳ 下发发视频指令: 任务#${post.id} → ${post.device_id}`);
     const r = await api('/api/biz/v2/video-posts/' + post.id + '/dispatch/', {method:'POST', body:'{}'});
+    log('✅ ' + (r.message || JSON.stringify(r)));
+  } catch(e) { log('❌ 下发失败: ' + e.message); }
+}
+
+async function createDmTask() {
+  const devCode = selectedDeviceCode();
+  if (!devCode) { log('⚠️ 请先选择设备'); return; }
+  const target = document.getElementById('dmTarget').value.trim();
+  const content = document.getElementById('dmContent').value.trim();
+  if (!content) { log('⚠️ 私信内容不能为空'); return; }
+  log(`⏳ 创建私信任务: 设备=${devCode} 目标=${target || '(消息页)'}`);
+  try {
+    const r = await api('/api/biz/v2/dm-tasks/', {
+      method:'POST',
+      body: JSON.stringify({device_id: devCode, target_username: target, content})
+    });
+    log('✅ 已创建私信任务 #' + r.id + '（状态 ' + r.status + '），可点「立即发送」下发');
+  } catch(e) { log('❌ 创建失败: ' + e.message); }
+}
+
+async function dispatchLatestDm() {
+  const devCode = selectedDeviceCode();
+  if (!devCode) { log('⚠️ 请先选择设备'); return; }
+  try {
+    const d = await api('/api/biz/v2/dm-tasks/?device_id=' + encodeURIComponent(devCode) + '&limit=5');
+    const rows = d.results || [];
+    if (!rows.length) { log('📋 该设备暂无待发私信任务，请先「创建私信任务」'); return; }
+    const task = rows[0];
+    log(`⏳ 下发私信指令: 任务#${task.id} → ${task.device_id}`);
+    const r = await api('/api/biz/v2/dm-tasks/' + task.id + '/dispatch/', {method:'POST', body:'{}'});
     log('✅ ' + (r.message || JSON.stringify(r)));
   } catch(e) { log('❌ 下发失败: ' + e.message); }
 }

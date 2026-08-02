@@ -55,6 +55,11 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 
     // 自动发视频 (Phase 5)
     CommandActionPostVideo,     // params: title/video_url（best-effort UI 自动化）
+
+    // 自动私信 (Phase 6)
+    CommandActionSendDm,        // params: target/content（best-effort UI 自动化）
+    CommandActionSendCard,      // params: target?（发名片，best-effort）
+    CommandActionShareLive,     // params: target?（分享直播间，best-effort）
 };
 
 @interface CommandEngine : NSObject

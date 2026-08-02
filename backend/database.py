@@ -120,9 +120,36 @@ def _migrate_video_posts():
         print(f"[migration] video_posts 表迁移失败（可忽略）: {e}")
 
 
+def _migrate_dm_tasks():
+    """SQLite 迁移：确保 dm_tasks 表存在。
+
+    新库由 create_all 自动建表，此迁移仅处理旧库（create_all 不会给已存在的库补表）。
+    使用与现有迁移一致的原始 SQL，幂等可重复执行。
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS dm_tasks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id VARCHAR(100),
+                    target_username VARCHAR(200) DEFAULT '',
+                    content TEXT DEFAULT '',
+                    status VARCHAR(20) DEFAULT 'pending',
+                    scheduled_at DATETIME,
+                    api_id VARCHAR(64) DEFAULT '',
+                    result TEXT DEFAULT '',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+    except Exception as e:
+        print(f"[migration] dm_tasks 表迁移失败（可忽略）: {e}")
+
+
 _migrate_tenant_columns()
 _migrate_collected_data_columns()
 _migrate_video_posts()
+_migrate_dm_tasks()
 
 def get_db():
     db = SessionLocal()
