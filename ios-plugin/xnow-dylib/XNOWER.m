@@ -72,28 +72,25 @@ __attribute__((destructor)) static void XNOWERUnload() {
                                stringForKey:kXnowConfigKeyServerURL];
         _serverURL = savedURL ?: kXnowDefaultServerURL;
 
-        // 生成或恢复设备 ID（优先使用绑定时设置的）
-        // 注意：XN_BindDeviceID 存的是"手机序号"(code，如 "1")，不是完整设备ID，
-        // 必须拼上机器码短码，否则 device_id 会退化成纯 "1" 导致激活错绑。
-        NSString *bindCode = [[NSUserDefaults standardUserDefaults]
-                             stringForKey:@"XN_BindDeviceID"];
-        if (bindCode.length > 0) {
+        // 生成或恢复设备 ID —— 必须稳定（激活卡、授权检查、绑定后台用同一个 ID）。
+        // 序号(device_code)不进入 deviceId，否则绑定前后 ID 变化导致激活的卡对不上。
+        NSString *savedId = [[NSUserDefaults standardUserDefaults]
+                              stringForKey:kXnowDeviceIdKey];
+        if (savedId.length > 0) {
+            // 旧格式（iphone_<code>_<shortID>）迁移：去掉序号段，恢复稳定格式
+            if ([savedId hasPrefix:@"iphone_"] && [[savedId componentsSeparatedByString:@"_"] count] == 3) {
+                NSArray *parts = [savedId componentsSeparatedByString:@"_"];
+                _deviceId = [NSString stringWithFormat:@"iphone_%@", parts[2]];
+                [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
+            } else {
+                _deviceId = savedId;
+            }
+        } else {
             NSString *vendorID = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
             NSString *shortID = vendorID.length >= 8 ? [vendorID substringToIndex:8] :
                                  [NSUUID UUID].UUIDString;
-            _deviceId = [NSString stringWithFormat:@"iphone_%@_%@", bindCode, shortID];
-        } else {
-            NSString *savedId = [[NSUserDefaults standardUserDefaults]
-                                  stringForKey:kXnowDeviceIdKey];
-            if (savedId) {
-                _deviceId = savedId;
-            } else {
-                NSString *vendorID = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
-                NSString *shortID = vendorID.length >= 8 ? [vendorID substringToIndex:8] :
-                                     [NSUUID UUID].UUIDString;
-                _deviceId = [NSString stringWithFormat:@"iphone_%@", shortID];
-                [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
-            }
+            _deviceId = [NSString stringWithFormat:@"iphone_%@", shortID];
+            [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
         }
 
         // 生成/恢复设备共享密钥（设备端点鉴权用）
@@ -125,9 +122,14 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)start {
     NSLog(@"[XNOWER] 🚀 start() 已执行 — dylib 加载成功");
 
-    // 只显示浮窗，不自动连 WS — BH TikTok 检测到外部连接会 exit()
-    // 用户可在浮窗菜单中手动点击"连接到服务器"
+    // 显示浮窗
     [self showFloatingPanel];
+
+    // 自动检测授权（piggyback 借 TikTok 网络栈，不连外部 WS，BH 检测不到）
+    // 未激活设备打开 TikTok 自动弹激活浮窗，无需手动点"连接到服务器"
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self startPiggybackPolling];
+    });
 }
 
 /// 添加操作日志（显示在左上角透明日志窗口）
@@ -741,11 +743,18 @@ __attribute__((destructor)) static void XNOWERUnload() {
     [[NSUserDefaults standardUserDefaults] setObject:apiId forKey:@"XN_BindAPIID"];
     [[NSUserDefaults standardUserDefaults] synchronize];
 
-    // 更新设备 ID（使用手机序号）
-    NSString *vendorID = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
-    NSString *shortID = vendorID.length >= 8 ? [vendorID substringToIndex:8] : [NSUUID UUID].UUIDString;
-    _deviceId = [NSString stringWithFormat:@"iphone_%@_%@", code, shortID];
-    [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
+    // 设备 ID 保持稳定（不随序号变化）——序号存 device_code 字段上报，
+    // 避免激活的卡绑在旧 deviceId 上导致授权对不上（设备身份必须稳定）。
+    // 若当前 deviceId 还是 iphone_ 前缀且不包含序号，保持原样；否则确保稳定格式。
+    if ([_deviceId hasPrefix:@"iphone_"] && ![_deviceId containsString:@"_"]) {
+        // 已经是稳定格式（iphone_xxxx），无需改
+    } else if (![_deviceId hasPrefix:@"iphone_"]) {
+        // 异常 deviceId（如纯 "1"），重建稳定 ID
+        NSString *vendorID = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
+        NSString *shortID = vendorID.length >= 8 ? [vendorID substringToIndex:8] : [NSUUID UUID].UUIDString;
+        _deviceId = [NSString stringWithFormat:@"iphone_%@", shortID];
+        [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
+    }
     [self.floatingPanel setDeviceId:_deviceId];
 
     [self addLog:[NSString stringWithFormat:@"✅ 绑定成功 设备:%@ API:%@", code, apiId]];
