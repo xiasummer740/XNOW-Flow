@@ -191,15 +191,17 @@ static volatile CFAbsoluteTime sLastPing = 0;
     }];
 }
 
-/// 检查设备授权状态（GET /api/biz/v2/licenses/device/{deviceId}/）
+/// 检查设备授权状态（GET /api/biz/v2/licenses/device/{uid}/）
+/// 使用设备唯一标识 UID（Keychain 持久化），重装/改编号不丢授权。
 /// 响应 {licensed, status, expires_at, days_left}
-+ (void)checkLicenseForDevice:(NSString *)deviceId
++ (void)checkLicenseForDevice:(NSString *)uid
                    completion:(void (^)(BOOL licensed, NSDictionary *info))completion {
-    if (deviceId.length == 0) {
+    if (uid.length == 0) {
         if (completion) completion(NO, nil);
         return;
     }
-    NSString *path = [NSString stringWithFormat:@"/api/biz/v2/licenses/device/%@/", deviceId];
+    // 用稳定 UID 查授权（后端同时匹配 udid 和 device_id）
+    NSString *path = [NSString stringWithFormat:@"/api/biz/v2/licenses/device/%@/", uid];
     [self _sendRequest:@"GET" path:path body:nil completion:^(NSData *data, NSError *error) {
         BOOL licensed = NO;
         NSDictionary *info = nil;

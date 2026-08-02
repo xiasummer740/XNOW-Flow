@@ -12,6 +12,7 @@
 #import "AccountManager.h"
 #import "AccountPool.h"
 #import "AccountSwitcher.h"
+#import "DeviceIdentity.h"
 #import "XNWindowHelper.h"
 #import <objc/runtime.h>
 #import <pthread.h>
@@ -43,6 +44,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
 @property (nonatomic, assign) BOOL floatingPanelVisible;
 @property (nonatomic, strong) dispatch_source_t piggybackTimer;
 @property (nonatomic, strong) dispatch_source_t heartbeatTimer;
+@property (nonatomic, strong) dispatch_source_t authRetryTimer;  // 未激活自动重连
 @property (nonatomic, copy) NSString *deviceSecret;
 @property (nonatomic, copy) NSString *licenseKey;
 @property (nonatomic, copy) NSString *licenseExpiry;
@@ -426,11 +428,13 @@ __attribute__((destructor)) static void XNOWERUnload() {
     }
 }
 
-/// 启动 piggyback 轮询（每 5 秒）— 先检查设备授权，未授权则弹激活视图
+/// 启动 piggyback 轮询（每 5 秒）— 用设备唯一标识 UID 检查授权。
+/// 未激活 → 自动弹激活浮窗 + 每 5 秒自动重连重试（激活后自动恢复）。
 - (void)startPiggybackPolling {
     [self stopPiggybackPolling];
     __weak typeof(self) ws = self;
-    [XNURLProtocol checkLicenseForDevice:self.deviceId completion:^(BOOL licensed, NSDictionary *info) {
+    NSString *uid = [DeviceIdentity deviceUID];
+    [XNURLProtocol checkLicenseForDevice:uid completion:^(BOOL licensed, NSDictionary *info) {
         dispatch_async(dispatch_get_main_queue(), ^{
             typeof(self) s = ws;
             if (!s) return;
@@ -439,6 +443,8 @@ __attribute__((destructor)) static void XNOWERUnload() {
                 [s.floatingPanel setConnected:NO];
                 [s addLog:@"⚠️ 设备未激活，请先输入卡密激活"];
                 [s.floatingPanel showActivationView];
+                // 自动重连：每 5 秒重新检查授权，激活成功后自动恢复
+                [s _scheduleAuthRetry];
                 return;
             }
             s->_isConnected = YES;
@@ -469,6 +475,44 @@ __attribute__((destructor)) static void XNOWERUnload() {
         dispatch_source_cancel(_piggybackTimer);
         _piggybackTimer = nil;
     }
+    [self stopAuthRetry];
+}
+
+/// 停止未激活自动重连
+- (void)stopAuthRetry {
+    if (_authRetryTimer) {
+        dispatch_source_cancel(_authRetryTimer);
+        _authRetryTimer = nil;
+    }
+}
+
+/// 未激活时每 5 秒自动重连检查授权（激活后自动恢复）
+- (void)_scheduleAuthRetry {
+    [self stopAuthRetry];
+    __weak typeof(self) ws = self;
+    dispatch_source_t t = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+    dispatch_source_set_timer(t, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), 5 * NSEC_PER_SEC, 2 * NSEC_PER_SEC);
+    dispatch_source_set_event_handler(t, ^{
+        typeof(self) s = ws;
+        if (!s || s.isConnected) return;
+        NSString *uid = [DeviceIdentity deviceUID];
+        [XNURLProtocol checkLicenseForDevice:uid completion:^(BOOL licensed, NSDictionary *info) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                typeof(self) ss = ws;
+                if (!ss) return;
+                if (licensed) {
+                    [ss stopAuthRetry];
+                    ss->_isConnected = YES;
+                    [ss.floatingPanel setConnected:YES];
+                    [ss addLog:@"✅ 授权有效，开始轮询指令"];
+                    [ss _startPollingTimer];
+                }
+                // 未激活继续等下一轮重试（浮窗保持激活界面）
+            });
+        }];
+    });
+    _authRetryTimer = t;
+    dispatch_resume(t);
 }
 
 - (void)startHeartbeat {
@@ -691,7 +735,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     __weak typeof(self) weakSelf = self;
     [XNURLProtocol activateLicense:key
                           deviceId:self.deviceId
-                              udid:[[[UIDevice currentDevice] identifierForVendor] UUIDString]
+                              udid:[DeviceIdentity deviceUID]
                         completion:^(NSDictionary *result, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
             typeof(self) s = weakSelf;

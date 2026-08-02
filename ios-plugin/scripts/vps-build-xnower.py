@@ -116,7 +116,7 @@ run(f"cd {REMOTE} && python3 fix_xn.py", 30)
 print("[2] Compiling...")
 CFLAGS = f"-target arm64-apple-ios16.5 -isysroot {SDK} -fobjc-arc -O2 -Wno-everything -DNDEBUG -c"
 SRCS = ['XNOWER.m', 'XNStartup.m', 'WsClient.m', 'CommandEngine.m', 'DeviceStatus.m',
-        'TikTokHooks.m', 'XNFloatingPanel.m', 'AccountManager.m', 'AccountPool.m', 'AccountSwitcher.m', 'AccountSnapshotter.m']
+        'TikTokHooks.m', 'XNFloatingPanel.m', 'AccountManager.m', 'AccountPool.m', 'AccountSwitcher.m', 'AccountSnapshotter.m', 'DeviceIdentity.m']
 
 for src in SRCS:
     obj = src.replace('.m', '.o')

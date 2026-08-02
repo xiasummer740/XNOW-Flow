@@ -243,12 +243,19 @@ def check_device_license(
     db: Session = Depends(get_db),
     secret: str = "",
 ):
-    """检查设备当前授权状态（连接时调用，设备密钥鉴权）"""
+    """检查设备当前授权状态（连接时调用，设备密钥鉴权）
+
+    用设备唯一标识(device_id 或 udid)查卡：兼容旧数据(device_id)和新版(udid)。
+    """
     from routers.ws import _verify_device_auth
     if not _verify_device_auth(device_id, secret):
         raise HTTPException(status_code=401, detail="设备密钥无效")
+    from sqlalchemy import or_
     lic = db.query(License).filter(
-        License.device_id == device_id,
+        or_(
+            License.device_id == device_id,
+            License.udid == device_id,
+        ),
         License.status == "active",
     ).first()
     now = datetime.utcnow()
