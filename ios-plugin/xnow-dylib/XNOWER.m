@@ -214,7 +214,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)wsClientDidDisconnect:(WsClient *)client error:(NSError *)error {
     _isConnected = NO;
 
-    [self addLog:@"❌ %@", error.localizedDescription ?: @"连接断开"];
+    [self addLog:@"❌ %@", [XNOWER _translateError:error.localizedDescription]];
 
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.floatingPanel setConnected:NO];
@@ -290,11 +290,69 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 /// 执行指令并回传结果（浮窗显示操作日志）
+/// 英文系统错误 → 中文（用户友好）
++ (NSString *)_translateError:(NSString *)msg {
+    if (!msg) return @"连接断开";
+    static NSDictionary *map = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        map = @{
+            @"internet connection appears to be offline": @"网络连接不可用",
+            @"offline": @"网络离线",
+            @"timed out": @"连接超时",
+            @"timeout": @"连接超时",
+            @"cannot connect": @"无法连接服务器",
+            @"connection refused": @"连接被拒绝",
+            @"unable to resolve": @"无法解析地址",
+            @"hostname could not be found": @"无法解析服务器地址",
+            @"not connected": @"未连接",
+            @"unauthorized": @"认证失败",
+            @"invalid": @"无效",
+            @"failed": @"失败",
+            @"success": @"成功",
+        };
+    });
+    NSString *lower = msg.lowercaseString;
+    for (NSString *en in map) {
+        if ([lower containsString:en]) return map[en];
+    }
+    return @"连接断开";
+}
+
+/// 指令英文名 → 中文显示名
++ (NSString *)_displayNameForAction:(NSString *)action {
+    static NSDictionary *map = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        map = @{
+            @"scroll_down": @"下滑", @"scroll_up": @"上滑",
+            @"like": @"点赞", @"follow": @"关注", @"comment": @"评论",
+            @"collect": @"收藏", @"screenshot": @"截图",
+            @"collect_fans": @"采集粉丝", @"collect_videos": @"采集视频",
+            @"collect_comments": @"采集评论", @"collect_live_users": @"采集直播用户",
+            @"batch_like": @"批量点赞", @"batch_follow": @"批量关注", @"batch_comment": @"批量评论",
+            @"batch_login": @"批量登录", @"switch_account": @"切换账号",
+            @"get_account_info": @"获取账号信息", @"report_account": @"上报账号",
+            @"edit_profile": @"修改资料", @"logout": @"退出登录",
+            @"smart_browse": @"智能浏览", @"check_health": @"健康检查",
+            @"go_back": @"返回", @"go_home": @"回首页", @"open_tab": @"切换页面",
+            @"open_search": @"打开搜索", @"search_keyword": @"搜索关键词",
+            @"open_user": @"打开用户", @"open_video": @"打开视频",
+            @"refresh": @"刷新", @"share": @"分享", @"save_video": @"保存视频",
+            @"send_dm": @"发送私信", @"send_card": @"发送名片", @"share_live": @"分享直播",
+            @"post_video": @"发布视频", @"register_account": @"注册账号",
+            @"nurture_tick": @"养号操作", @"nurture_stop": @"停止养号",
+        };
+    });
+    NSString *cn = map[action];
+    return cn ?: action;
+}
+
 - (void)_executePiggybackCommand:(NSDictionary *)cmd {
     NSString *type = cmd[@"type"] ?: @"command";
     if ([type isEqualToString:@"command"]) {
         NSString *action = cmd[@"action"] ?: @"";
-        [self addLog:@"📲 收到指令: %@", action];
+        [self addLog:@"📲 收到指令: %@", [XNOWER _displayNameForAction:action]];
 
         if ([action isEqualToString:@"batch_login"]) {
             NSDictionary *params = cmd[@"params"] ?: @{};
@@ -327,14 +385,15 @@ __attribute__((destructor)) static void XNOWERUnload() {
             }];
         } else {
             // 普通指令
-            [self addLog:@"⚙️ 执行: %@", action];
+            NSString *actionCN = [XNOWER _displayNameForAction:action];
+            [self addLog:@"⚙️ 执行: %@", actionCN];
             __weak typeof(self) weakSelf = self;
             [self.cmdEngine executeCommand:cmd completion:^(NSDictionary *result) {
                 NSString *status = result[@"success"] ? (result[@"success"] ? @"✅" : @"❌") : @"✅";
                 if (result[@"message"]) {
-                    [weakSelf addLog:@"%@ %@: %@", status, action, result[@"message"]];
+                    [weakSelf addLog:@"%@ %@: %@", status, actionCN, result[@"message"]];
                 } else {
-                    [weakSelf addLog:@"%@ %@ 完成", status, action];
+                    [weakSelf addLog:@"%@ %@ 完成", status, actionCN];
                 }
                 [XNURLProtocol sendMessage:@{@"type": @"result", @"data": result}
                                   deviceId:weakSelf.deviceId];
