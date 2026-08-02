@@ -146,8 +146,8 @@ static NSArray *kCountries;
     blur.userInteractionEnabled = NO;
     [_badgeButton addSubview:blur];
 
-    // SF Symbol 图标
-    UIImageView *iconView = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"bolt.fill"]];
+    // SF Symbol 图标（X = XNOW）
+    UIImageView *iconView = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"xmark"]];
     iconView.tintColor = [UIColor systemBlueColor];
     iconView.contentMode = UIViewContentModeScaleAspectFit;
     iconView.frame = CGRectInset(_badgeButton.bounds, kCollapsedSize * 0.26, kCollapsedSize * 0.26);
