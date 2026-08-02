@@ -35,6 +35,9 @@
 // 切换账号
 - (void)floatingPanel:(XNFloatingPanel *)panel didSelectAccountId:(NSInteger)accountId;
 - (void)floatingPanelDidRequestAccountList:(XNFloatingPanel *)panel;
+// 多账号管理：新增（无痕） / 备份当前账号
+- (void)floatingPanelDidTapAddNewAccount:(XNFloatingPanel *)panel;
+- (void)floatingPanelDidTapBackupAccount:(XNFloatingPanel *)panel;
 // 商业激活 / 设备绑定
 - (void)floatingPanel:(XNFloatingPanel *)panel didEnterLicenseKey:(NSString *)key;
 - (void)floatingPanel:(XNFloatingPanel *)panel didSubmitBindingWithCode:(NSString *)code apiId:(NSString *)apiId;

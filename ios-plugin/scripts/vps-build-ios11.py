@@ -38,7 +38,7 @@ sftp.close()
 print("[1] Compiling with iOS 11.4 SDK...")
 CFLAGS = f"-target arm64-apple-ios11.4 -isysroot {SDK_OLD} -fobjc-arc -O2 -Wno-everything -DNDEBUG -c"
 SRCS = ['XNOWER.m', 'XNStartup.m', 'WsClient.m', 'CommandEngine.m', 'DeviceStatus.m',
-        'TikTokHooks.m', 'XNFloatingPanel.m', 'AccountManager.m', 'AccountPool.m', 'AccountSwitcher.m']
+        'TikTokHooks.m', 'XNFloatingPanel.m', 'AccountManager.m', 'AccountPool.m', 'AccountSwitcher.m', 'AccountSnapshotter.m']
 
 for src in SRCS:
     obj = f"ios11/{src.replace('.m', '.o')}"

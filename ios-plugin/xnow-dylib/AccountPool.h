@@ -61,6 +61,9 @@ typedef NS_ENUM(NSInteger, AccountStatus) {
 /// 标记为当前活跃
 - (void)markActive:(NSInteger)accountId;
 
+/// 清除当前活跃标记（不删池中账号）
+- (void)clearActiveAccount;
+
 /// 更新账号状态
 - (void)updateStatus:(NSInteger)accountId status:(AccountStatus)status;
 

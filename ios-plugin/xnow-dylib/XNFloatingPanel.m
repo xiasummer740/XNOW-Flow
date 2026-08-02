@@ -4,6 +4,7 @@
 
 #import "XNFloatingPanel.h"
 #import "AccountPool.h"
+#import "AccountManager.h"
 #import <objc/runtime.h>
 
 static const CGFloat kCollapsedSize = 56;       // 折叠徽章尺寸
@@ -503,8 +504,9 @@ static NSArray *kCountries;
     if (_viewMode == 3) {
         if ([_currentSubMenu isEqualToString:@"set_country"]) return kCountries.count;
         if ([_currentSubMenu isEqualToString:@"account_mgmt"]) {
+            // 账号列表 + 2 个操作按钮（新增账号 / 备份当前账号）
             NSArray *a = [[AccountPool sharedPool] allAccounts];
-            return MAX(a.count, 1);
+            return MAX(a.count, 1) + 2;
         }
     }
     return 0;
@@ -551,7 +553,21 @@ static NSArray *kCountries;
         if (sel) { cell.accessoryType = UITableViewCellAccessoryCheckmark; cell.tintColor = [UIColor systemBlueColor]; }
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"account_mgmt"]) {
         NSArray *a = [[AccountPool sharedPool] allAccounts];
-        if (a.count == 0) {
+        NSUInteger actionRow = MAX(a.count, 1);   // 操作按钮起始行
+        if (ip.row >= actionRow) {
+            // 操作按钮行
+            if (ip.row == actionRow) {
+                cell.textLabel.text = @"＋ 新增账号（无痕）";
+                cell.textLabel.textColor = [UIColor systemBlueColor];
+                cell.imageView.image = [UIImage systemImageNamed:@"plus.circle.fill"];
+                cell.imageView.tintColor = [UIColor systemBlueColor];
+            } else {
+                cell.textLabel.text = @"📦 备份当前账号";
+                cell.textLabel.textColor = [UIColor systemGreenColor];
+                cell.imageView.image = [UIImage systemImageNamed:@"square.and.arrow.down.fill"];
+                cell.imageView.tintColor = [UIColor systemGreenColor];
+            }
+        } else if (a.count == 0) {
             cell.textLabel.text = @"暂无账号";
             cell.textLabel.textColor = [UIColor secondaryLabelColor];
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -559,8 +575,9 @@ static NSArray *kCountries;
             NSDictionary *acc = a[ip.row];
             cell.textLabel.text = acc[@"nickname"] ?: @"未知账号";
             cell.textLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
-            cell.detailTextLabel.text = [NSString stringWithFormat:@"号码:%@  粉丝:%@  关注:%@",
-                                         acc[@"aweme_number"]?:@"", acc[@"followers"]?:@"0", acc[@"following_count"]?:@"0"];
+            cell.detailTextLabel.text = [NSString stringWithFormat:@"号码:%@  粉丝:%@  关注:%@  国家:%@",
+                                         acc[@"aweme_number"]?:@"", acc[@"followers"]?:@"0",
+                                         acc[@"following_count"]?:@"0", acc[@"act_country"]?:@"—"];
             cell.detailTextLabel.numberOfLines = 1;
         }
     }
@@ -584,10 +601,90 @@ static NSArray *kCountries;
         [self _showToast:[NSString stringWithFormat:@"国家已切换: %@", _selectedCountry]];
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"account_mgmt"]) {
         NSArray *accounts = [[AccountPool sharedPool] allAccounts];
+        NSUInteger actionRow = MAX(accounts.count, 1);   // 操作按钮起始行
+        if (ip.row >= actionRow) {
+            // 操作按钮：新增账号 / 备份当前账号
+            if (ip.row == actionRow) {
+                [self _promptAddNewAccount];
+            } else {
+                [self _promptBackupCurrentAccount];
+            }
+            return;
+        }
         if (ip.row >= accounts.count) return;
         NSDictionary *acc = accounts[ip.row];
         [self _promptSwitchAccount:acc];
     }
+}
+
+/// 新增账号：清空登录态（无痕）→ 让用户登录全新账号
+- (void)_promptAddNewAccount {
+    NSArray *accounts = [[AccountPool sharedPool] allAccounts];
+    if (accounts.count >= 20) {
+        [self _showToast:@"已达 20 账号上限"];
+        [self addLog:@"❌ 已达 20 账号上限"];
+        return;
+    }
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:@"新增账号"
+        message:@"将清空当前登录态（无痕），进入全新登录页。请登录新账号，登录完成后点「备份当前账号」记录。"
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"开始无痕登录"
+        style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidTapAddNewAccount:)]) {
+                [self.delegate floatingPanelDidTapAddNewAccount:self];
+            }
+            [self addLog:@"开始新增账号：无痕登录"];
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self _presentAlert:alert];
+}
+
+/// 备份当前登录账号的登录态快照
+- (void)_promptBackupCurrentAccount {
+    NSDictionary *current = [[AccountManager sharedManager] currentAccount];
+    if (!current) {
+        // 退回 AccountPool 活跃账号
+        current = [[AccountPool sharedPool] activeAccount];
+    }
+    if (!current) {
+        [self _showToast:@"未检测到当前登录账号"];
+        [self addLog:@"❌ 备份失败：未检测到当前账号"];
+        return;
+    }
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:@"备份当前账号"
+        message:[NSString stringWithFormat:@"将记录当前账号：%@ 的登录态，用于后续一键切换。", current[@"nickname"] ?: @"未知"]
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"备份"
+        style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidTapBackupAccount:)]) {
+                [self.delegate floatingPanelDidTapBackupAccount:self];
+            }
+            [self addLog:@"正在备份当前账号登录态..."];
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self _presentAlert:alert];
+}
+
+/// 统一弹 Alert（兼容多场景）
+- (void)_presentAlert:(UIAlertController *)alert {
+    UIWindow *topWin = nil;
+    if (@available(iOS 13, *)) {
+        for (UIScene *sc in UIApplication.sharedApplication.connectedScenes) {
+            if ([sc isKindOfClass:[UIWindowScene class]]) {
+                UIWindowScene *ws = (UIWindowScene *)sc;
+                if (ws.activationState == UISceneActivationStateForegroundActive) {
+                    topWin = ws.keyWindow ?: ws.windows.firstObject;
+                    break;
+                }
+            }
+        }
+    }
+    if (!topWin) topWin = UIApplication.sharedApplication.windows.firstObject;
+    UIViewController *topVC = topWin.rootViewController;
+    while (topVC.presentedViewController) topVC = topVC.presentedViewController;
+    if (topVC) [topVC presentViewController:alert animated:YES completion:nil];
 }
 
 /// 弹出账号操作菜单 — 确认切换到所选账号

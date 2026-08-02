@@ -156,6 +156,12 @@ static AccountPool *gShared = nil;
     [self updateStatus:accountId status:AccountStatusActive];
 }
 
+- (void)clearActiveAccount {
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:kActiveIdKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    POOL_LOG(@"已清除当前活跃账号标记");
+}
+
 - (void)updateStatus:(NSInteger)accountId status:(AccountStatus)status {
     for (NSMutableDictionary *acc in __accounts) {
         if ([acc[@"id"] integerValue] == accountId) {

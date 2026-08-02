@@ -8,6 +8,7 @@
 
 #import "AccountSwitcher.h"
 #import "AccountPool.h"
+#import "AccountSnapshotter.h"
 #import "CommandEngine.h"
 #import "XNWindowHelper.h"
 #import <UIKit/UIKit.h>
@@ -68,6 +69,28 @@ static AccountSwitcher *gShared = nil;
     dispatch_async(_switchQueue, ^{
         __block NSDictionary *result = nil;
 
+        // [多账号隔离] 切换前：保存当前登录态到当前活跃账号的快照
+        NSDictionary *active = [[AccountPool sharedPool] activeAccount];
+        NSInteger activeId = [active[@"id"] integerValue];
+        if (activeId > 0 && activeId != accountId) {
+            [[AccountSnapshotter sharedSnapshotter] saveSnapshotForAccount:activeId];
+            SW_LOG(@"已保存当前账号 %ld 登录态快照", (long)activeId);
+        }
+
+        // [多账号隔离] 目标账号有快照 → 直接恢复登录态 + 重启（无需重新登录）
+        if ([[AccountSnapshotter sharedSnapshotter] hasSnapshotForAccount:accountId]) {
+            SW_LOG(@"账号 %@ 有快照，直接恢复登录态", account[@"nickname"]);
+            [[AccountSnapshotter sharedSnapshotter] restoreSnapshotForAccount:accountId];
+            [[AccountPool sharedPool] markActive:accountId];
+            self.isSwitching = NO;
+            if (completion) completion(YES, @{@"status": @"restored", @"message": @"已恢复账号登录态"});
+            // 重启 TikTok 进程，让注入的登录态生效
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                [self restartApp];
+            });
+            return;
+        }
+
         // 策略 1: Token 注入（最快，秒切）
         result = [self _tryTokenInjection:account];
         if (result && [result[@"success"] boolValue]) {
@@ -103,6 +126,33 @@ static AccountSwitcher *gShared = nil;
             }];
         });
     });
+}
+
+/// 重启 TikTok 进程（iOS 无优雅重启，靠 SpringBoard 拉起）
+- (void)restartApp {
+    SW_LOG(@"重启 TikTok 进程（注入登录态生效）");
+    exit(0);
+}
+
+/// 备份当前登录账号的登录态快照（浮窗「备份」按钮调用）
+/// @return 备份成功的账号 ID；无当前账号返回 0
+- (NSInteger)backupCurrentAccount {
+    NSDictionary *active = [[AccountPool sharedPool] activeAccount];
+    NSInteger activeId = [active[@"id"] integerValue];
+    if (activeId <= 0) {
+        SW_LOG(@"备份失败：无当前活跃账号");
+        return 0;
+    }
+    BOOL ok = [[AccountSnapshotter sharedSnapshotter] saveSnapshotForAccount:activeId];
+    SW_LOG(@"备份账号 %ld 登录态%@", (long)activeId, ok ? @"成功" : @"失败");
+    return ok ? activeId : 0;
+}
+
+/// 新增账号：清空当前登录态（无痕），让用户登录全新账号
+- (void)prepareNewAccount {
+    SW_LOG(@"准备新增账号：清空当前登录态（无痕）");
+    [[AccountSnapshotter sharedSnapshotter] clearCurrentState];
+    [[AccountPool sharedPool] clearActiveAccount];
 }
 
 - (void)batchLogin:(NSArray<NSNumber *> *)accountIds

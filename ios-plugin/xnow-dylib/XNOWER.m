@@ -932,4 +932,23 @@ __attribute__((destructor)) static void XNOWERUnload() {
     }
 }
 
+- (void)floatingPanelDidTapAddNewAccount:(XNFloatingPanel *)panel {
+    [self addLog:@"🧹 新增账号：清空登录态（无痕）"];
+    [[AccountSwitcher sharedSwitcher] prepareNewAccount];
+    // 回到 TikTok 首页，让用户走登录流程
+    [self addLog:@"已进入全新无痕环境，请登录新账号。完成后点「备份当前账号」"];
+}
+
+- (void)floatingPanelDidTapBackupAccount:(XNFloatingPanel *)panel {
+    NSInteger savedId = [[AccountSwitcher sharedSwitcher] backupCurrentAccount];
+    if (savedId > 0) {
+        [self addLog:@"✅ 已备份账号 #%ld 登录态", (long)savedId];
+        [self _sendCommandToBackend:@"account_backed_up" params:@{@"account_id": @(savedId)}];
+        // 刷新账号列表
+        [self.floatingPanel setAccountList:[[AccountPool sharedPool] allAccounts]];
+    } else {
+        [self addLog:@"❌ 备份失败：未检测到当前登录账号"];
+    }
+}
+
 @end

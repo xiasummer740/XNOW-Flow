@@ -34,6 +34,16 @@ typedef void(^SwitchCompletion)(BOOL success, NSDictionary *_Nullable result);
 /// @return @{isLoggedIn, accountId?, nickname?}
 - (NSDictionary *)verifyCurrentLogin;
 
+/// 备份当前登录账号的登录态快照（浮窗「备份」按钮）
+/// @return 备份成功的账号 ID；无当前账号返回 0
+- (NSInteger)backupCurrentAccount;
+
+/// 新增账号：清空当前登录态（无痕），让用户登录全新账号
+- (void)prepareNewAccount;
+
+/// 重启 TikTok 进程（注入登录态生效）
+- (void)restartApp;
+
 @end
 
 NS_ASSUME_NONNULL_END
