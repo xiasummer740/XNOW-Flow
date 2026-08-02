@@ -173,15 +173,16 @@ def _handle_device_message(device_id: str, msg: dict):
         # 更新 App 版本（应用程序列）
         app_version = status_data.get("app_version", "")
         if app_version:
+            db = SessionLocal()
             try:
-                db = SessionLocal()
                 dev = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
                 if dev:
                     dev.app_version = app_version
                     db.commit()
-                db.close()
             except Exception as e:
                 logger.error(f"update app_version error: {e}")
+            finally:
+                db.close()
 
         current_account = status_data.get("current_account")
         if current_account:
@@ -222,7 +223,9 @@ def _handle_device_message(device_id: str, msg: dict):
         try:
             dev = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
             if dev:
-                dev.api_id = api_id
+                # 只绑定首个租户：设备已绑定 api_id 时忽略设备上报的 api_id
+                if not dev.api_id:
+                    dev.api_id = api_id
                 if device_code:
                     dev.device_code = device_code  # 编号存独立列，不改 name
                 db.commit()
@@ -293,8 +296,8 @@ def _verify_device_auth(device_id: str, secret: str) -> bool:
 
 def _mark_device_online(device_id: str, api_id: str = "", device_code: str = ""):
     """标记设备在线（用于 HTTP 轮询设备）"""
+    db = SessionLocal()
     try:
-        db = SessionLocal()
         device = db.query(DeviceBinding).filter(
             DeviceBinding.name == device_id
         ).first()
@@ -302,7 +305,8 @@ def _mark_device_online(device_id: str, api_id: str = "", device_code: str = "")
             device.online = True
             device.is_online = True  # 前端用 is_online 判断在线
             device.status = "online"
-            if api_id:
+            # 只绑定首个租户：设备已绑定 api_id 时忽略上报值
+            if api_id and not device.api_id:
                 device.api_id = api_id
             # 机器码：设备唯一标识（用于区分多台设备）
             if not device.device_id:
@@ -324,9 +328,10 @@ def _mark_device_online(device_id: str, api_id: str = "", device_code: str = "")
             db.add(device)
             logger.info(f"Device {device_id} auto-registered via HTTP poll")
         db.commit()
-        db.close()
     except Exception as e:
         logger.error(f"_mark_device_online error: {e}")
+    finally:
+        db.close()
 
 
 # ========== WebSocket 端点（向后兼容） ==========
@@ -399,7 +404,9 @@ async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", devi
                     try:
                         dev = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
                         if dev:
-                            dev.api_id = api_id
+                            # 只绑定首个租户：设备已绑定 api_id 时忽略设备上报的 api_id
+                            if not dev.api_id:
+                                dev.api_id = api_id
                             if device_code:
                                 dev.name = device_code
                             db.commit()

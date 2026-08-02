@@ -94,15 +94,16 @@ class ConnectionManager:
         if device_id in self._connections:
             return True
         # DB 中 last_online 在 30 秒内（HTTP 轮询设备）
+        db = SessionLocal()
         try:
-            db = SessionLocal()
             dev = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
-            db.close()
             if dev and dev.last_online:
                 delta = (datetime.utcnow() - dev.last_online.replace(tzinfo=None)).total_seconds()
                 return delta < 30
         except Exception:
             pass
+        finally:
+            db.close()
         return False
 
     def get_connection_count(self) -> int:
@@ -132,15 +133,16 @@ class ConnectionManager:
 
     def _update_device_status(self, device_id: str, online: bool, status: str, api_id: str = ""):
         """更新数据库中设备的在线状态，设备不存在时自动注册"""
+        db = SessionLocal()
         try:
-            db = SessionLocal()
             device = db.query(DeviceBinding).filter(
                 DeviceBinding.name == device_id
             ).first()
             if device:
                 device.online = online
                 device.status = status
-                if api_id:
+                # 只绑定首个租户：设备已绑定 api_id 时忽略上报值
+                if api_id and not device.api_id:
                     device.api_id = api_id
                 if online:
                     device.last_online = datetime.utcnow()
@@ -159,9 +161,10 @@ class ConnectionManager:
                 db.add(device)
                 logger.info(f"Device {device_id} auto-registered to database (api_id={api_id})")
             db.commit()
-            db.close()
         except Exception as e:
             logger.error(f"Update device status failed: {e}")
+        finally:
+            db.close()
 
 
 # 全局单例

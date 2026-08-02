@@ -19,6 +19,13 @@ from tenant import tenant_scope, ensure_owned
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/biz/v2", tags=["accounts"])
 
+# CSV 导入时把空字符串单元格转 None 的字段（数值/布尔，避免 Pydantic int("") 报错）
+_CSV_EMPTYABLE_FIELDS = {
+    "act_sex", "act_age", "followers", "fans_count", "following_count",
+    "digg_count", "video_count", "friends_count", "diamond",
+    "health_score", "register_time", "has_2fa",
+}
+
 
 # ==================== 查询 ====================
 
@@ -58,16 +65,14 @@ def list_accounts(
     if device_id:
         query = query.filter(Account.device_id == device_id)
 
+    if has_credentials is True:
+        query = query.filter(Account.credentials != "")
+    elif has_credentials is False:
+        query = query.filter(or_(Account.credentials == "", Account.credentials.is_(None)))
+
     total = query.count()
     accounts = query.order_by(Account.id.desc()).offset(offset).limit(limit).all()
     results = [AccountResponse.from_orm_with_creds(a) for a in accounts]
-
-    # 如果有 has_credentials 筛选，在 Python 层过滤
-    if has_credentials is not None:
-        results = [r for r in results if r.has_credentials == has_credentials]
-        # total 也需要重新计算（粗略处理）
-        # 精确 count 太复杂，这里取过滤后的长度
-        total = len(results)
 
     return PaginatedResponse(count=total, results=results)
 
@@ -179,29 +184,40 @@ def batch_import_accounts(
             if current_user.role != "admin":
                 acct.api_id = current_user.api_id or ""
             db.add(acct)
-            imported.append(data)
+            imported.append(acct)
         db.commit()
 
     # 方式2: CSV 文件
     if file and file.filename:
         content = file.file.read().decode("utf-8-sig")
         reader = csv.DictReader(io.StringIO(content))
-        for row in reader:
-            req = AccountImportRequest(**row)
-            data = req.to_orm_dict()
-            acct = Account(**data)
-            if current_user.role != "admin":
-                acct.api_id = current_user.api_id or ""
-            db.add(acct)
-            imported.append(data)
+        for idx, row in enumerate(reader):
+            try:
+                # 空字符串单元格：数值/布尔字段转 None，避免 Pydantic int("") 报错
+                for key, value in list(row.items()):
+                    if isinstance(value, str) and value.strip() == "" and key in _CSV_EMPTYABLE_FIELDS:
+                        row[key] = None
+                req = AccountImportRequest(**row)
+                data = req.to_orm_dict()
+                acct = Account(**data)
+                if current_user.role != "admin":
+                    acct.api_id = current_user.api_id or ""
+                db.add(acct)
+                imported.append(acct)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"CSV 第 {idx + 2} 行数据错误: {e}")
         db.commit()
 
     if not imported:
         raise HTTPException(status_code=400, detail="未提供任何账号数据")
 
     logger.info(f"批量导入 {len(imported)} 个账号")
-    # 重新查出来返回
-    accounts = db.query(Account).order_by(Account.id.desc()).limit(len(imported)).all()
+    # 只返回本次导入的账号，且按租户隔离（防止泄露其他租户账号）
+    query = db.query(Account).filter(Account.id.in_([a.id for a in imported]))
+    scope = tenant_scope(Account, current_user)
+    if scope is not None:
+        query = query.filter(scope)
+    accounts = query.all()
     results = [AccountResponse.from_orm_with_creds(a) for a in accounts]
     return PaginatedResponse(count=len(results), results=results)
 
@@ -273,7 +289,11 @@ def dispatch_accounts(
     for acc in accounts:
         acc.device_id = req.device_id
 
-    device.account_count = len(accounts)
+    # 先 flush 待更新的 device_id，再按真实绑定数重算（避免覆盖其他已绑定账号）
+    db.flush()
+    device.account_count = db.query(Account).filter(
+        Account.device_id == req.device_id
+    ).count()
     db.commit()
     logger.info(f"分配 {len(accounts)} 个账号到设备 {req.device_id}")
     return MessageResponse(message=f"已分配 {len(accounts)} 个账号到 {req.device_id}")
