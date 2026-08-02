@@ -608,13 +608,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
     });
 }
 
-/// 摇一摇恢复显示浮窗
-- (void)motionBegan:(UIEventSubtype)motion withEvent:(UIEvent *)event {
-    if (motion == UIEventSubtypeMotionShake) {
-        NSLog(@"[XNOWER] 摇一摇 → 恢复浮窗");
-        [self showFloatingPanel];
-    }
-}
+// L18: 摇一摇恢复浮窗 — XNOWER 是 NSObject 非 UIResponder，此方法不会收到
+// motion 事件（死代码）。要恢复浮窗请重新打开 TikTok 或点击浮窗按钮。
+// 如需要摇一摇，应在 overlayWindow 的自定义 UIWindow 子类中实现 motionBegan:。
 
 #pragma mark - XNFloatingPanelDelegate
 
