@@ -33,13 +33,19 @@ PLAN_DAYS = {k: v["days"] for k, v in PLAN_QUOTA.items()}  # 兼容旧引用
 
 
 def _gen_key() -> str:
-    """生成卡密: XXXX-XXXX-XXXX-XXXX"""
+    """生成卡密: 16位大写字母+数字连体（无横杠/空格，避免用户理解错误）"""
     alphabet = string.ascii_uppercase + string.digits
     # 去除易混淆字符
     for ch in "O0I1":
         alphabet = alphabet.replace(ch, "")
-    groups = ["".join(secrets.choice(alphabet) for _ in range(4)) for _ in range(4)]
-    return "-".join(groups)
+    return "".join(secrets.choice(alphabet) for _ in range(16))
+
+
+def _normalize_key(raw: str) -> str:
+    """卡密归一化：去掉横杠/空格/其他分隔符，统一大写。
+    支持 GQGU-BWQG-ZWCA-YV9Z / GQGU BWQG ZWCA YV9Z / gqgubwqgzwcayv9z 任意格式。
+    """
+    return "".join(ch for ch in (raw or "").upper() if ch.isalnum())
 
 
 def _serialize(lic: License):
@@ -169,19 +175,28 @@ def get_my_quota(
 def activate_license(
     body: dict,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    secret: str = "",
 ):
-    """设备输入卡密激活
+    """设备输入卡密激活（设备级操作，用设备密钥 secret 鉴权，不要求管理员 JWT）
     body: {key, device_id, udid}
     成功绑定设备，有效期按套餐（默认1年）。
     """
-    key = (body.get("key") or "").strip().upper()
+    # 设备密钥鉴权（设备请求带 ?secret=xxx）
+    from routers.ws import _verify_device_auth
+    device_id_pre = (body.get("device_id") or "").strip()
+    if not _verify_device_auth(device_id_pre, secret):
+        raise HTTPException(status_code=401, detail="设备密钥无效")
+    key_norm = _normalize_key(body.get("key"))
     device_id = (body.get("device_id") or "").strip()
     udid = (body.get("udid") or "").strip()
-    if not key or not device_id:
+    if not key_norm or not device_id:
         raise HTTPException(status_code=400, detail="缺少卡密或设备ID")
 
-    lic = db.query(License).filter(License.key == key).first()
+    # 归一化匹配：兼容带/不带横杠、空格、大小写
+    lic = next(
+        (l for l in db.query(License).all() if _normalize_key(l.key) == key_norm),
+        None,
+    )
     if not lic:
         raise HTTPException(status_code=400, detail="卡密不存在")
     if lic.status == "disabled":
@@ -213,11 +228,11 @@ def activate_license(
         dev = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
         if dev and dev.api_id:
             lic.api_id = dev.api_id
-            logger.info(f"License {key} api_id backfilled -> {dev.api_id} (device {device_id})")
+            logger.info(f"License {key_norm} api_id backfilled -> {dev.api_id} (device {device_id})")
 
     db.commit()
     db.refresh(lic)
-    logger.info(f"Device {device_id} activated license {key} (plan={lic.plan})")
+    logger.info(f"Device {device_id} activated license {key_norm} (plan={lic.plan})")
 
     return _serialize(lic)
 
@@ -226,9 +241,12 @@ def activate_license(
 def check_device_license(
     device_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    secret: str = "",
 ):
-    """检查设备当前授权状态（连接时调用）"""
+    """检查设备当前授权状态（连接时调用，设备密钥鉴权）"""
+    from routers.ws import _verify_device_auth
+    if not _verify_device_auth(device_id, secret):
+        raise HTTPException(status_code=401, detail="设备密钥无效")
     lic = db.query(License).filter(
         License.device_id == device_id,
         License.status == "active",
