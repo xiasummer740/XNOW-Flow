@@ -19,8 +19,11 @@ static NSString *const kXNProcKey       = @"XNOWER_processed";
 
 // ====== 后端配置 ======
 // 优先 VPS 直连（运营商封了 Cloudflare，但 VPS IP 通）
-#define XN_BACKEND_HOST  @"192.129.210.52"
-#define XN_BACKEND_PORT  8000
+// 后端地址（全局共享，供 XNOWER 等使用）
+NSString *const kXnowBackendHost = @"192.129.210.52";
+int const kXnowBackendPort = 8000;
+#define XN_BACKEND_HOST  kXnowBackendHost
+#define XN_BACKEND_PORT  kXnowBackendPort
 #define XN_POLL_INTERVAL 8.0  // 秒，两次后端请求最小间隔
 
 // ====== 全局状态 ======

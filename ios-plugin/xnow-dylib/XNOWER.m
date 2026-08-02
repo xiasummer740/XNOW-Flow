@@ -620,7 +620,10 @@ __attribute__((destructor)) static void XNOWERUnload() {
 
 /// 通过 HTTP API 向后端发送指令（VPS 直连，Cloudflare 被封）
 - (void)_sendCommandToBackend:(NSString *)action params:(NSDictionary *)params {
-    NSString *baseURL = @"http://192.129.210.52:8000";
+    // L17: 与 XNURLProtocol 共用后端常量（VPS 直连）
+    extern NSString *const kXnowBackendHost;
+    extern int const kXnowBackendPort;
+    NSString *baseURL = [NSString stringWithFormat:@"http://%@:%d", kXnowBackendHost, kXnowBackendPort];
     // M5: 上报带设备密钥鉴权
     NSString *sec = self.deviceSecret ?: @"";
     NSString *reportPath = sec.length > 0 ?

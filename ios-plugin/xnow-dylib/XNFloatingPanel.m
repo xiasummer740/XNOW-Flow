@@ -614,10 +614,23 @@ static NSArray *kCountries;
 
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
 
-    // 从顶层 VC 弹出
-    UIViewController *topVC = UIApplication.sharedApplication.keyWindow.rootViewController;
+    // 从顶层 VC 弹出（L19: 用 connectedScenes 兼容多场景，避免废弃 keyWindow）
+    UIWindow *topWin = nil;
+    if (@available(iOS 13, *)) {
+        for (UIScene *sc in UIApplication.sharedApplication.connectedScenes) {
+            if ([sc isKindOfClass:[UIWindowScene class]]) {
+                UIWindowScene *ws = (UIWindowScene *)sc;
+                if (ws.activationState == UISceneActivationStateForegroundActive) {
+                    topWin = ws.keyWindow ?: ws.windows.firstObject;
+                    break;
+                }
+            }
+        }
+    }
+    if (!topWin) topWin = UIApplication.sharedApplication.windows.firstObject;
+    UIViewController *topVC = topWin.rootViewController;
     while (topVC.presentedViewController) topVC = topVC.presentedViewController;
-    [topVC presentViewController:alert animated:YES completion:nil];
+    if (topVC) [topVC presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)_handleMenuAction:(NSString *)action {
