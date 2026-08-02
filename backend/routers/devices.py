@@ -172,7 +172,7 @@ def batch_delete_devices(
 
 
 @router.post("/device-bindings/batch/dispatch/")
-def batch_dispatch_task(
+async def batch_dispatch_task(
     req: DispatchTaskRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -225,7 +225,6 @@ def batch_dispatch_task(
 
         # 下发指令（WebSocket 优先，HTTP 轮询设备入队）
         # 始终入队（不再用 is_online 拦截 — 离线设备靠队列延迟送达，避免丢指令）
-        import asyncio
         payload = {
             "type": "command",
             "action": req.action,
@@ -236,14 +235,8 @@ def batch_dispatch_task(
             payload["credentials"] = account_credentials
 
         try:
-            # send_or_enqueue_command: WS可达就发，否则入轮询队列
-            loop = asyncio.new_event_loop()
-            try:
-                sent, via_ws = loop.run_until_complete(
-                    manager.send_or_enqueue_command(d.name, payload)
-                )
-            finally:
-                loop.close()
+            # send_or_enqueue_command: WS可达就发，否则入轮询队列（async直接await）
+            sent, via_ws = await manager.send_or_enqueue_command(d.name, payload)
             if sent:
                 sent_count += 1
         except Exception as e:

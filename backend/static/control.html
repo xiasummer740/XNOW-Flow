@@ -270,8 +270,16 @@ async function loadDevices() {
         const sel = document.getElementById('deviceSelect');
         const opt = sel.options[sel.selectedIndex];
         const dev = (d.results||[]).find(x => x.id == deviceId);
-        if (dev) document.getElementById('deviceStatus').innerHTML =
-          `<span class="${dev.is_online?'online':'offline'}">${dev.is_online?'● 在线':'○ 离线'}</span> 设备:${dev.device_id||dev.name} App:${dev.app_version||'—'}`;
+        if (dev) {
+          // 安全渲染：用 textContent 防 XSS（设备数据不可信）
+          const el = document.getElementById('deviceStatus');
+          el.textContent = '';
+          const span = document.createElement('span');
+          span.className = dev.is_online ? 'online' : 'offline';
+          span.textContent = dev.is_online ? '● 在线' : '○ 离线';
+          el.appendChild(span);
+          el.appendChild(document.createTextNode(' 设备:' + (dev.device_id || dev.name) + ' App:' + (dev.app_version || '—')));
+        }
       }).catch(()=>{});
     }, 5000);
   } catch(e) { log('加载设备失败: ' + e.message); }

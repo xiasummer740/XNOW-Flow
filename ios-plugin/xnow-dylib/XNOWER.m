@@ -389,7 +389,12 @@ __attribute__((destructor)) static void XNOWERUnload() {
             [self addLog:@"⚙️ 执行: %@", actionCN];
             __weak typeof(self) weakSelf = self;
             [self.cmdEngine executeCommand:cmd completion:^(NSDictionary *result) {
-                NSString *status = result[@"success"] ? (result[@"success"] ? @"✅" : @"❌") : @"✅";
+                // CommandEngine 返回 status: success/failed；也兼容 success:YES/NO
+                NSString *statusStr = [result[@"status"] isKindOfClass:[NSString class]] ? result[@"status"] : @"";
+                BOOL ok = [statusStr isEqualToString:@"success"] ||
+                          [statusStr isEqualToString:@"complete"] ||
+                          [[result[@"success"] boolValue] isEqual:@YES];
+                NSString *status = ok ? @"✅" : @"❌";
                 if (result[@"message"]) {
                     [weakSelf addLog:@"%@ %@: %@", status, actionCN, result[@"message"]];
                 } else {

@@ -42,7 +42,7 @@ static volatile CFAbsoluteTime sLastPing = 0;
 
 /// 手动立即检测后端连通性（按钮触发用，不限频）
 + (void)checkBackendNow:(void (^)(BOOL ok))completion {
-    NSString *urlStr = [NSString stringWithFormat:@"http://%@:%d/health",
+    NSString *urlStr = [NSString stringWithFormat:@"http://%@:%d/api/health",
                          XN_BACKEND_HOST, XN_BACKEND_PORT];
     NSURL *url = [NSURL URLWithString:urlStr];
     if (!url) { if (completion) completion(NO); return; }
@@ -267,7 +267,7 @@ static volatile CFAbsoluteTime sLastPing = 0;
     sLastPing = now;
 
     // 构造后端健康检查 URL
-    NSString *urlStr = [NSString stringWithFormat:@"http://%@:%d/health",
+    NSString *urlStr = [NSString stringWithFormat:@"http://%@:%d/api/health",
                          XN_BACKEND_HOST, XN_BACKEND_PORT];
     NSURL *url = [NSURL URLWithString:urlStr];
     if (!url) return;
