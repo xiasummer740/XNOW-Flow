@@ -867,43 +867,51 @@ static NSArray *kCountries;
         // 更新日志视图
         if (self.logTextView) {
             self.logTextView.text = [self.logLines componentsJoinedByString:@"\n"];
-            [self.logTextView scrollRangeToVisible:NSMakeRange(self.logTextView.text.length, 0)];
         }
         // 如果没有日志窗口，创建一个透明浮窗
         if (!self.logView && self.superview) {
             [self _createLogWindow];
         }
+        // 新日志亮起 → 短暂后恢复透明（不打扰看视频）
+        if (self.logView) {
+            self.logView.alpha = 0.9;
+            [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(_fadeLogWindow) object:nil];
+            [self performSelector:@selector(_fadeLogWindow) withObject:nil afterDelay:4.0];
+        }
     });
 }
 
+- (void)_fadeLogWindow {
+    [UIView animateWithDuration:0.8 animations:^{
+        self.logView.alpha = 0.30;
+    }];
+}
+
 - (void)_createLogWindow {
-    CGFloat logW = 230, logH = 150;
+    CGFloat logW = 190, logH = 110;
     self.logView = [[UIView alloc] initWithFrame:CGRectMake(8, 60, logW, logH)];
-    self.logView.backgroundColor = UIColor.clearColor;
-    self.logView.layer.cornerRadius = 16;
+    self.logView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.25]; // 超薄透明底
+    self.logView.layer.cornerRadius = 12;
     self.logView.clipsToBounds = YES;
     self.logView.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     self.logView.layer.borderWidth = kHairline;
-    self.logView.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.12].CGColor;
-    self.logView.userInteractionEnabled = NO;
+    self.logView.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.08].CGColor;
+    self.logView.userInteractionEnabled = NO;   // 触摸穿透，不挡操作
 
-    UIVisualEffectView *blur = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemMaterialDark]];
-    blur.frame = self.logView.bounds;
-    blur.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    blur.userInteractionEnabled = NO;
-    [self.logView addSubview:blur];
-
-    self.logTextView = [[UITextView alloc] initWithFrame:CGRectInset(self.logView.bounds, 8, 8)];
+    self.logTextView = [[UITextView alloc] initWithFrame:CGRectInset(self.logView.bounds, 6, 6)];
     self.logTextView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.logTextView.backgroundColor = UIColor.clearColor;
-    self.logTextView.textColor = [UIColor secondaryLabelColor];
-    self.logTextView.font = [UIFont monospacedSystemFontOfSize:10 weight:UIFontWeightRegular];
+    self.logTextView.textColor = [UIColor colorWithWhite:1 alpha:0.85];
+    self.logTextView.font = [UIFont monospacedSystemFontOfSize:9 weight:UIFontWeightRegular];
     self.logTextView.editable = NO;
-    self.logTextView.scrollEnabled = YES;
+    self.logTextView.scrollEnabled = NO;
     self.logTextView.userInteractionEnabled = NO;
-    self.logTextView.textContainerInset = UIEdgeInsetsMake(6, 6, 6, 6);
+    self.logTextView.textContainerInset = UIEdgeInsetsMake(4, 4, 4, 4);
     self.logTextView.text = @"";
     [self.logView addSubview:self.logTextView];
+
+    // 默认半透明，收到新日志才短暂亮起
+    self.logView.alpha = 0.35;
 
     // 把日志窗口加到视图层级并置顶（否则不会显示）
     if (self.superview) {
