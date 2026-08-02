@@ -1,12 +1,28 @@
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, event
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 from config import settings
 
+# 优化4: SQLite WAL模式 + busy_timeout — 降低并发读写锁冲突
 engine = create_engine(
     settings.DATABASE_URL,
-    connect_args={"check_same_thread": False}  # SQLite only
+    connect_args={
+        "check_same_thread": False,   # SQLite only
+        "timeout": 10,                # busy_timeout 10s（连接级）
+    }
 )
+# 连接建立后设置 PRAGMA（WAL 允许读写并发，减少 "database is locked"）
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, connection_record):
+    try:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=10000")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
+    except Exception:
+        pass
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class Base(DeclarativeBase):
