@@ -131,6 +131,9 @@ async def dispatch_dm_task(
     ensure_owned(task, current_user)
     if not task.device_id:
         raise HTTPException(status_code=400, detail="任务缺少 device_id")
+    from tenant import resolve_owned_device
+    if not resolve_owned_device(db, task.device_id, current_user):
+        raise HTTPException(status_code=404, detail="设备不存在")
 
     command = {
         "type": "command",

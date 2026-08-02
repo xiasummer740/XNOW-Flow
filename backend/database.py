@@ -51,6 +51,12 @@ def _migrate_tenant_columns():
                     "UPDATE users SET api_id='1' WHERE username='admin' AND (api_id IS NULL OR api_id='')"
                 ))
 
+            # device_bindings.device_code：绑定编号存独立列（不改name防丢指令）
+            if "device_bindings" in tables:
+                cols = [r[1] for r in conn.execute(text("PRAGMA table_info(device_bindings)")).fetchall()]
+                if "device_code" not in cols:
+                    conn.execute(text("ALTER TABLE device_bindings ADD COLUMN device_code VARCHAR(50) DEFAULT ''"))
+
             conn.commit()
     except Exception as e:
         print(f"[migration] 租户列迁移失败（可忽略）: {e}")

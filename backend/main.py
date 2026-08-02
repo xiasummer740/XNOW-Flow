@@ -121,6 +121,56 @@ _NURTURE_TICK_INTERVAL = 30 * 60  # 30 分钟
 _nurture_scheduler_stop = threading.Event()
 _nurture_scheduler_thread = None
 
+# ---- 设备离线巡检（H9） ----
+_OFFLINE_SWEEP_INTERVAL = 15  # 秒
+_offline_sweep_stop = threading.Event()
+_offline_sweep_thread = None
+
+
+def _offline_sweep_loop():
+    """HTTP 轮询设备掉线标记：last_online 超过 35s 未更新 → is_online=False"""
+    logger.info("[offline-sweep] started")
+    from datetime import datetime, timedelta
+    while not _offline_sweep_stop.is_set():
+        try:
+            from database import SessionLocal
+            from models.device import DeviceBinding
+            db = SessionLocal()
+            try:
+                cutoff = datetime.utcnow() - timedelta(seconds=35)
+                from sqlalchemy import or_
+                stale = db.query(DeviceBinding).filter(
+                    DeviceBinding.is_online == True,
+                    or_(
+                        DeviceBinding.last_online < cutoff,
+                        DeviceBinding.last_online.is_(None),
+                    ),
+                ).all()
+                for d in stale:
+                    d.is_online = False
+                    d.online = False
+                    d.status = "offline"
+                if stale:
+                    db.commit()
+                    logger.info(f"[offline-sweep] marked {len(stale)} devices offline")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"[offline-sweep] error: {e}")
+        _offline_sweep_stop.wait(_OFFLINE_SWEEP_INTERVAL)
+
+
+def _start_offline_sweep():
+    global _offline_sweep_thread
+    if _offline_sweep_thread is not None and _offline_sweep_thread.is_alive():
+        return
+    _offline_sweep_thread = threading.Thread(
+        target=_offline_sweep_loop,
+        daemon=True,
+        name="offline-sweep",
+    )
+    _offline_sweep_thread.start()
+
 
 def _nurture_scheduler_loop():
     logger.info("[nurture-scheduler] started")
@@ -147,3 +197,4 @@ def _start_nurture_scheduler():
 
 
 _start_nurture_scheduler()
+_start_offline_sweep()

@@ -135,6 +135,9 @@ async def dispatch_quick_command(
     device_id = (body.get("device_id") or "").strip()
     if not device_id:
         raise HTTPException(status_code=400, detail="device_id 不能为空")
+    from tenant import resolve_owned_device
+    if not resolve_owned_device(db, device_id, current_user):
+        raise HTTPException(status_code=404, detail="设备不存在")
 
     command = {
         "type": "command",

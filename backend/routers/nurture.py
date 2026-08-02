@@ -160,6 +160,12 @@ def create_nurture_plan(
     else:
         device_ids = []
 
+    # 校验目标设备归属（非admin只能操作自己的设备）
+    from tenant import resolve_owned_device
+    for dev_code in device_ids:
+        if not resolve_owned_device(db, dev_code, current_user):
+            raise HTTPException(status_code=404, detail=f"设备不存在或无权限: {dev_code}")
+
     account_ids = body.get("account_ids") or []
     if isinstance(account_ids, (list, tuple)):
         account_ids = [int(a) for a in account_ids if str(a).strip().isdigit()]

@@ -100,18 +100,26 @@ def _insert_collected_data(device_id: str, data: dict) -> int:
 
 
 def _upsert_account(device_id: str, account_data: dict):
-    """从设备上报创建或更新账号记录"""
+    """从设备上报创建或更新账号记录（按租户隔离，防跨租户篡改）"""
     db = SessionLocal()
     try:
         aweme_id = account_data.get("aweme_id", "")
         if not aweme_id:
             return
+        tenant_id = _get_device_api_id(device_id)
 
-        account = db.query(Account).filter(Account.aweme_id == aweme_id).first()
+        # 按租户查找，避免篡改他人账号
+        account = db.query(Account).filter(
+            Account.aweme_id == aweme_id,
+            Account.api_id == tenant_id,
+        ).first()
         if account:
+            # 阻止越权字段（所有权/主键/凭证）
+            blocked = {"id", "api_id", "aweme_id", "created_at", "updated_at", "credentials"}
             for key, value in account_data.items():
-                if hasattr(account, key) and key not in ("aweme_id", "id"):
-                    setattr(account, key, value)
+                if key in blocked or not hasattr(account, key):
+                    continue
+                setattr(account, key, value)
             account.device_id = device_id
         else:
             account = Account(
@@ -128,6 +136,7 @@ def _upsert_account(device_id: str, account_data: dict):
                 health_score=account_data.get("health_score", 100),
                 status=account_data.get("status", "active"),
                 source="device_report",
+                api_id=tenant_id,  # 归属设备租户
             )
             db.add(account)
 
@@ -208,16 +217,16 @@ def _handle_device_message(device_id: str, msg: dict):
         logger.info(f"Device {device_id} bound: code={device_code}, api_id={api_id}")
         _mark_device_online(device_id, api_id, device_code)
 
-        # 更新设备记录
+        # 更新设备记录（不改 name = 连接身份，防指令 key 失配）
         db = SessionLocal()
         try:
             dev = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
             if dev:
                 dev.api_id = api_id
                 if device_code:
-                    dev.name = device_code
+                    dev.device_code = device_code  # 编号存独立列，不改 name
                 db.commit()
-                logger.info(f"Device {device_id} updated with api_id={api_id}")
+                logger.info(f"Device {device_id} updated with api_id={api_id}, code={device_code}")
         except Exception as e:
             logger.error(f"bind_info error: {e}")
         finally:

@@ -135,6 +135,9 @@ async def dispatch_video_post(
     ensure_owned(post, current_user)
     if not post.device_id:
         raise HTTPException(status_code=400, detail="任务缺少 device_id")
+    from tenant import resolve_owned_device
+    if not resolve_owned_device(db, post.device_id, current_user):
+        raise HTTPException(status_code=404, detail="设备不存在")
 
     command = {
         "type": "command",

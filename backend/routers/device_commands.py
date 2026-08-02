@@ -40,10 +40,9 @@ async def send_device_command(
     Actions: scroll_down, scroll_up, open_profile,
              like, follow, comment, collect, screenshot
     """
-    # 检查设备是否存在
-    device = db.query(DeviceBinding).filter(
-        DeviceBinding.name == device_id
-    ).first()
+    # 检查设备是否存在 + 归属校验
+    from tenant import resolve_owned_device
+    device = resolve_owned_device(db, device_id, current_user)
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
 

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Union
 from datetime import datetime
 import json
 
@@ -23,7 +23,7 @@ class DeviceResponse(BaseModel):
     current_account_id: Optional[int] = 0
     group_name: Optional[str] = "未分组"
     tags: Optional[List[str]] = []
-    api_id: Optional[str] = ""
+    api_id: Optional[Union[str, int]] = ""
     last_seen: Optional[datetime] = None
     last_online: Optional[datetime] = None
     created_at: Optional[datetime] = None

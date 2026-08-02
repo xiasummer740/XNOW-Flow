@@ -33,6 +33,7 @@ class DeviceBinding(Base):
     tags = Column(Text, default="[]")                   # JSON tags
     # 设备鉴权
     device_secret = Column(String(64), default="")        # 每设备共享密钥（设备请求鉴权）
+    device_code = Column(String(50), default="")          # 设备编号（用户绑定1-20，不改name防丢指令）
 
     # Meta
     api_id = Column(String(20), default="")               # API ID（关联用户）
