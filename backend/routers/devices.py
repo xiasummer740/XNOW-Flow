@@ -224,30 +224,30 @@ def batch_dispatch_task(
         db.add(task)
 
         # 下发指令（WebSocket 优先，HTTP 轮询设备入队）
-        if manager.is_online(d.name):
-            import asyncio
-            payload = {
-                "type": "command",
-                "action": req.action,
-                "params": req.params or {},
-                "timestamp": datetime.utcnow().isoformat(),
-            }
-            if req.action == "batch_login" and account_credentials:
-                payload["credentials"] = account_credentials
+        # 始终入队（不再用 is_online 拦截 — 离线设备靠队列延迟送达，避免丢指令）
+        import asyncio
+        payload = {
+            "type": "command",
+            "action": req.action,
+            "params": req.params or {},
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        if req.action == "batch_login" and account_credentials:
+            payload["credentials"] = account_credentials
 
+        try:
+            # send_or_enqueue_command: WS可达就发，否则入轮询队列
+            loop = asyncio.new_event_loop()
             try:
-                # send_or_enqueue_command: WS可达就发，否则入轮询队列
-                loop = asyncio.new_event_loop()
-                try:
-                    sent, via_ws = loop.run_until_complete(
-                        manager.send_or_enqueue_command(d.name, payload)
-                    )
-                finally:
-                    loop.close()
-                if sent:
-                    sent_count += 1
-            except Exception as e:
-                logger.error(f"dispatch to {d.name} error: {e}")
+                sent, via_ws = loop.run_until_complete(
+                    manager.send_or_enqueue_command(d.name, payload)
+                )
+            finally:
+                loop.close()
+            if sent:
+                sent_count += 1
+        except Exception as e:
+            logger.error(f"dispatch to {d.name} error: {e}")
 
     db.commit()
     return MessageResponse(message=f"已向 {len(devices)} 台设备下发任务，{sent_count} 台已推送(含队列)")
