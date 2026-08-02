@@ -17,6 +17,7 @@ from schemas.dashboard import (
 )
 from dependencies import get_current_user
 from models.user import User
+from tenant import tenant_scope
 
 router = APIRouter(prefix="/api/biz/v2", tags=["dashboard"])
 
@@ -26,11 +27,19 @@ def dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # 租户隔离：非 admin 的每个聚合查询都只统计自己租户的数据
+    def _scoped(model):
+        q = db.query(model)
+        scope = tenant_scope(model, current_user)
+        if scope is not None:
+            q = q.filter(scope)
+        return q
+
     now = datetime.utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     # ===== Device Stats =====
-    devices = db.query(DeviceBinding).all()
+    devices = _scoped(DeviceBinding).all()
     total_devices = len(devices)
     online_devices = sum(1 for d in devices if d.is_online or d.online)
     device_stats = DeviceStats(
@@ -43,7 +52,7 @@ def dashboard_stats(
     )
 
     # ===== Task Stats =====
-    all_tasks = db.query(Task).all()
+    all_tasks = _scoped(Task).all()
     today_tasks = [t for t in all_tasks if t.created_at and t.created_at >= today_start]
     task_stats = TaskStats(
         total=len(all_tasks),
@@ -57,7 +66,7 @@ def dashboard_stats(
     )
 
     # ===== Account Stats =====
-    accounts = db.query(Account).all()
+    accounts = _scoped(Account).all()
     account_stats = AccountStats(
         total=len(accounts),
         active=sum(1 for a in accounts if a.status == "active"),
@@ -75,7 +84,7 @@ def dashboard_stats(
     )
 
     # ===== Collect Stats =====
-    today_collected = db.query(CollectedData).filter(CollectedData.collected_at >= today_start).all()
+    today_collected = _scoped(CollectedData).filter(CollectedData.collected_at >= today_start).all()
     collect_stats = CollectStats(
         fans=sum(1 for c in today_collected if c.source_type == "fans"),
         videos=sum(1 for c in today_collected if c.source_type == "videos"),
@@ -104,7 +113,7 @@ def dashboard_stats(
     )
 
     # ===== Success Rate =====
-    today_execs = db.query(TaskExecution).filter(TaskExecution.created_at >= today_start).all()
+    today_execs = _scoped(TaskExecution).filter(TaskExecution.created_at >= today_start).all()
     success_count = sum(1 for e in today_execs if e.status == "success")
     today_success_rate = round((success_count / len(today_execs) * 100) if today_execs else 0, 1)
 
@@ -142,7 +151,7 @@ def dashboard_stats(
         fail_reason_top5.append(FailReason(reason=reason, count=count))
 
     # ===== Recent Activities (last 5 task executions) =====
-    recent_execs = db.query(TaskExecution).order_by(TaskExecution.created_at.desc()).limit(5).all()
+    recent_execs = _scoped(TaskExecution).order_by(TaskExecution.created_at.desc()).limit(5).all()
     recent_activities = [
         ActivityItem(
             id=e.id,

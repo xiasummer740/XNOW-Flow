@@ -115,6 +115,32 @@ def _migrate_collected_data_columns():
         print(f"[migration] 采集数据列迁移失败（可忽略）: {e}")
 
 
+def _migrate_add_api_id(table):
+    """SQLite 迁移：为指定表补齐 api_id 列并回填旧数据。
+
+    仅处理已存在的旧表（create_all 不会给已存在表加列），失败不影响启动。
+    旧数据归到 admin 租户（api_id='1'）。幂等可重复执行。
+    """
+    try:
+        with engine.connect() as conn:
+            tables = [r[0] for r in conn.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )).fetchall()]
+            if table not in tables:
+                return
+            cols = [r[1] for r in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()]
+            if "api_id" not in cols:
+                conn.execute(text(
+                    f"ALTER TABLE {table} ADD COLUMN api_id VARCHAR(20) DEFAULT ''"
+                ))
+            conn.execute(text(
+                f"UPDATE {table} SET api_id = '1' WHERE api_id IS NULL OR api_id = ''"
+            ))
+            conn.commit()
+    except Exception as e:
+        print(f"[migration] {table}.api_id 迁移失败（可忽略）: {e}")
+
+
 def _migrate_video_posts():
     """SQLite 迁移：确保 video_posts 表存在。
 
@@ -221,6 +247,9 @@ def _migrate_quick_commands():
 
 _migrate_tenant_columns()
 _migrate_collected_data_columns()
+# 租户隔离：为尚未有 api_id 的业务表补齐列并回填旧数据（collected_data 已有）
+for _table in ("tasks", "task_executions", "timed_tasks", "feedback", "reply_templates", "media"):
+    _migrate_add_api_id(_table)
 _migrate_video_posts()
 _migrate_dm_tasks()
 _migrate_nurture_plans()

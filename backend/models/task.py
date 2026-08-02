@@ -6,6 +6,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id = Column(Integer, primary_key=True, index=True)
+    api_id = Column(String(20), default="", index=True)   # 租户（关联用户）
     name = Column(String(200))
     type = Column(String(50), nullable=False)
     status = Column(String(20), default="pending")

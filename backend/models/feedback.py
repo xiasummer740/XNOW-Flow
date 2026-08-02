@@ -6,6 +6,7 @@ class Feedback(Base):
     __tablename__ = "feedback"
 
     id = Column(Integer, primary_key=True, index=True)
+    api_id = Column(String(20), default="", index=True)   # 租户（关联用户）
     title = Column(String(200))
     content = Column(Text)
     contact = Column(String(100))

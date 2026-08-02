@@ -221,6 +221,8 @@ async def batch_dispatch_task(
             status="running",
             progress=50,
         )
+        if current_user.role != "admin":
+            task.api_id = current_user.api_id or ""
         db.add(task)
 
         # 下发指令（WebSocket 优先，HTTP 轮询设备入队）

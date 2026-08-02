@@ -1,4 +1,3 @@
-# TODO(tenant-isolation): Task 模型缺少 api_id 列，当前无租户隔离，任何已登录用户可查看/修改他人任务。需加列 + 过滤。
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -8,6 +7,7 @@ from schemas.task import TaskResponse, TaskCreateRequest
 from schemas.common import PaginatedResponse
 from dependencies import get_current_user
 from models.user import User
+from tenant import tenant_scope
 
 router = APIRouter(prefix="/api/biz/v2", tags=["tasks"])
 
@@ -19,9 +19,14 @@ def list_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    total = db.query(Task).count()
+    query = db.query(Task)
+    # 租户隔离：非 admin 只能看自己的任务
+    scope = tenant_scope(Task, current_user)
+    if scope is not None:
+        query = query.filter(scope)
+    total = query.count()
     tasks = (
-        db.query(Task)
+        query
         .order_by(Task.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -48,6 +53,8 @@ def create_task(
         status="pending",
         progress=0,
     )
+    if current_user.role != "admin":
+        task.api_id = current_user.api_id or ""
     db.add(task)
     db.commit()
     db.refresh(task)

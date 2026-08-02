@@ -1,4 +1,3 @@
-# TODO(tenant-isolation): Feedback 模型缺少 api_id 列，当前无租户隔离，任何已登录用户可查看他人反馈。需加列 + 过滤。
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -8,6 +7,7 @@ from schemas.feedback import FeedbackResponse, FeedbackCreateRequest
 from schemas.common import PaginatedResponse
 from dependencies import get_current_user
 from models.user import User
+from tenant import tenant_scope
 
 router = APIRouter(prefix="/api/biz/v2", tags=["feedback"])
 
@@ -19,9 +19,14 @@ def list_feedback(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    total = db.query(Feedback).count()
+    query = db.query(Feedback)
+    # 租户隔离：非 admin 只能看自己的反馈
+    scope = tenant_scope(Feedback, current_user)
+    if scope is not None:
+        query = query.filter(scope)
+    total = query.count()
     items = (
-        db.query(Feedback)
+        query
         .order_by(Feedback.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -40,6 +45,8 @@ def create_feedback(
     current_user: User = Depends(get_current_user),
 ):
     item = Feedback(title=req.title, content=req.content, contact=req.contact)
+    if current_user.role != "admin":
+        item.api_id = current_user.api_id or ""
     db.add(item)
     db.commit()
     db.refresh(item)

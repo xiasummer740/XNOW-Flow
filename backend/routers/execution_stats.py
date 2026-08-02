@@ -6,6 +6,7 @@ from database import get_db
 from models.task_execution import TaskExecution
 from dependencies import get_current_user
 from models.user import User
+from tenant import tenant_scope
 
 router = APIRouter(prefix="/api/biz/v2", tags=["execution_stats"])
 
@@ -15,13 +16,21 @@ def execution_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # 租户隔离：非 admin 只统计自己租户的执行记录
+    def _scoped():
+        q = db.query(TaskExecution)
+        scope = tenant_scope(TaskExecution, current_user)
+        if scope is not None:
+            q = q.filter(scope)
+        return q
+
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     days = []
     for i in range(6, -1, -1):
         day_start = today - timedelta(days=i)
         day_end = day_start + timedelta(days=1)
         execs = (
-            db.query(TaskExecution)
+            _scoped()
             .filter(
                 TaskExecution.created_at >= day_start,
                 TaskExecution.created_at < day_end,
@@ -38,7 +47,7 @@ def execution_stats(
             }
         )
 
-    all_execs = db.query(TaskExecution).all()
+    all_execs = _scoped().all()
     type_map = {}
     for e in all_execs:
         t = e.type or "other"

@@ -6,6 +6,7 @@ class TaskExecution(Base):
     __tablename__ = "task_executions"
 
     id = Column(Integer, primary_key=True, index=True)
+    api_id = Column(String(20), default="", index=True)   # 租户（关联用户）
     task_name = Column(String(200))
     type = Column(String(50))
     status = Column(String(20), default="pending")

@@ -65,6 +65,8 @@ async def send_device_command(
         status="running",
         progress=50,
     )
+    if current_user.role != "admin":
+        task.api_id = current_user.api_id or ""
     db.add(task)
     db.commit()
 
@@ -91,12 +93,14 @@ async def report_command(data: Dict[str, Any], secret: str = ""):
     # 记录到 task 表
     db = SessionLocal()
     try:
+        dev = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
         task = Task(
             type=action,
             name=f"手机指令-{action}",
             device=device_id,
             status="success",
             progress=100,
+            api_id=(dev.api_id if dev else "") or "",
         )
         db.add(task)
         db.commit()

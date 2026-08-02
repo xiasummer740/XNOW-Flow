@@ -1,4 +1,3 @@
-# TODO(tenant-isolation): TimedTask 模型缺少 api_id 列，当前无租户隔离，任何已登录用户可查看/修改他人定时任务。需加列 + 过滤。
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -8,6 +7,7 @@ from schemas.timed_task import TimedTaskResponse, TimedTaskCreateRequest, TimedT
 from schemas.common import MessageResponse
 from dependencies import get_current_user
 from models.user import User
+from tenant import tenant_scope, ensure_owned
 
 router = APIRouter(prefix="/api/biz/v2", tags=["timed_tasks"])
 
@@ -29,7 +29,12 @@ def list_timed_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    tasks = db.query(TimedTask).order_by(TimedTask.id).all()
+    query = db.query(TimedTask)
+    # 租户隔离：非 admin 只能看自己的定时任务
+    scope = tenant_scope(TimedTask, current_user)
+    if scope is not None:
+        query = query.filter(scope)
+    tasks = query.order_by(TimedTask.id).all()
     return [_serialize_timed_task(t) for t in tasks]
 
 
@@ -40,6 +45,8 @@ def create_timed_task(
     current_user: User = Depends(get_current_user),
 ):
     task = TimedTask(name=req.name, cron=req.cron, task_type=req.task_type)
+    if current_user.role != "admin":
+        task.api_id = current_user.api_id or ""
     db.add(task)
     db.commit()
     db.refresh(task)
@@ -56,6 +63,7 @@ def update_timed_task(
     task = db.query(TimedTask).filter(TimedTask.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="定时任务不存在")
+    ensure_owned(task, current_user)
     if req.name is not None:
         task.name = req.name
     if req.cron is not None:
@@ -78,6 +86,7 @@ def delete_timed_task(
     task = db.query(TimedTask).filter(TimedTask.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="定时任务不存在")
+    ensure_owned(task, current_user)
     db.delete(task)
     db.commit()
     return MessageResponse(message="删除成功")

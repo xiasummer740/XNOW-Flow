@@ -1,4 +1,3 @@
-# TODO(tenant-isolation): Media 模型缺少 api_id 列，当前无租户隔离，任何已登录用户可查看/删除他人素材。需加列 + 过滤。
 from fastapi import APIRouter, Depends, UploadFile, File, Query
 from sqlalchemy.orm import Session
 import os
@@ -10,6 +9,7 @@ from models.media import Media
 from schemas.media import MediaResponse
 from dependencies import get_current_user
 from models.user import User
+from tenant import tenant_scope
 
 router = APIRouter(prefix="/api/biz/v2", tags=["media"])
 
@@ -20,7 +20,12 @@ def list_media(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Media).order_by(Media.created_at.desc())
+    query = db.query(Media)
+    # 租户隔离：非 admin 只能看自己的素材
+    scope = tenant_scope(Media, current_user)
+    if scope is not None:
+        query = query.filter(scope)
+    query = query.order_by(Media.created_at.desc())
     if file_type:
         query = query.filter(Media.file_type == file_type)
     items = query.all()
@@ -56,6 +61,8 @@ async def upload_media(
         file_size=len(content),
         url=f"/uploads/{unique_name}",
     )
+    if current_user.role != "admin":
+        item.api_id = current_user.api_id or ""
     db.add(item)
     db.commit()
     db.refresh(item)

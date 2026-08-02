@@ -6,6 +6,7 @@ class TimedTask(Base):
     __tablename__ = "timed_tasks"
 
     id = Column(Integer, primary_key=True, index=True)
+    api_id = Column(String(20), default="", index=True)   # 租户（关联用户）
     name = Column(String(200), nullable=False)
     cron = Column(String(50), nullable=False)
     task_type = Column(String(50), default="数据采集")

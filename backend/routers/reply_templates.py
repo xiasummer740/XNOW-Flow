@@ -1,4 +1,3 @@
-# TODO(tenant-isolation): ReplyTemplate 模型缺少 api_id 列，当前无租户隔离，任何已登录用户可查看/修改他人模板。需加列 + 过滤。
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -13,6 +12,7 @@ from schemas.reply_template import (
 from schemas.common import MessageResponse
 from dependencies import get_current_user
 from models.user import User
+from tenant import tenant_scope, ensure_owned
 
 router = APIRouter(prefix="/api/biz/v2", tags=["reply_templates"])
 
@@ -22,8 +22,13 @@ def list_templates(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    query = db.query(ReplyTemplate)
+    # 租户隔离：非 admin 只能看自己的话术模板
+    scope = tenant_scope(ReplyTemplate, current_user)
+    if scope is not None:
+        query = query.filter(scope)
     items = (
-        db.query(ReplyTemplate)
+        query
         .order_by(ReplyTemplate.created_at.desc())
         .all()
     )
@@ -36,8 +41,13 @@ def random_template(
     current_user: User = Depends(get_current_user),
 ):
     """随机取一条激活话术模板（用于自动私信话术）"""
+    query = db.query(ReplyTemplate)
+    # 租户隔离：非 admin 只能随机取自己租户的话术模板
+    scope = tenant_scope(ReplyTemplate, current_user)
+    if scope is not None:
+        query = query.filter(scope)
     item = (
-        db.query(ReplyTemplate)
+        query
         .filter(ReplyTemplate.is_active == True)  # noqa: E712
         .order_by(func.random())
         .first()
@@ -59,6 +69,8 @@ def create_template(
         match_type=req.match_type,
         match_rule=req.match_rule,
     )
+    if current_user.role != "admin":
+        item.api_id = current_user.api_id or ""
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -79,6 +91,7 @@ def update_template(
     )
     if not item:
         raise HTTPException(status_code=404, detail="模板不存在")
+    ensure_owned(item, current_user)
     if req.name is not None:
         item.name = req.name
     if req.content is not None:
@@ -107,6 +120,7 @@ def delete_template(
     )
     if not item:
         raise HTTPException(status_code=404, detail="模板不存在")
+    ensure_owned(item, current_user)
     db.delete(item)
     db.commit()
     return MessageResponse(message="删除成功")
