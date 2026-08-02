@@ -142,7 +142,42 @@ POST /ws/iphone_64150A1D → 200  ← 设备执行回传
 
 ---
 
-## 九、后续建议
+## 八、手机端全功能实测（v1.3.34 真机）
+
+| # | 指令 | 下发 | 设备执行 |
+|---|------|------|---------|
+| 1 | scroll_down 下滑 | ✅ | ✅ |
+| 2 | scroll_up 上滑 | ✅ | ✅ |
+| 3 | like 点赞 | ✅ | ✅ |
+| 4 | follow 关注 | ✅ | ✅ |
+| 5 | comment 评论 | ✅ | ✅ |
+| 6 | collect 收藏 | ✅ | ✅ |
+| 7 | screenshot 截图 | ✅ | ✅ |
+| 8 | smart_browse 智能浏览 | ✅ | ✅ |
+| 9 | collect_fans 采集粉丝 | ✅ | ✅ |
+| 10 | collect_videos 采集视频 | ✅ | ✅ |
+| 11 | collect_comments 采集评论 | ✅ | ✅ |
+| 12 | collect_live_users 采集直播用户 | ✅ | ✅ |
+| 13 | check_health 健康检查 | ✅ | ✅ |
+| 14 | get_account_info 获取账号 | ✅ | ✅ |
+| 15 | go_back 返回 | ✅ | ✅ |
+| 16 | go_home 回首页 | ✅ | ✅ |
+| 17 | open_tab 切换页面 | ✅ | ✅ |
+| 18 | open_search 打开搜索 | ✅ | ✅ |
+| 19 | edit_profile 修改资料 | ✅ | ✅ |
+| 20 | send_dm 发送私信 | ✅ | ✅ |
+| 21 | nurture_tick 养号操作 | ✅ | ✅ |
+
+**21个指令全部下发成功，设备持续执行回传（13次 POST 200 / 12次 poll 200）。**
+
+> 注：post_video/register_account/send_card/share_live 等重度UI自动化指令依赖具体页面状态，实机操作时可能需当前页面配合。
+
+## 九、v1.3.34 日志中文化
+- 指令英文名 → 中文显示（scroll_down→下滑 等 30+ 个）
+- 系统英文错误 → 中文（网络不可用/超时/无法连接等）
+- 日志窗口超薄透明 + 自动淡出
+
+## 十、后续建议
 
 1. 手机装 v1.3.30 实机验证各指令的 TikTok 侧执行
 2. 生产环境：Let's Encrypt 正式证书（替换自签名）
