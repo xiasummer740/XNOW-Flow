@@ -127,7 +127,7 @@ for src in SRCS:
 # Step 3: Link
 print("[3] Linking...")
 OBJS = ' '.join([s.replace('.m', '.o') for s in SRCS])
-LINK_CMD = f"cd {REMOTE} && {LD} -arch arm64 -dylib -platform_version ios 16.5 16.5 -o xnower.dylib {OBJS} -lSystem -lobjc -framework Foundation -framework UIKit -framework CoreGraphics -framework CFNetwork -framework WebKit -syslibroot {SDK} -install_name @executable_path/Frameworks/xnower.dylib"
+LINK_CMD = f"cd {REMOTE} && {LD} -arch arm64 -dylib -platform_version ios 16.5 16.5 -o xnower.dylib {OBJS} -lSystem -lobjc -framework Foundation -framework UIKit -framework CoreGraphics -framework CFNetwork -framework WebKit -framework Security -syslibroot {SDK} -install_name @executable_path/Frameworks/xnower.dylib"
 out = run(LINK_CMD, 120)
 
 # Step 4: Convert private commands to standard format

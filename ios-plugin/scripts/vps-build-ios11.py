@@ -49,7 +49,7 @@ for src in SRCS:
 # Link
 print("[2] Linking with ld64.lld (iOS 11.4 target)...")
 OBJS = ' '.join([f"ios11/{s.replace('.m', '.o')}" for s in SRCS])
-LINK_CMD = f"cd {REMOTE} && ld64.lld -arch arm64 -dylib -platform_version ios 11.4 11.4 -o ios11/xnower.dylib {OBJS} -lSystem -lobjc -framework Foundation -framework UIKit -framework CoreGraphics -framework CFNetwork -framework WebKit -syslibroot {SDK_OLD} -install_name @executable_path/Frameworks/xnower.dylib"
+LINK_CMD = f"cd {REMOTE} && ld64.lld -arch arm64 -dylib -platform_version ios 11.4 11.4 -o ios11/xnower.dylib {OBJS} -lSystem -lobjc -framework Foundation -framework UIKit -framework CoreGraphics -framework CFNetwork -framework WebKit -framework Security -syslibroot {SDK_OLD} -install_name @executable_path/Frameworks/xnower.dylib"
 run(LINK_CMD, 120)
 
 # Check and convert
