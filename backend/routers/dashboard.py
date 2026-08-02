@@ -117,17 +117,27 @@ def dashboard_stats(
     success_count = sum(1 for e in today_execs if e.status == "success")
     today_success_rate = round((success_count / len(today_execs) * 100) if today_execs else 0, 1)
 
-    # ===== 7d Online Rate =====
+    # ===== 7d Online Rate（真实数据：每天 last_online 活跃设备占比） =====
     device_online_rate_7d = []
     for i in range(6, -1, -1):
         day = (now - timedelta(days=i)).strftime("%m-%d")
-        device_online_rate_7d.append(Rate7d(date=day, rate=round(90 + (i % 10) * 0.5, 1)))
+        day_start = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+        # 当天在线 = last_online 落在当天 或 当前在线
+        active = sum(1 for d in devices if d.last_online and day_start <= d.last_online.replace(tzinfo=None) < day_end)
+        if i == 0:
+            active = online_devices
+        rate = round(active / total_devices * 100, 1) if total_devices else 0
+        device_online_rate_7d.append(Rate7d(date=day, rate=rate))
 
-    # ===== Risk Accounts 7d =====
+    # ===== Risk Accounts 7d（真实数据：按 created_at 分布） =====
     risk_accounts_7d = []
     for i in range(6, -1, -1):
         day = (now - timedelta(days=i)).strftime("%m-%d")
-        risk_accounts_7d.append(RiskAccount7d(date=day, count=max(0, 3 - i)))
+        day_start = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+        cnt = sum(1 for a in accounts if a.status == "risk_control" and a.created_at and day_start <= a.created_at.replace(tzinfo=None) < day_end)
+        risk_accounts_7d.append(RiskAccount7d(date=day, count=cnt))
 
     # ===== Task Type Distribution =====
     type_counts = {}
