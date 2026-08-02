@@ -29,6 +29,7 @@ from models.video_post import VideoPost
 from models.dm_task import DmTask
 from models.nurture_plan import NurturePlan
 from models.quick_command import QuickCommand
+from models.license import License
 
 # 创建表
 Base.metadata.create_all(bind=engine)
@@ -51,6 +52,7 @@ from routers import media, collected_data, execution_stats
 from routers import materials, video_posts
 from routers import dm_tasks
 from routers import nurture, quick_commands
+from routers import licenses
 from routers import ws as ws_router
 from routers import device_commands
 
@@ -72,6 +74,7 @@ app.include_router(video_posts.router)
 app.include_router(dm_tasks.router)
 app.include_router(nurture.router)
 app.include_router(quick_commands.router)
+app.include_router(licenses.router)
 app.include_router(ws_router.router)
 app.include_router(device_commands.router)
 
