@@ -104,8 +104,12 @@ async def serve_spa(full_path: str):
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=404, content={"detail": "Not found"})
 
+    # 根路径 → 返回 SPA 首页（nginx 代理 / 到后端，空路径应回 index.html）
+    if not full_path:
+        return FileResponse(os.path.join(static_dir, "index.html"))
+
     # 防路径穿越：拒绝任何含 ../ 或绝对路径的请求
-    if not full_path or ".." in full_path or full_path.startswith("/") or "\\" in full_path:
+    if ".." in full_path or full_path.startswith("/") or "\\" in full_path:
         from fastapi.responses import JSONResponse
         return JSONResponse(status_code=404, content={"detail": "Not found"})
 
