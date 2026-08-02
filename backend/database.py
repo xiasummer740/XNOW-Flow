@@ -67,6 +67,20 @@ def _migrate_tenant_columns():
                     "UPDATE users SET api_id='1' WHERE username='admin' AND (api_id IS NULL OR api_id='')"
                 ))
 
+            # 商用配额：users / licenses 补配额列（NULL=按套餐默认，迁移期不覆盖存量数据）
+            if "users" in tables:
+                cols = [r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
+                if "device_limit" not in cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN device_limit INTEGER"))
+                if "account_limit" not in cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN account_limit INTEGER"))
+            if "licenses" in tables:
+                cols = [r[1] for r in conn.execute(text("PRAGMA table_info(licenses)")).fetchall()]
+                if "device_limit" not in cols:
+                    conn.execute(text("ALTER TABLE licenses ADD COLUMN device_limit INTEGER"))
+                if "account_limit" not in cols:
+                    conn.execute(text("ALTER TABLE licenses ADD COLUMN account_limit INTEGER"))
+
             # device_bindings.device_code：绑定编号存独立列（不改name防丢指令）
             if "device_bindings" in tables:
                 cols = [r[1] for r in conn.execute(text("PRAGMA table_info(device_bindings)")).fetchall()]

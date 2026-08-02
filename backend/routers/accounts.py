@@ -175,6 +175,8 @@ def import_account(
     # 管理员可见全部账号（不走 tenant 过滤），空 api_id 表示"全局共享"账号，
     # 供租户继承/调度使用，而非归属某特定租户。非管理员导入则强制归属自身。
     if current_user.role != "admin":
+        from quota import ensure_account_importable
+        ensure_account_importable(db, current_user.api_id or "", extra=1, current_user=current_user)
         account.api_id = current_user.api_id or ""
     db.add(account)
     db.commit()
@@ -195,6 +197,18 @@ def batch_import_accounts(
     - file: CSV 文件（列名与 AccountImportRequest 字段一致）
     """
     imported = []
+
+    # 商用配额：非 admin 预检本次导入总量（JSON + CSV 合并计数）
+    if current_user.role != "admin":
+        from quota import ensure_account_importable
+        expected = len(body.accounts) if body and body.accounts else 0
+        if file and file.filename:
+            content0 = file.file.read().decode("utf-8-sig")
+            file.file.seek(0)
+            expected += len(list(csv.DictReader(io.StringIO(content0))))
+        ensure_account_importable(
+            db, current_user.api_id or "", extra=expected, current_user=current_user
+        )
 
     # 方式1: JSON body
     if body and body.accounts:

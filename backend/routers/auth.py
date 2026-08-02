@@ -214,5 +214,46 @@ def list_users(db: Session = Depends(get_db),
     if current_user.username != "admin":
         raise HTTPException(status_code=403, detail="仅管理员可查看")
     users = db.query(User).all()
-    results = [UserInfo(id=u.id, username=u.username, role=u.role, is_active=u.is_active, api_id=u.api_id) for u in users]
+    results = []
+    for u in users:
+        info = UserInfo(id=u.id, username=u.username, role=u.role, is_active=u.is_active, api_id=u.api_id)
+        # 附带商用配额（优先 User override，否则按名下卡算）
+        try:
+            from quota import get_tenant_quota
+            q = get_tenant_quota(db, u.api_id or "") if u.api_id else {}
+            info_dict = info.model_dump()
+            info_dict.update({
+                "device_limit": u.device_limit if u.device_limit is not None else q.get("device_limit"),
+                "device_used": q.get("device_used", 0),
+                "account_limit": u.account_limit if u.account_limit is not None else q.get("account_limit"),
+                "account_used": q.get("account_used", 0),
+                "card_count": q.get("card_count", 0),
+                "licensed": q.get("licensed", False),
+            })
+            results.append(info_dict)
+        except Exception:
+            results.append(info.model_dump())
     return PaginatedResponse(count=len(results), results=results)
+
+
+@router.patch("/users/{user_id}/quota/", response_model=MessageResponse)
+def set_user_quota(
+    user_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """管理员设置用户租户配额覆盖（null=按名下卡密算）"""
+    if current_user.username != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可操作")
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if "device_limit" in body:
+        v = body["device_limit"]
+        target.device_limit = max(0, int(v)) if v is not None else None
+    if "account_limit" in body:
+        v = body["account_limit"]
+        target.account_limit = max(0, int(v)) if v is not None else None
+    db.commit()
+    return MessageResponse(message="配额已更新")

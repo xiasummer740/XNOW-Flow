@@ -16,14 +16,20 @@ from database import get_db, SessionLocal
 from models.license import License
 from models.device import DeviceBinding
 from models.user import User
+from quota import get_tenant_quota, ensure_device_bindable, ensure_account_importable
 from dependencies import get_current_user
 from tenant import ensure_owned
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/biz/v2", tags=["licenses"])
 
-# 套餐时长（天）
-PLAN_DAYS = {"year1": 365, "month1": 30, "month3": 90}
+# 套餐配额（天 / 设备上限 / 账号上限）
+PLAN_QUOTA = {
+    "month1": {"days": 30,  "device_limit": 3,  "account_limit": 30},
+    "month3": {"days": 90,  "device_limit": 8,  "account_limit": 80},
+    "year1":  {"days": 365, "device_limit": 20, "account_limit": 200},
+}
+PLAN_DAYS = {k: v["days"] for k, v in PLAN_QUOTA.items()}  # 兼容旧引用
 
 
 def _gen_key() -> str:
@@ -48,6 +54,8 @@ def _serialize(lic: License):
         "activated_at": lic.activated_at.isoformat() if lic.activated_at else None,
         "expires_at": lic.expires_at.isoformat() if lic.expires_at else None,
         "remark": lic.remark,
+        "device_limit": lic.device_limit,
+        "account_limit": lic.account_limit,
         "created_at": lic.created_at.isoformat() if lic.created_at else None,
     }
 
@@ -117,6 +125,44 @@ def disable_license(
     return {"message": "已禁用"}
 
 
+@router.post("/licenses/{license_id}/quota/")
+def set_license_quota(
+    license_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """管理员调整单卡配额（device_limit/account_limit，None=恢复套餐默认）"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可操作")
+    lic = db.query(License).filter(License.id == license_id).first()
+    if not lic:
+        raise HTTPException(status_code=404, detail="卡密不存在")
+    if "device_limit" in body:
+        v = body["device_limit"]
+        lic.device_limit = max(0, int(v)) if v is not None else None
+    if "account_limit" in body:
+        v = body["account_limit"]
+        lic.account_limit = max(0, int(v)) if v is not None else None
+    db.commit()
+    db.refresh(lic)
+    return _serialize(lic)
+
+
+# ========== 租户配额查询 ==========
+
+@router.get("/quota/")
+def get_my_quota(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """当前用户租户的配额使用情况"""
+    if current_user.role == "admin":
+        # admin 不限额，返回空信息
+        return {"admin": True}
+    return get_tenant_quota(db, current_user.api_id or "")
+
+
 # ========== 设备：激活/校验 ==========
 
 @router.post("/licenses/activate/")
@@ -161,6 +207,14 @@ def activate_license(
             days = PLAN_DAYS.get(lic.plan, 365)
             lic.expires_at = now + timedelta(days=days)
             lic.status = "active"
+
+    # 归属回写（双保险）：若设备已绑定租户，把卡归到该租户（主路径在设备绑后台时）
+    if not lic.api_id or lic.api_id in ("", "1"):
+        dev = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
+        if dev and dev.api_id:
+            lic.api_id = dev.api_id
+            logger.info(f"License {key} api_id backfilled -> {dev.api_id} (device {device_id})")
+
     db.commit()
     db.refresh(lic)
     logger.info(f"Device {device_id} activated license {key} (plan={lic.plan})")

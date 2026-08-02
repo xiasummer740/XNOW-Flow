@@ -17,4 +17,7 @@ class License(Base):
     activated_at = Column(DateTime(timezone=True))        # 激活时间
     expires_at = Column(DateTime(timezone=True))          # 到期时间
     remark = Column(String(200), default="")              # 备注（客户名等）
+    # 配额：NULL=按套餐默认（PLAN_QUOTA），非 NULL=管理员特批单卡
+    device_limit = Column(Integer, nullable=True)
+    account_limit = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

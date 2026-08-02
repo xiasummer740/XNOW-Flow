@@ -239,7 +239,12 @@ def _handle_device_message(device_id: str, msg: dict):
         device_code = bind_data.get("device_code", "")
         api_id = bind_data.get("api_id", "")
         logger.info(f"Device {device_id} bound: code={device_code}, api_id={api_id}")
-        _mark_device_online(device_id, api_id, device_code)
+
+        # 商用配额：首次绑定须有该设备的 active 卡，失败则不绑租户
+        err = _mark_device_online(device_id, api_id, device_code)
+        if err:
+            logger.warning(f"Device {device_id} bind_info rejected: {err}")
+            return
 
         # 更新设备记录（不改 name = 连接身份，防指令 key 失配）
         db = SessionLocal()
@@ -318,7 +323,11 @@ def _verify_device_auth(device_id: str, secret: str) -> bool:
 
 
 def _mark_device_online(device_id: str, api_id: str = "", device_code: str = ""):
-    """标记设备在线（用于 HTTP 轮询设备）"""
+    """标记设备在线（用于 HTTP 轮询设备）
+
+    首次绑定 api_id 时执行商用配额校验（严格模式：设备须有 active 卡）。
+    返回错误信息（str）或 None（成功）。配额不足时设备不绑定，保持原状态。
+    """
     db = SessionLocal()
     try:
         device = db.query(DeviceBinding).filter(
@@ -330,12 +339,21 @@ def _mark_device_online(device_id: str, api_id: str = "", device_code: str = "")
             device.status = "online"
             # 只绑定首个租户：设备已绑定 api_id 时忽略上报值
             if api_id and not device.api_id:
-                device.api_id = api_id
+                # 商用配额：首次绑定须有该设备的 active 卡（一卡一机）
+                try:
+                    from quota import ensure_device_bindable
+                    ensure_device_bindable(db, device_id, api_id)
+                    device.api_id = api_id
+                except Exception as e:
+                    logger.warning(f"Device {device_id} bind blocked: {e}")
+                    db.rollback()
+                    return str(getattr(e, "detail", e))
             # 机器码：设备唯一标识（用于区分多台设备）
             if not device.device_id:
                 device.device_id = device_id
             device.last_online = datetime.utcnow()
         else:
+            # 新设备自动注册：标记在线但不绑定租户（须先激活卡密 + 显式 bind_info）
             device = DeviceBinding(
                 name=device_id,
                 device_name=device_id,
@@ -344,7 +362,7 @@ def _mark_device_online(device_id: str, api_id: str = "", device_code: str = "")
                 online=True,
                 is_online=True,  # 前端用 is_online 判断在线
                 account_count=0,
-                api_id=api_id,
+                api_id="",
                 last_online=datetime.utcnow(),
                 app_version="—",
             )
@@ -353,8 +371,10 @@ def _mark_device_online(device_id: str, api_id: str = "", device_code: str = "")
         db.commit()
     except Exception as e:
         logger.error(f"_mark_device_online error: {e}")
+        return "内部错误"
     finally:
         db.close()
+    return None
 
 
 # ========== WebSocket 端点（向后兼容） ==========

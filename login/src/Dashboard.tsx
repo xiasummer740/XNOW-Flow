@@ -15,6 +15,7 @@ import UserManagement from './pages/UserManagement'
 import ReplyConfig from './pages/ReplyConfig'
 import UsageGuide from './pages/UsageGuide'
 import Placeholder from './pages/Placeholder'
+import CardManagement from './pages/CardManagement'
 
 const getMenuData = (role?: string) => {
   const isAdmin = role === 'admin'
@@ -33,7 +34,7 @@ const getMenuData = (role?: string) => {
     ]},
     ...(isAdmin ? [{ group: '系统', items: [
       { icon: '👥', label: '用户管理' }, { icon: '⚙️', label: '回复配置' },
-      { icon: '🔧', label: '设置中心' },
+      { icon: '🎫', label: '卡密管理' }, { icon: '🔧', label: '设置中心' },
     ]}] : []),
     { group: '帮助', items: [{ icon: '📖', label: '使用教程' }] },
   ]
@@ -199,6 +200,7 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
                 case '公告中心': return <Announcements token={token} />
                 case '反馈中心': return <Feedback token={token} />
                 case '回复配置': return <ReplyConfig token={token} />
+                case '卡密管理': return <CardManagement token={token} />
                 case '使用教程': return <UsageGuide token={token} />
                 default: return <Placeholder title={activeMenu} />
               }
