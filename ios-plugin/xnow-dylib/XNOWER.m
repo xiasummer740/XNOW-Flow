@@ -393,7 +393,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
                 NSString *statusStr = [result[@"status"] isKindOfClass:[NSString class]] ? result[@"status"] : @"";
                 BOOL ok = [statusStr isEqualToString:@"success"] ||
                           [statusStr isEqualToString:@"complete"] ||
-                          [[result[@"success"] boolValue] isEqual:@YES];
+                          [result[@"success"] boolValue];
                 NSString *status = ok ? @"✅" : @"❌";
                 if (result[@"message"]) {
                     [weakSelf addLog:@"%@ %@: %@", status, actionCN, result[@"message"]];
