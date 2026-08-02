@@ -92,7 +92,6 @@ static NSArray *kCountries;
     // icon 为 SF Symbol 名称，保持 action 字符串与旧版完全一致
     _mainMenu = @[
         @{@"icon": @"network", @"label": @"绑定云控后台", @"action": @"bind_server"},
-        @{@"icon": @"antenna.radiowaves.left.and.right", @"label": @"连接到服务器", @"action": @"connect_server"},
         @{@"icon": @"person.2.fill", @"label": @"账号管理", @"action": @"account_mgmt"},
         @{@"icon": @"square.and.arrow.down.fill", @"label": @"下载无水印视频", @"action": @"dl_video"},
         @{@"icon": @"globe", @"label": @"设置国家", @"action": @"set_country"},
