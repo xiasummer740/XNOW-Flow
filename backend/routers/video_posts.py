@@ -4,7 +4,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from database import get_db
@@ -18,6 +18,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/biz/v2", tags=["video_posts"])
 
 VALID_STATUSES = {"pending", "processing", "done", "failed"}
+
+
+def _parse_iso_datetime(value):
+    """容错解析 ISO8601：接受 naive/aware 与 'Z' 后缀，统一返回 aware UTC。
+    解析失败抛 ValueError，由调用方转 400。"""
+    s = str(value).strip().replace("Z", "+00:00")
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 @router.post("/video-posts/", status_code=201)
@@ -41,9 +51,7 @@ def create_video_post(
     scheduled_at = None
     if body.get("scheduled_at"):
         try:
-            scheduled_at = datetime.fromisoformat(
-                str(body["scheduled_at"]).replace("Z", "+00:00")
-            )
+            scheduled_at = _parse_iso_datetime(body["scheduled_at"])
         except Exception:
             raise HTTPException(status_code=400, detail="scheduled_at 格式非法，需 ISO8601")
 

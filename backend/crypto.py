@@ -5,9 +5,12 @@
 import json
 import base64
 import hashlib
+import logging
 
 from cryptography.fernet import Fernet
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 _fernet = None
 
@@ -28,7 +31,9 @@ def encrypt_credentials(creds: dict) -> str:
     try:
         token = _get_fernet().encrypt(json.dumps(creds, ensure_ascii=False).encode())
         return "enc:v1:" + token.decode()
-    except Exception:
+    except Exception as e:
+        # 加密失败时保留明文兜底（不阻断数据导入），但必须大声记录，便于发现
+        logger.error(f"encrypt_credentials 加密失败，已降级为明文存储: {e}")
         return json.dumps(creds, ensure_ascii=False)
 
 

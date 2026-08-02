@@ -7,7 +7,7 @@
 """
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -24,6 +24,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/biz/v2", tags=["nurture"])
 
 VALID_STATUSES = {"active", "paused", "completed"}
+
+# 养号计划 daily_actions 中的数值字段及其类型（下发前强转，避免非数值崩溃）
+_DAILY_ACTION_NUMERIC_KEYS = {
+    "min_scrolls": int,
+    "max_scrolls": int,
+    "like_probability": float,
+    "follow_probability": float,
+    "comment_probability": float,
+    "browse_minutes": int,
+}
+
+
+def _parse_iso_datetime(value):
+    """容错解析 ISO8601：接受 naive/aware 与 'Z' 后缀，统一返回 aware UTC。
+    解析失败抛 ValueError，由调用方转 400。"""
+    s = str(value).strip().replace("Z", "+00:00")
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 # ========== 序列化 / 解析辅助 ==========
@@ -192,17 +212,24 @@ def create_nurture_plan(
     daily_actions = body.get("daily_actions") or {}
     if not isinstance(daily_actions, dict):
         daily_actions = {}
+    # 校验/强转数值字段（下发时会被 int()/float() 转，先在此拦截非数值）
+    for k, caster in _DAILY_ACTION_NUMERIC_KEYS.items():
+        if k in daily_actions and daily_actions[k] is not None:
+            try:
+                daily_actions[k] = caster(daily_actions[k])
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail=f"daily_actions.{k} 需为数值")
 
     start_date = None
     if body.get("start_date"):
         try:
-            start_date = datetime.fromisoformat(str(body["start_date"]).replace("Z", "+00:00"))
+            start_date = _parse_iso_datetime(body["start_date"])
         except Exception:
             raise HTTPException(status_code=400, detail="start_date 格式非法，需 ISO8601")
     end_date = None
     if body.get("end_date"):
         try:
-            end_date = datetime.fromisoformat(str(body["end_date"]).replace("Z", "+00:00"))
+            end_date = _parse_iso_datetime(body["end_date"])
         except Exception:
             raise HTTPException(status_code=400, detail="end_date 格式非法，需 ISO8601")
 

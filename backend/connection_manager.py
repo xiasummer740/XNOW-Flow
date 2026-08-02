@@ -65,6 +65,13 @@ class ConnectionManager:
     async def send_or_enqueue_command(self, device_id: str, command: dict) -> tuple:
         """发送指令：优先 WebSocket，不可达则入队等待 HTTP 轮询
         返回 (success, via_websocket)
+
+        语义说明：success=True 表示指令已"成功投递"——要么通过 WebSocket
+        实时发出，要么已进入 HTTP 轮询队列等待设备拉取。二者对调用方都算
+        "已下发"，因此第一个元素恒为 True（即使只是入队）。via_websocket
+        才是区分走没走实时通道的真实信号。调用方依赖此语义：
+        devices.py / device_commands.py / video_posts.py / dm_tasks.py /
+        quick_commands.py / nurture.py 均按"success=True 即已下发"处理。
         """
         # 1) 尝试 WebSocket 发送
         if device_id in self._connections:

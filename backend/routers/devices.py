@@ -253,6 +253,8 @@ def list_groups(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # 说明：DeviceGroup 是全局共享分组（无 api_id 列，无 creator 归属）。
+    # 列表对全体用户可见（含管理员创建的分组）；写操作（创建/删除）仅管理员可用。
     groups = db.query(DeviceGroup).order_by(DeviceGroup.id).all()
     # Update device counts
     for g in groups:
@@ -267,6 +269,9 @@ def create_group(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # 分组为全局共享资源，写操作仅管理员可执行
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可创建分组")
     existing = db.query(DeviceGroup).filter(DeviceGroup.name == req.name).first()
     if existing:
         raise HTTPException(status_code=400, detail="分组已存在")
@@ -283,6 +288,9 @@ def delete_group(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # 分组为全局共享资源，删除仅管理员可执行
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可删除分组")
     group = db.query(DeviceGroup).filter(DeviceGroup.id == group_id).first()
     if not group:
         raise HTTPException(status_code=404, detail="分组不存在")

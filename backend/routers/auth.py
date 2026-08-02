@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 import hashlib
 import time
 import threading
@@ -17,7 +18,11 @@ from dependencies import get_current_user
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 def gen_api_id(db: Session) -> str:
-    """生成随机 4 位数字 API ID"""
+    """生成随机 4 位数字 API ID
+
+    注意：SELECT-然后-INSERT 并非原子操作，并发下可能撞唯一约束。
+    调用方提交时必须捕获 IntegrityError 并重试（见 login/register）。
+    """
     import random
     while True:
         aid = f"{random.randint(0, 9999):04d}"
@@ -30,6 +35,7 @@ _login_attempts = {}
 _login_lock = threading.Lock()
 _MAX_ATTEMPTS = 5
 _LOCK_SECONDS = 15 * 60  # 15 分钟
+_MAX_CACHE_ENTRIES = 10000  # 登录失败记录上限，防止 dict 无限增长
 
 def _check_rate_limit(key: str) -> bool:
     """返回是否允许继续尝试"""
@@ -51,6 +57,20 @@ def _check_rate_limit(key: str) -> bool:
             return False
         return True
 
+def _prune_login_attempts(now: float):
+    """记录数超过上限时，清理过期条目（first 早于 2×锁定窗口）"""
+    if len(_login_attempts) <= _MAX_CACHE_ENTRIES:
+        return
+    cutoff = now - 2 * _LOCK_SECONDS
+    for key in list(_login_attempts.keys()):
+        rec = _login_attempts.get(key)
+        if rec and rec[1] < cutoff:
+            del _login_attempts[key]
+    # 清理后仍超限 → 整体清空（防御性兜底）
+    if len(_login_attempts) > _MAX_CACHE_ENTRIES:
+        _login_attempts.clear()
+
+
 def _record_failure(key: str):
     with _login_lock:
         now = time.time()
@@ -60,6 +80,7 @@ def _record_failure(key: str):
         else:
             count, first, locked = rec
             _login_attempts[key] = (count + 1, first, locked)
+        _prune_login_attempts(now)
 
 def _clear_attempts(key: str):
     with _login_lock:
@@ -118,8 +139,21 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
 
     token = create_token(user.id)
     if not user.api_id:
-        user.api_id = "1" if user.username == "admin" else gen_api_id(db)
+        # 先持久化密码升级，避免下面 api_id 冲突重试的回滚把密码升级一起冲掉
         db.commit()
+        if user.username == "admin":
+            user.api_id = "1"
+            db.commit()
+        else:
+            user.api_id = gen_api_id(db)
+            for _ in range(50):
+                try:
+                    db.commit()
+                    break
+                except IntegrityError:
+                    # 并发撞号（唯一约束）→ 回滚后重新生成
+                    db.rollback()
+                    user.api_id = gen_api_id(db)
     if not user.role:
         user.role = "admin" if user.username == "admin" else "user"
         db.commit()
@@ -154,10 +188,18 @@ def register(req: RegisterRequest, db: Session = Depends(get_db),
         raise HTTPException(status_code=400, detail="用户名已存在")
     if req.username == "admin":
         raise HTTPException(status_code=400, detail="不能创建 admin 账号")
-    api_id = gen_api_id(db)
-    user = User(username=req.username, password_hash=hash_password(req.password), role="user", api_id=api_id)
-    db.add(user)
-    db.commit()
+    for _ in range(50):
+        api_id = gen_api_id(db)
+        user = User(username=req.username, password_hash=hash_password(req.password), role="user", api_id=api_id)
+        db.add(user)
+        try:
+            db.commit()
+            break
+        except IntegrityError:
+            # 并发撞号（唯一约束）→ 回滚后重新生成 api_id
+            db.rollback()
+    else:
+        raise HTTPException(status_code=400, detail="注册失败，请重试")
     db.refresh(user)
     return LoginResponse(
         token=create_token(user.id),

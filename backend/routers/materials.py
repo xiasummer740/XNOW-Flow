@@ -41,10 +41,16 @@ def list_groups(
         _ensure_category(category)
         query = query.filter(MaterialGroup.category == category)
     groups = query.order_by(MaterialGroup.id.desc()).all()
-    # 附带条目数
+    # 附带条目数（按租户隔离：非 admin 只统计本租户素材，避免跨租户计数）
+    mat_scope = tenant_scope(Material, current_user)
     results = []
     for g in groups:
-        item_count = db.query(Material).filter(Material.group_id == g.id, Material.status == "active").count()
+        item_query = db.query(Material).filter(
+            Material.group_id == g.id, Material.status == "active"
+        )
+        if mat_scope is not None:
+            item_query = item_query.filter(mat_scope)
+        item_count = item_query.count()
         g.item_count = item_count
         results.append({
             "id": g.id, "name": g.name, "category": g.category,
@@ -174,6 +180,15 @@ def batch_create_materials(
                         content=c, api_id=current_user.api_id or ""))
         count += 1
     db.commit()
+    # 更新分组条目数
+    if body.get("group_id"):
+        try:
+            g = db.query(MaterialGroup).filter(MaterialGroup.id == int(body["group_id"])).first()
+            if g:
+                g.item_count = db.query(Material).filter(Material.group_id == g.id).count()
+                db.commit()
+        except (TypeError, ValueError):
+            pass  # group_id 非整数时忽略计数更新
     return {"message": f"批量导入 {count} 条素材"}
 
 

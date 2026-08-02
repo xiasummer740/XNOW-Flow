@@ -131,10 +131,27 @@ def update_account(
     for key, value in updates.items():
         if key in blocked or not hasattr(account, key):
             continue
-        # credentials 单独加密存储
-        if key == "credentials" and isinstance(value, dict):
+        # credentials 单独加密存储；兼容 dict / JSON 字符串 / 已加密字符串
+        if key == "credentials":
             from crypto import encrypt_credentials
-            setattr(account, key, encrypt_credentials(value))
+            if isinstance(value, dict):
+                setattr(account, key, encrypt_credentials(value))
+            elif isinstance(value, str):
+                if value.startswith("enc:v1:"):
+                    # 已加密，原样保存（避免重复加密）
+                    setattr(account, key, value)
+                else:
+                    try:
+                        parsed = json.loads(value)
+                    except (ValueError, TypeError):
+                        parsed = None
+                    if isinstance(parsed, dict):
+                        setattr(account, key, encrypt_credentials(parsed))
+                    else:
+                        # 非 JSON 明文，原样保存
+                        setattr(account, key, value)
+            else:
+                setattr(account, key, value)
         else:
             setattr(account, key, value)
     db.commit()
@@ -154,6 +171,9 @@ def import_account(
     """导入单个账号（支持密码/cookies/token）"""
     data = req.to_orm_dict()
     account = Account(**data)
+    # 说明：管理员导入的账号 api_id 保持为空字符串("")——这是有意为之。
+    # 管理员可见全部账号（不走 tenant 过滤），空 api_id 表示"全局共享"账号，
+    # 供租户继承/调度使用，而非归属某特定租户。非管理员导入则强制归属自身。
     if current_user.role != "admin":
         account.api_id = current_user.api_id or ""
     db.add(account)
@@ -181,6 +201,8 @@ def batch_import_accounts(
         for req in body.accounts:
             data = req.to_orm_dict()
             acct = Account(**data)
+            # 说明：管理员导入的账号 api_id 保持空字符串，表示"全局共享"账号，
+            # 供所有租户继承/调度使用（管理员可见全部账号，不走 tenant 过滤）。
             if current_user.role != "admin":
                 acct.api_id = current_user.api_id or ""
             db.add(acct)
@@ -200,6 +222,7 @@ def batch_import_accounts(
                 req = AccountImportRequest(**row)
                 data = req.to_orm_dict()
                 acct = Account(**data)
+                # 说明：管理员导入的账号 api_id 保持空字符串（全局共享，见单条导入注释）。
                 if current_user.role != "admin":
                     acct.api_id = current_user.api_id or ""
                 db.add(acct)

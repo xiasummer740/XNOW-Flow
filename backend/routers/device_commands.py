@@ -112,11 +112,13 @@ async def report_account(device_id: str, data: Dict[str, Any]):
     """手机端上报当前账号信息"""
     logger.info(f"📱 Account report from {device_id}: {data}")
     return {"status": "ok", "device_id": device_id}
+
+
+@router.get("/devices/online/")
 def get_online_devices(
     current_user: User = Depends(get_current_user),
 ):
     """获取所有在线设备"""
     return {
-        "online_count": manager.get_connection_count(),
-        "online_devices": manager.get_online_devices(),
+        "devices": manager.get_online_devices(),
     }

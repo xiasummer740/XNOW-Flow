@@ -203,3 +203,14 @@ def _start_nurture_scheduler():
 
 _start_nurture_scheduler()
 _start_offline_sweep()
+
+
+@app.on_event("shutdown")
+def _shutdown_background_threads():
+    """应用关闭时通知后台线程退出（养号调度 + 离线巡检）"""
+    _nurture_scheduler_stop.set()
+    _offline_sweep_stop.set()
+    if _nurture_scheduler_thread is not None:
+        _nurture_scheduler_thread.join(timeout=3)
+    if _offline_sweep_thread is not None:
+        _offline_sweep_thread.join(timeout=3)

@@ -51,7 +51,10 @@ def _insert_collected_data(device_id: str, data: dict) -> int:
                 aweme_id = u.get("aweme_id") or ""
                 gender = u.get("gender") or ""
                 region = u.get("region") or ""
-                followers = u.get("followers") or 0
+                try:
+                    followers = int(u.get("followers") or 0)
+                except (TypeError, ValueError):
+                    followers = 0  # 非数值兜底，避免 Integer 列写入崩溃
                 remark = u.get("remark") or ""
             else:
                 author = str(u)
@@ -99,8 +102,19 @@ def _insert_collected_data(device_id: str, data: dict) -> int:
     return inserted
 
 
+def _apply_account_update(account: Account, account_data: dict, device_id: str):
+    """把设备上报字段写入既有账号（阻止越权字段）"""
+    blocked = {"id", "api_id", "aweme_id", "created_at", "updated_at", "credentials"}
+    for key, value in account_data.items():
+        if key in blocked or not hasattr(account, key):
+            continue
+        setattr(account, key, value)
+    account.device_id = device_id
+
+
 def _upsert_account(device_id: str, account_data: dict):
     """从设备上报创建或更新账号记录（按租户隔离，防跨租户篡改）"""
+    from sqlalchemy.exc import IntegrityError
     db = SessionLocal()
     try:
         aweme_id = account_data.get("aweme_id", "")
@@ -114,13 +128,7 @@ def _upsert_account(device_id: str, account_data: dict):
             Account.api_id == tenant_id,
         ).first()
         if account:
-            # 阻止越权字段（所有权/主键/凭证）
-            blocked = {"id", "api_id", "aweme_id", "created_at", "updated_at", "credentials"}
-            for key, value in account_data.items():
-                if key in blocked or not hasattr(account, key):
-                    continue
-                setattr(account, key, value)
-            account.device_id = device_id
+            _apply_account_update(account, account_data, device_id)
         else:
             account = Account(
                 aweme_id=aweme_id,
@@ -140,15 +148,30 @@ def _upsert_account(device_id: str, account_data: dict):
             )
             db.add(account)
 
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # 并发上报同 aweme_id：先查后插非原子，撞唯一约束 → 回滚后重查并更新
+            db.rollback()
+            logger.warning(f"[ws] _upsert_account IntegrityError for aweme_id={aweme_id}, re-querying")
+            account = db.query(Account).filter(
+                Account.aweme_id == aweme_id,
+                Account.api_id == tenant_id,
+            ).first()
+            if account:
+                _apply_account_update(account, account_data, device_id)
+                db.commit()
+            else:
+                logger.error(f"[ws] _upsert_account re-query failed for aweme_id={aweme_id}")
 
         # 绑定设备到该账号
-        device = db.query(DeviceBinding).filter(
-            DeviceBinding.name == device_id
-        ).first()
-        if device:
-            device.current_account_id = account.id
-            db.commit()
+        if account is not None:
+            device = db.query(DeviceBinding).filter(
+                DeviceBinding.name == device_id
+            ).first()
+            if device:
+                device.current_account_id = account.id
+                db.commit()
 
     except Exception as e:
         logger.error(f"_upsert_account error: {e}")
@@ -399,7 +422,7 @@ async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", devi
                     device_code = bind_data.get("device_code", "")
                     api_id = bind_data.get("api_id", "")
                     logger.info(f"Device {device_id} bound: code={device_code}, api_id={api_id}")
-                    # 更新设备记录
+                    # 更新设备记录（不改 name = 连接身份，防指令 key 失配）
                     db = SessionLocal()
                     try:
                         dev = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
@@ -408,9 +431,9 @@ async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", devi
                             if not dev.api_id:
                                 dev.api_id = api_id
                             if device_code:
-                                dev.name = device_code
+                                dev.device_code = device_code  # 编号存独立列，不改 name
                             db.commit()
-                            logger.info(f"Device {device_id} updated with api_id={api_id}")
+                            logger.info(f"Device {device_id} updated with api_id={api_id}, code={device_code}")
                     except Exception as e:
                         logger.error(f"bind_info error: {e}")
                     finally:
