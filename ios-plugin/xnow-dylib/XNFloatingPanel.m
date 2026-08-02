@@ -721,10 +721,13 @@ static NSArray *kCountries;
         [self _showActivationView];
     }
 
-    // 自动开启日志窗口
+    // 自动开启日志窗口（确保挂到当前 superview 并置顶）
     [self addLog:@"XNOWER 已启动"];
     if (!self.logView && self.superview) {
         [self _createLogWindow];
+    } else if (self.logView && self.superview && self.logView.superview != self.superview) {
+        [self.superview addSubview:self.logView];
+        [self.superview bringSubviewToFront:self.logView];
     }
 
     CGFloat ow = self.frame.size.width, oh = self.frame.size.height;
@@ -899,6 +902,12 @@ static NSArray *kCountries;
     self.logTextView.textContainerInset = UIEdgeInsetsMake(6, 6, 6, 6);
     self.logTextView.text = @"";
     [self.logView addSubview:self.logTextView];
+
+    // 把日志窗口加到视图层级并置顶（否则不会显示）
+    if (self.superview) {
+        [self.superview addSubview:self.logView];
+        [self.superview bringSubviewToFront:self.logView];
+    }
 }
 
 #pragma mark - 显示/隐藏
