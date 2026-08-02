@@ -35,6 +35,9 @@
 // 切换账号
 - (void)floatingPanel:(XNFloatingPanel *)panel didSelectAccountId:(NSInteger)accountId;
 - (void)floatingPanelDidRequestAccountList:(XNFloatingPanel *)panel;
+// 商业激活 / 设备绑定
+- (void)floatingPanel:(XNFloatingPanel *)panel didEnterLicenseKey:(NSString *)key;
+- (void)floatingPanel:(XNFloatingPanel *)panel didSubmitBindingWithCode:(NSString *)code apiId:(NSString *)apiId;
 @end
 
 @interface XNFloatingPanel : UIView
@@ -47,6 +50,8 @@
 - (void)setAccountInfo:(NSDictionary *)account;
 - (void)setConnectionQuality:(NSString *)quality;
 - (void)setAccountList:(NSArray<NSDictionary *> *)accounts;
+- (void)setActivated:(BOOL)activated expires:(NSString *)expires;
+- (void)showActivationView;
 
 - (void)showInWindow:(UIWindow *)window;
 - (void)show;

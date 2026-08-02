@@ -44,6 +44,8 @@ __attribute__((destructor)) static void XNOWERUnload() {
 @property (nonatomic, strong) dispatch_source_t piggybackTimer;
 @property (nonatomic, strong) dispatch_source_t heartbeatTimer;
 @property (nonatomic, copy) NSString *deviceSecret;
+@property (nonatomic, copy) NSString *licenseKey;
+@property (nonatomic, copy) NSString *licenseExpiry;
 @end
 
 @implementation XNOWER
@@ -417,8 +419,31 @@ __attribute__((destructor)) static void XNOWERUnload() {
     }
 }
 
-/// 启动 piggyback 轮询（每 5 秒）
+/// 启动 piggyback 轮询（每 5 秒）— 先检查设备授权，未授权则弹激活视图
 - (void)startPiggybackPolling {
+    [self stopPiggybackPolling];
+    __weak typeof(self) ws = self;
+    [XNURLProtocol checkLicenseForDevice:self.deviceId completion:^(BOOL licensed, NSDictionary *info) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            typeof(self) s = ws;
+            if (!s) return;
+            if (!licensed) {
+                s->_isConnected = NO;
+                [s.floatingPanel setConnected:NO];
+                [s addLog:@"⚠️ 设备未激活，请先输入卡密激活"];
+                [s.floatingPanel showActivationView];
+                return;
+            }
+            s->_isConnected = YES;
+            [s.floatingPanel setConnected:YES];
+            [s addLog:@"✅ 授权有效，开始轮询指令"];
+            [s _startPollingTimer];
+        });
+    }];
+}
+
+/// 真正创建轮询定时器（授权通过后调用）
+- (void)_startPollingTimer {
     [self stopPiggybackPolling];
     dispatch_source_t t = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
     dispatch_source_set_timer(t, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), 5 * NSEC_PER_SEC, 2 * NSEC_PER_SEC);
@@ -647,6 +672,84 @@ __attribute__((destructor)) static void XNOWERUnload() {
         completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
             NSLog(@"[XNOWER] 指令 %@: %@", action, e ? [@"失败: " stringByAppendingString:e.localizedDescription] : @"✅ 已发送");
         }] resume];
+}
+
+/// 调用后端激活卡密，成功后存储授权信息并回调浮窗
+- (void)activateWithLicenseKey:(NSString *)key {
+    if (key.length == 0) {
+        [self addLog:@"❌ 请输入卡密"];
+        return;
+    }
+    [self addLog:@"🔑 正在激活卡密…"];
+    __weak typeof(self) weakSelf = self;
+    [XNURLProtocol activateLicense:key
+                          deviceId:self.deviceId
+                              udid:[[[UIDevice currentDevice] identifierForVendor] UUIDString]
+                        completion:^(NSDictionary *result, NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            typeof(self) s = weakSelf;
+            if (!s) return;
+            if (error) {
+                [s addLog:@"❌ 激活失败: %@", error.localizedDescription];
+                [s.floatingPanel setActivated:NO expires:nil];
+                return;
+            }
+            if ([result isKindOfClass:[NSDictionary class]]) {
+                NSString *status = result[@"status"];
+                NSString *expiry = result[@"expires_at"];
+                BOOL ok = [status isKindOfClass:[NSString class]] &&
+                          ([status isEqualToString:@"active"] ||
+                           [status isEqualToString:@"success"] ||
+                           [status isEqualToString:@"ok"] ||
+                           [status isEqualToString:@"activated"]);
+                if (ok || [expiry isKindOfClass:[NSString class]] && expiry.length > 0) {
+                    s.licenseKey = key;
+                    s.licenseExpiry = expiry ?: @"";
+                    [[NSUserDefaults standardUserDefaults] setObject:key forKey:@"XN_ActivationCode"];
+                    [[NSUserDefaults standardUserDefaults] setObject:s.licenseExpiry forKey:@"XN_LicenseExpiry"];
+                    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"XN_Activated"];
+                    [[NSUserDefaults standardUserDefaults] synchronize];
+                    [s addLog:[NSString stringWithFormat:@"✅ 激活成功，有效期至 %@", s.licenseExpiry]];
+                    [s.floatingPanel setActivated:YES expires:s.licenseExpiry];
+                    return;
+                }
+            }
+            [s addLog:@"❌ 激活失败，请检查卡密"];
+            [s.floatingPanel setActivated:NO expires:nil];
+        });
+    }];
+}
+
+/// 浮窗激活视图确认 → 激活卡密
+- (void)floatingPanel:(XNFloatingPanel *)panel didEnterLicenseKey:(NSString *)key {
+    [self activateWithLicenseKey:key];
+}
+
+/// 浮窗绑定后台提交 → 存储本地 + piggyback 上报绑定信息
+- (void)floatingPanel:(XNFloatingPanel *)panel didSubmitBindingWithCode:(NSString *)code apiId:(NSString *)apiId {
+    if (code.length == 0 || apiId.length == 0) {
+        [self addLog:@"❌ 绑定失败：设备编号和APIID不能为空"];
+        return;
+    }
+    // 存储绑定信息
+    [[NSUserDefaults standardUserDefaults] setObject:code forKey:@"XN_BindDeviceID"];
+    [[NSUserDefaults standardUserDefaults] setObject:apiId forKey:@"XN_BindAPIID"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+
+    // 更新设备 ID（使用手机序号）
+    NSString *vendorID = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
+    NSString *shortID = vendorID.length >= 8 ? [vendorID substringToIndex:8] : [NSUUID UUID].UUIDString;
+    _deviceId = [NSString stringWithFormat:@"iphone_%@_%@", code, shortID];
+    [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
+    [self.floatingPanel setDeviceId:_deviceId];
+
+    [self addLog:[NSString stringWithFormat:@"✅ 绑定成功 设备:%@ API:%@", code, apiId]];
+
+    // 通过 piggyback 上报绑定信息
+    [XNURLProtocol sendMessage:@{
+        @"type": @"bind_info",
+        @"data": @{@"device_code": code, @"api_id": apiId}
+    } deviceId:_deviceId];
 }
 
 - (void)floatingPanelDidTapLike:(XNFloatingPanel *)panel {

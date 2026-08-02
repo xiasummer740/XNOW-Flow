@@ -32,6 +32,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// 轮询指令（GET /ws/{deviceId}/poll）
 + (void)pollCommands:(NSString *)deviceId;
 
+/// 激活卡密（POST /api/biz/v2/licenses/activate/）
++ (void)activateLicense:(NSString *)key deviceId:(NSString *)deviceId udid:(NSString *)udid
+             completion:(void (^)(NSDictionary *result, NSError *error))completion;
+
+/// 检查设备授权状态（GET /api/biz/v2/licenses/device/{deviceId}/）
++ (void)checkLicenseForDevice:(NSString *)deviceId
+                   completion:(void (^)(BOOL licensed, NSDictionary *info))completion;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -445,16 +445,16 @@ static NSArray *kCountries;
 
 - (void)_activateTapped {
     NSString *code = _inputField.text ?: @"";
-    if (code.length > 0) {
-        // 本地存储激活状态
-        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"XN_Activated"];
-        [[NSUserDefaults standardUserDefaults] setObject:code forKey:@"XN_ActivationCode"];
-        [[NSUserDefaults standardUserDefaults] synchronize];
+    if (code.length == 0) {
+        [self _showToast:@"请输入卡密"];
+        return;
     }
-    [self _showToast:@"激活成功"];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-        [self _showMainMenu];
-    });
+    // 交给 XNOWER 调后端激活接口
+    if ([self.delegate respondsToSelector:@selector(floatingPanel:didEnterLicenseKey:)]) {
+        [self.delegate floatingPanel:self didEnterLicenseKey:code];
+    } else {
+        [self _showToast:@"未配置激活处理器"];
+    }
 }
 
 - (void)_bindTapped {
@@ -464,16 +464,13 @@ static NSArray *kCountries;
     NSString *apiId = af.text ?: @"";
 
     if (devId.length > 0 && apiId.length > 0) {
-        [[NSUserDefaults standardUserDefaults] setObject:devId forKey:@"XN_BindDeviceID"];
-        [[NSUserDefaults standardUserDefaults] setObject:apiId forKey:@"XN_BindAPIID"];
-        [[NSUserDefaults standardUserDefaults] synchronize];
-        [self addLog:[NSString stringWithFormat:@"绑定成功 设备:%@ API:%@", devId, apiId]];
-        [self _showToast:@"绑定成功"];
-        [self _backToMain];
-        // 通过现有连接上报绑定信息
-        if ([self.delegate respondsToSelector:@selector(floatingPanelDidTapAccountInfo:)]) {
-            [self.delegate floatingPanelDidTapAccountInfo:self];
+        // 交给 XNOWER 存本地 + piggyback 上报绑定信息
+        if ([self.delegate respondsToSelector:@selector(floatingPanel:didSubmitBindingWithCode:apiId:)]) {
+            [self.delegate floatingPanel:self didSubmitBindingWithCode:devId apiId:apiId];
+        } else {
+            [self _showToast:@"未配置绑定处理器"];
         }
+        [self _backToMain];
     } else {
         [self _showToast:@"请填写设备编号和APIID"];
     }
@@ -850,6 +847,31 @@ static NSArray *kCountries;
 - (void)setServerURL:(NSString *)serverURL { _panelServerURL = serverURL; dispatch_async(dispatch_get_main_queue(), ^{ [self _updateStatusUI]; }); }
 - (void)setAccountInfo:(NSDictionary *)account { _panelAccount = account; }
 - (void)setConnectionQuality:(NSString *)quality { _panelQuality = quality; }
+
+/// 显示设备激活视图（后端检测到未授权时由 XNOWER 调用）
+- (void)showActivationView {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!_isExpanded) [self _expandPanel];
+        [self _showActivationView];
+    });
+}
+
+/// 激活结果回调：成功 → 隐藏激活视图并显示主菜单；失败 → 停留在激活视图
+- (void)setActivated:(BOOL)activated expires:(NSString *)expires {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (activated) {
+            if (expires.length > 0) {
+                [self _showToast:[NSString stringWithFormat:@"✅ 激活成功 有效期至 %@", expires]];
+            } else {
+                [self _showToast:@"✅ 激活成功"];
+            }
+            [self _showMainMenu];
+        } else {
+            [self _showToast:@"❌ 激活失败，请检查卡密"];
+            [self _showActivationView];
+        }
+    });
+}
 
 /// 统一刷新连接状态（折叠徽章圆点 + 面板状态胶囊）
 - (void)_updateStatusUI {

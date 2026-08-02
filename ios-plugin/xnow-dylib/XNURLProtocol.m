@@ -163,6 +163,60 @@ static volatile CFAbsoluteTime sLastPing = 0;
     }];
 }
 
+/// 激活卡密（POST /api/biz/v2/licenses/activate/）
+/// 请求体 {key, device_id, udid}，响应 {status, expires_at}
++ (void)activateLicense:(NSString *)key deviceId:(NSString *)deviceId udid:(NSString *)udid
+             completion:(void (^)(NSDictionary *result, NSError *error))completion {
+    NSMutableDictionary *payload = [NSMutableDictionary dictionary];
+    if (key.length > 0) payload[@"key"] = key;
+    if (deviceId.length > 0) payload[@"device_id"] = deviceId;
+    if (udid.length > 0) payload[@"udid"] = udid;
+    NSData *json = [NSJSONSerialization dataWithJSONObject:payload options:0 error:nil];
+    if (!json) {
+        if (completion) completion(nil, [NSError errorWithDomain:@"XN" code:10 userInfo:nil]);
+        return;
+    }
+    [self _sendRequest:@"POST" path:@"/api/biz/v2/licenses/activate/" body:json
+            completion:^(NSData *data, NSError *error) {
+        if (error) {
+            if (completion) completion(nil, error);
+            return;
+        }
+        NSDictionary *result = nil;
+        if (data) {
+            id obj = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+            if ([obj isKindOfClass:[NSDictionary class]]) result = obj;
+        }
+        if (completion) completion(result, nil);
+    }];
+}
+
+/// 检查设备授权状态（GET /api/biz/v2/licenses/device/{deviceId}/）
+/// 响应 {licensed, status, expires_at, days_left}
++ (void)checkLicenseForDevice:(NSString *)deviceId
+                   completion:(void (^)(BOOL licensed, NSDictionary *info))completion {
+    if (deviceId.length == 0) {
+        if (completion) completion(NO, nil);
+        return;
+    }
+    NSString *path = [NSString stringWithFormat:@"/api/biz/v2/licenses/device/%@/", deviceId];
+    [self _sendRequest:@"GET" path:path body:nil completion:^(NSData *data, NSError *error) {
+        BOOL licensed = NO;
+        NSDictionary *info = nil;
+        if (!error && data) {
+            id obj = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+            if ([obj isKindOfClass:[NSDictionary class]]) {
+                info = obj;
+                id licensedVal = obj[@"licensed"];
+                if ([licensedVal respondsToSelector:@selector(boolValue)]) {
+                    licensed = [licensedVal boolValue];
+                }
+            }
+        }
+        if (completion) completion(licensed, info);
+    }];
+}
+
 /// 解析响应中的指令并派发
 /// 兼容两种格式:
 ///   - POST 响应: {"status":"ok", "command": {...}}   → 取 d[@"command"]
