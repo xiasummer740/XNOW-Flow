@@ -180,6 +180,8 @@ static NSArray *kCountries;
     _panelContainer.alpha = 0;
     _panelContainer.layer.borderWidth = kHairline;
     _panelContainer.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.12].CGColor; // 1px 高光描边
+    // 统一深色底（毛玻璃渲染不佳时也保持一致，避免"打补丁"双底色）
+    _panelContainer.backgroundColor = [UIColor colorWithWhite:0.09 alpha:0.94];
     [self addSubview:_panelContainer];
 
     // 玻璃材质
