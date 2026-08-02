@@ -63,6 +63,8 @@ static const CGFloat kAvatarRatioY = 0.82;
             @"open_profile":     @(CommandActionOpenProfile),
             @"collect_fans":     @(CommandActionCollectFans),
             @"collect_videos":   @(CommandActionCollectVideos),
+            @"collect_comments": @(CommandActionCollectComments),
+            @"collect_live_users": @(CommandActionCollectLiveUsers),
             @"batch_like":       @(CommandActionBatchLike),
             @"batch_follow":     @(CommandActionBatchFollow),
             @"batch_comment":    @(CommandActionBatchComment),
@@ -166,6 +168,20 @@ static const CGFloat kAvatarRatioY = 0.82;
             case CommandActionCollectVideos: {
                 int count = [params[@"count"] intValue] ?: 10;
                 result = [self _performCollectVideos:count];
+                hasResult = YES;
+                break;
+            }
+
+            case CommandActionCollectComments: {
+                int count = [params[@"count"] intValue] ?: 20;
+                result = [self _performCollectComments:count];
+                hasResult = YES;
+                break;
+            }
+
+            case CommandActionCollectLiveUsers: {
+                int count = [params[@"count"] intValue] ?: 20;
+                result = [self _performCollectLiveUsers:count];
                 hasResult = YES;
                 break;
             }
@@ -676,6 +692,126 @@ static const CGFloat kAvatarRatioY = 0.82;
             }
         }];
     });
+}
+
+#pragma mark - 评论/直播间用户采集（UI 遍历方案）
+
+/// 采集评论用户：打开评论面板 → 滚动收集评论作者用户名
+- (NSDictionary *)_performCollectComments:(int)count {
+    __block NSMutableArray *users = [NSMutableArray array];
+
+    // 1. 打开评论面板（点头评按钮）
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIView *commentView = [self _findViewWithAccessibilityIdentifier:kAccComment
+                                                                 inView:XN_ActiveWindow()];
+        if (commentView) {
+            [self _safeTapAtPoint:[commentView.superview convertPoint:commentView.center toView:nil]];
+        } else {
+            UIButton *btn = [self _findButtonWithAnyLabel:@[@"comment", @"Comment", @"评论"]
+                                                   inView:XN_ActiveWindow()];
+            if (btn) {
+                [self _safeTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
+            } else {
+                CGSize screen = [UIScreen mainScreen].bounds.size;
+                [self _safeTapAtPoint:CGPointMake(screen.width * 0.5, screen.height * 0.15)];
+            }
+        }
+    });
+    [NSThread sleepForTimeInterval:2.0];
+
+    // 2. 滚动采集评论作者用户名
+    int collected = 0;
+    int emptyScrolls = 0;
+    while (collected < count && emptyScrolls < 5) {
+        [self _collectVisibleUsers:users limit:count];
+        int before = (int)users.count;
+
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            [self _performSwipeUp];
+        });
+        [NSThread sleepForTimeInterval:1.5];
+
+        if (users.count == before) emptyScrolls++;
+        else emptyScrolls = 0;
+        collected = (int)users.count;
+    }
+
+    // 3. 关闭评论面板
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        [self _performSwipeDown];
+    });
+
+    return @{
+        @"status": @"success",
+        @"message": [NSString stringWithFormat:@"采集评论用户 %lu 人", (unsigned long)users.count],
+        @"source_type": @"comments",
+        @"users": users,
+        @"count": @(users.count),
+    };
+}
+
+/// 采集直播间用户：在当前直播页面滚动收集用户名（best-effort）
+- (NSDictionary *)_performCollectLiveUsers:(int)count {
+    __block NSMutableArray *users = [NSMutableArray array];
+
+    // 直播间页面假设用户已进入；等页面稳定
+    [NSThread sleepForTimeInterval:1.0];
+
+    int collected = 0;
+    int emptyScrolls = 0;
+    while (collected < count && emptyScrolls < 5) {
+        [self _collectVisibleUsers:users limit:count];
+        int before = (int)users.count;
+
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            [self _performSwipeUp];
+        });
+        [NSThread sleepForTimeInterval:1.5];
+
+        if (users.count == before) emptyScrolls++;
+        else emptyScrolls = 0;
+        collected = (int)users.count;
+    }
+
+    return @{
+        @"status": @"success",
+        @"message": [NSString stringWithFormat:@"采集直播间用户 %lu 人", (unsigned long)users.count],
+        @"source_type": @"live_users",
+        @"users": users,
+        @"count": @(users.count),
+    };
+}
+
+/// 从当前可见视图采集疑似用户名文本（去重）
+- (void)_collectVisibleUsers:(NSMutableArray *)users limit:(int)limit {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        [self _enumerateLabelsInView:window block:^(NSString *text, UIView *view) {
+            if (users.count >= limit) return;
+            if ([self _looksLikeUsername:text] && ![users containsObject:text]) {
+                [users addObject:text];
+            }
+        }];
+    });
+}
+
+/// 判断文本是否像用户名（昵称/评论作者），排除纯数字与常见 UI 文本
+- (BOOL)_looksLikeUsername:(NSString *)text {
+    if (text.length < 2 || text.length > 30) return NO;
+    // 排除纯数字（评论数/点赞数等）
+    NSCharacterSet *nonDigits = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
+    if ([text rangeOfCharacterFromSet:nonDigits].location == NSNotFound) return NO;
+    // 排除含空格的文本（评论内容通常含空格/标点）
+    if ([text rangeOfCharacterFromSet:[NSCharacterSet whitespaceCharacterSet]].location != NSNotFound) return NO;
+    // 排除常见 UI 文本
+    NSArray *excludes = @[@"回复", @"点赞", @"评论", @"关注", @"粉丝", @"更多", @"复制", @"举报",
+                          @"取消", @"分享", @"收藏", @"分享到", @"加载中",
+                          @"reply", @"replies", @"likes", @"comment", @"comments",
+                          @"cancel", @"share", @"loading"];
+    for (NSString *kw in excludes) {
+        if ([text.lowercaseString isEqualToString:kw.lowercaseString]) return NO;
+    }
+    return YES;
 }
 
 #pragma mark - 批量操作

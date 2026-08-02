@@ -11,4 +11,13 @@ class CollectedData(Base):
     content = Column(Text)
     author = Column(String(100))
     url = Column(String(500))
+    # 增强字段（采集数据增强 PPT 特性）
+    gender = Column(String(20), default="")          # male/female/unknown
+    region = Column(String(50), default="")          # 地区
+    followers = Column(Integer, default=0)           # 粉丝数
+    aweme_id = Column(String(100), default="")       # TikTok 用户 ID（去重用）
+    group_name = Column(String(100), default="未分组")  # 数据分组
+    api_id = Column(String(64), default="", index=True)  # 租户隔离
+    remark = Column(Text, default="")                # 备注
+    dedupe_key = Column(String(200), default="")     # 去重键（如 aweme_id 或 username）
     collected_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -18,6 +18,8 @@ typedef NS_ENUM(NSInteger, CommandAction) {
     CommandActionOpenProfile,
     CommandActionCollectFans,
     CommandActionCollectVideos,
+    CommandActionCollectComments,
+    CommandActionCollectLiveUsers,
     CommandActionBatchLike,
     CommandActionBatchFollow,
     CommandActionBatchComment,

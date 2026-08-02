@@ -56,7 +56,45 @@ def _migrate_tenant_columns():
         print(f"[migration] 租户列迁移失败（可忽略）: {e}")
 
 
+def _migrate_collected_data_columns():
+    """SQLite 迁移：补齐采集数据表增强字段并回填旧数据。
+
+    仅处理已存在的旧表（create_all 不会给已存在表加列），失败不影响启动。
+    新增列（ALTER-safe）：gender/region/followers/aweme_id/group_name/api_id/remark/dedupe_key
+    旧数据归到 admin(api_id='1')。
+    """
+    try:
+        with engine.connect() as conn:
+            tables = [r[0] for r in conn.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )).fetchall()]
+
+            if "collected_data" in tables:
+                cols = [r[1] for r in conn.execute(text("PRAGMA table_info(collected_data)")).fetchall()]
+                add_cols = {
+                    "gender": "VARCHAR(20) DEFAULT ''",
+                    "region": "VARCHAR(50) DEFAULT ''",
+                    "followers": "INTEGER DEFAULT 0",
+                    "aweme_id": "VARCHAR(100) DEFAULT ''",
+                    "group_name": "VARCHAR(100) DEFAULT '未分组'",
+                    "api_id": "VARCHAR(64) DEFAULT ''",
+                    "remark": "TEXT DEFAULT ''",
+                    "dedupe_key": "VARCHAR(200) DEFAULT ''",
+                }
+                for name, ddl in add_cols.items():
+                    if name not in cols:
+                        conn.execute(text(f"ALTER TABLE collected_data ADD COLUMN {name} {ddl}"))
+                # 回填旧数据到 admin 租户
+                conn.execute(text(
+                    "UPDATE collected_data SET api_id = '1' WHERE api_id IS NULL OR api_id = ''"
+                ))
+                conn.commit()
+    except Exception as e:
+        print(f"[migration] 采集数据列迁移失败（可忽略）: {e}")
+
+
 _migrate_tenant_columns()
+_migrate_collected_data_columns()
 
 def get_db():
     db = SessionLocal()

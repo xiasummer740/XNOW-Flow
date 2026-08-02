@@ -12,6 +12,93 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["websocket"])
 
 
+def _get_device_api_id(device_id: str) -> str:
+    """查询设备所属租户 api_id"""
+    try:
+        db = SessionLocal()
+        dev = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
+        if dev and dev.api_id:
+            return dev.api_id
+        return "1"
+    except Exception as e:
+        logger.error(f"_get_device_api_id error: {e}")
+        return "1"
+    finally:
+        db.close()
+
+
+def _insert_collected_data(device_id: str, data: dict) -> int:
+    """从设备采集结果插入 collected_data（带去重：同租户 dedupe_key 已存在则跳过）
+
+    data 形如: {"source_type": "comments", "users": ["u1", "u2"]}
+    或        {"source_type": "comments", "users": [{"author": "u1", "aweme_id": "...", "gender": "...", "region": "...", "followers": 123}]}
+    """
+    from models.collected_data import CollectedData
+
+    source_type = data.get("source_type") or "fans"
+    users = data.get("users") or []
+    if not isinstance(users, list) or not users:
+        return 0
+
+    api_id = _get_device_api_id(device_id)
+    inserted = 0
+    seen = set()  # 本次消息内的去重
+    db = SessionLocal()
+    try:
+        for u in users:
+            if isinstance(u, dict):
+                author = u.get("author") or u.get("nickname") or u.get("username") or ""
+                aweme_id = u.get("aweme_id") or ""
+                gender = u.get("gender") or ""
+                region = u.get("region") or ""
+                followers = u.get("followers") or 0
+                remark = u.get("remark") or ""
+            else:
+                author = str(u)
+                aweme_id = ""
+                gender = ""
+                region = ""
+                followers = 0
+                remark = ""
+            if not author and not aweme_id:
+                continue
+            dedupe_key = aweme_id or f"{source_type}:{author}"
+            if dedupe_key in seen:
+                continue
+            exists = db.query(CollectedData).filter(
+                CollectedData.dedupe_key == dedupe_key,
+                CollectedData.api_id == api_id,
+            ).first()
+            if exists:
+                seen.add(dedupe_key)
+                continue
+            db.add(CollectedData(
+                source="device",
+                source_type=source_type,
+                content="",
+                author=author,
+                url="",
+                gender=gender,
+                region=region,
+                followers=followers,
+                aweme_id=aweme_id,
+                group_name="未分组",
+                api_id=api_id,
+                remark=remark,
+                dedupe_key=dedupe_key,
+            ))
+            seen.add(dedupe_key)
+            inserted += 1
+        db.commit()
+        if inserted:
+            logger.info(f"Device {device_id} collected {inserted} users (type={source_type})")
+    except Exception as e:
+        logger.error(f"_insert_collected_data error: {e}")
+    finally:
+        db.close()
+    return inserted
+
+
 def _upsert_account(device_id: str, account_data: dict):
     """从设备上报创建或更新账号记录"""
     db = SessionLocal()
@@ -92,7 +179,17 @@ def _handle_device_message(device_id: str, msg: dict):
             _upsert_account(device_id, current_account)
 
     elif msg_type == "result":
-        logger.info(f"Device {device_id} result: {msg.get('data', {})}")
+        data = msg.get("data", {})
+        logger.info(f"Device {device_id} result: {data}")
+        # 采集结果（collect_fans/collect_comments/collect_live_users 等）入库
+        if isinstance(data, dict) and isinstance(data.get("users"), list):
+            _insert_collected_data(device_id, data)
+
+    elif msg_type == "collect_result":
+        data = msg.get("data", {})
+        logger.info(f"Device {device_id} collect_result: {data.get('source_type', '')}")
+        inserted = _insert_collected_data(device_id, data if isinstance(data, dict) else {})
+        logger.info(f"Device {device_id} collect_result inserted {inserted} rows")
 
     elif msg_type == "account_update":
         account_data = msg.get("data", {})
@@ -259,7 +356,16 @@ async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", devi
 
                 elif msg_type == "result":
                     # 任务执行结果回传
-                    logger.info(f"Device {device_id} result: {msg.get('data', {})}")
+                    data = msg.get("data", {})
+                    logger.info(f"Device {device_id} result: {data}")
+                    # 采集结果（collect_fans/collect_comments/collect_live_users 等）入库
+                    if isinstance(data, dict) and isinstance(data.get("users"), list):
+                        _insert_collected_data(device_id, data)
+
+                elif msg_type == "collect_result":
+                    data = msg.get("data", {})
+                    logger.info(f"Device {device_id} collect_result: {data.get('source_type', '')}")
+                    _insert_collected_data(device_id, data if isinstance(data, dict) else {})
 
                 elif msg_type == "account_update":
                     # 设备上报账号信息

@@ -82,8 +82,28 @@ button:disabled { opacity:.4; cursor:not-allowed; }
   <div class="btns">
     <button onclick="cmd('collect_fans',{count:20})">👥 采集粉丝</button>
     <button onclick="cmd('collect_videos',{count:10})">🎬 采集视频</button>
+    <button onclick="cmd('collect_comments',{count:20})">💬 采集评论用户</button>
+    <button onclick="cmd('collect_live_users',{count:20})">📺 采集直播间用户</button>
     <button onclick="cmd('get_account_info')">👤 获取账号信息</button>
     <button onclick="cmd('check_health')">💓 健康检查</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>🔍 数据筛选</h2>
+  <label>性别</label>
+  <select id="filterGender">
+    <option value="">全部</option>
+    <option value="male">男</option>
+    <option value="female">女</option>
+    <option value="unknown">未知</option>
+  </select>
+  <label>地区</label>
+  <input type="text" id="filterRegion" placeholder="如 广东 / US">
+  <label>分组</label>
+  <input type="text" id="filterGroup" placeholder="如 未分组">
+  <div class="btns">
+    <button class="btn-primary" onclick="viewCollectedData()">📋 查看采集数据</button>
   </div>
 </div>
 
@@ -208,6 +228,27 @@ async function cmdCustom() {
   try { params = JSON.parse(document.getElementById('customParams').value || '{}'); }
   catch(e) { log('❌ Params 不是合法 JSON'); return; }
   await cmd(action, params);
+}
+
+async function viewCollectedData() {
+  const gender = document.getElementById('filterGender').value;
+  const region = document.getElementById('filterRegion').value.trim();
+  const group = document.getElementById('filterGroup').value.trim();
+  const params = new URLSearchParams();
+  params.set('limit', '50');
+  if (gender) params.set('gender', gender);
+  if (region) params.set('region', region);
+  if (group) params.set('group_name', group);
+  try {
+    const d = await api('/api/biz/v2/collected-data/?' + params.toString());
+    const rows = (d.results || []);
+    if (!rows.length) { log('📋 没有匹配的采集数据'); return; }
+    let out = `📋 采集数据 (共 ${d.count} 条):\n`;
+    rows.forEach(r => {
+      out += `• ${r.author || r.content || '#' + r.id} [${r.gender || '未知'}/${r.region || '未知'}] 粉丝:${r.followers || 0} 组:${r.group_name || '未分组'} (${r.source_type || ''})\n`;
+    });
+    log(out);
+  } catch(e) { log('❌ 查看采集数据失败: ' + e.message); }
 }
 
 function log(msg) {
