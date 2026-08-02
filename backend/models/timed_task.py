@@ -10,6 +10,9 @@ class TimedTask(Base):
     name = Column(String(200), nullable=False)
     cron = Column(String(50), nullable=False)
     task_type = Column(String(50), default="数据采集")
+    device_ids = Column(Text, default="[]")     # 目标设备 JSON 数组
+    action = Column(String(50), default="")      # 指令动作
+    params = Column(Text, default="{}")          # 指令参数 JSON
     enabled = Column(Boolean, default=True)
     last_run = Column(DateTime(timezone=True))
     next_run = Column(DateTime(timezone=True))

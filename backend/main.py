@@ -204,12 +204,17 @@ def _start_nurture_scheduler():
 _start_nurture_scheduler()
 _start_offline_sweep()
 
+# 优化2: 定时任务调度器（每分钟检查 cron 并派发）
+from timed_scheduler import start_scheduler as _start_timed_scheduler, stop_scheduler as _stop_timed_scheduler
+_start_timed_scheduler()
+
 
 @app.on_event("shutdown")
 def _shutdown_background_threads():
-    """应用关闭时通知后台线程退出（养号调度 + 离线巡检）"""
+    """应用关闭时通知后台线程退出（养号调度 + 离线巡检 + 定时任务）"""
     _nurture_scheduler_stop.set()
     _offline_sweep_stop.set()
+    _stop_timed_scheduler()
     if _nurture_scheduler_thread is not None:
         _nurture_scheduler_thread.join(timeout=3)
     if _offline_sweep_thread is not None:

@@ -73,6 +73,16 @@ def _migrate_tenant_columns():
                 if "device_code" not in cols:
                     conn.execute(text("ALTER TABLE device_bindings ADD COLUMN device_code VARCHAR(50) DEFAULT ''"))
 
+            # timed_tasks: 定时任务目标设备/指令列（优化2调度器用）
+            if "timed_tasks" in tables:
+                cols = [r[1] for r in conn.execute(text("PRAGMA table_info(timed_tasks)")).fetchall()]
+                if "device_ids" not in cols:
+                    conn.execute(text("ALTER TABLE timed_tasks ADD COLUMN device_ids TEXT DEFAULT '[]'"))
+                if "action" not in cols:
+                    conn.execute(text("ALTER TABLE timed_tasks ADD COLUMN action VARCHAR(50) DEFAULT ''"))
+                if "params" not in cols:
+                    conn.execute(text("ALTER TABLE timed_tasks ADD COLUMN params TEXT DEFAULT '{}'"))
+
             conn.commit()
     except Exception as e:
         print(f"[migration] 租户列迁移失败（可忽略）: {e}")

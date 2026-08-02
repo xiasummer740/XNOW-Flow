@@ -44,7 +44,11 @@ def create_timed_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    import json as _json
     task = TimedTask(name=req.name, cron=req.cron, task_type=req.task_type)
+    task.device_ids = _json.dumps(req.device_ids or [])
+    task.action = req.action or ""
+    task.params = _json.dumps(req.params or {})
     if current_user.role != "admin":
         task.api_id = current_user.api_id or ""
     db.add(task)
@@ -72,6 +76,13 @@ def update_timed_task(
         task.task_type = req.task_type
     if req.enabled is not None:
         task.enabled = req.enabled
+    import json as _json
+    if req.device_ids is not None:
+        task.device_ids = _json.dumps(req.device_ids)
+    if req.action is not None:
+        task.action = req.action
+    if req.params is not None:
+        task.params = _json.dumps(req.params)
     db.commit()
     db.refresh(task)
     return _serialize_timed_task(task)
