@@ -89,6 +89,58 @@ button:disabled { opacity:.4; cursor:not-allowed; }
 </div>
 
 <div class="card">
+  <h2>📝 注册账号</h2>
+  <label>邮箱（优先）</label>
+  <input type="text" id="regEmail" placeholder="如 newuser@example.com">
+  <label>手机号（邮箱为空时用）</label>
+  <input type="text" id="regPhone" placeholder="如 +8613800000000">
+  <label>密码（可空）</label>
+  <input type="text" id="regPassword" placeholder="如 Xnow@123456">
+  <button class="btn-primary" onclick="registerAccount()">📝 注册账号</button>
+  <div class="status">⚠️ 纯 UI 自动化 best-effort；滑块/验证码需人工或专用打码工具</div>
+</div>
+
+<div class="card">
+  <h2>🌱 养号计划</h2>
+  <label>计划名称</label>
+  <input type="text" id="nurtureName" placeholder="如 新号养号计划">
+  <label>每次滑动次数（min ~ max）</label>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+    <input type="number" id="nurtureMinScrolls" value="2" min="1" max="20">
+    <input type="number" id="nurtureMaxScrolls" value="5" min="1" max="20">
+  </div>
+  <label>点赞概率（0~1）</label>
+  <input type="number" id="nurtureLikeProb" value="0.2" step="0.05" min="0" max="1">
+  <label>关注概率（0~1）</label>
+  <input type="number" id="nurtureFollowProb" value="0.05" step="0.05" min="0" max="1">
+  <label>浏览时长（分钟）</label>
+  <input type="number" id="nurtureBrowseMinutes" value="2" min="1" max="10">
+  <div class="btns">
+    <button class="btn-primary" onclick="createNurturePlan()">📝 创建养号计划</button>
+    <button class="btn-primary" onclick="startNurturePlan()">▶️ 开始养号</button>
+    <button class="btn-danger" onclick="pauseNurturePlan()">⏸ 暂停养号</button>
+  </div>
+  <div class="status" id="nurtureStatus">创建后点「开始养号」立即下发 nurture_tick，后台每 30 分钟自动 tick</div>
+</div>
+
+<div class="card">
+  <h2>🚀 快捷指令</h2>
+  <label>指令名称</label>
+  <input type="text" id="qcName" placeholder="如 批量点赞10个">
+  <label>Action</label>
+  <input type="text" id="qcAction" placeholder="如 batch_like">
+  <label>Params（JSON，可空）</label>
+  <input type="text" id="qcParams" placeholder='如 {"count":10,"interval":1}'>
+  <label>描述（可空）</label>
+  <input type="text" id="qcDesc" placeholder="如 快速给10个视频点赞">
+  <div class="btns">
+    <button class="btn-primary" onclick="saveQuickCommand()">💾 保存快捷指令</button>
+    <button class="btn-primary" onclick="dispatchLatestQuickCommand()">🚀 下发给当前设备</button>
+  </div>
+  <div class="status" id="qcStatus">保存后即可一键下发给当前选中设备</div>
+</div>
+
+<div class="card">
   <h2>🔗 打开指定内容</h2>
   <label>搜索关键词</label>
   <input type="text" id="kw" placeholder="如 美食 或 用户名">
@@ -168,6 +220,8 @@ const API = '';  // 相对路径（同源）
 let token = localStorage.getItem('xn_token') || '';
 let deviceId = null;
 let pollTimer = null;
+let lastNurturePlanId = null;
+let lastQuickCommandId = null;
 
 // 登录（提示输入密码）
 async function ensureLogin() {
@@ -339,6 +393,122 @@ async function dispatchLatestDm() {
     const r = await api('/api/biz/v2/dm-tasks/' + task.id + '/dispatch/', {method:'POST', body:'{}'});
     log('✅ ' + (r.message || JSON.stringify(r)));
   } catch(e) { log('❌ 下发失败: ' + e.message); }
+}
+
+// ========== 养号计划 / 快捷指令 / 注册账号 ==========
+
+async function createNurturePlan() {
+  const devCode = selectedDeviceCode();
+  if (!devCode) { log('⚠️ 请先选择设备'); return; }
+  const name = document.getElementById('nurtureName').value.trim() || ('养号计划-' + Date.now());
+  const minScrolls = parseInt(document.getElementById('nurtureMinScrolls').value) || 2;
+  const maxScrolls = parseInt(document.getElementById('nurtureMaxScrolls').value) || 5;
+  const likeProb = parseFloat(document.getElementById('nurtureLikeProb').value);
+  const followProb = parseFloat(document.getElementById('nurtureFollowProb').value);
+  const browseMinutes = parseInt(document.getElementById('nurtureBrowseMinutes').value) || 2;
+  log(`⏳ 创建养号计划: ${name} → 设备=${devCode}`);
+  try {
+    const r = await api('/api/biz/v2/nurture-plans/', {
+      method:'POST',
+      body: JSON.stringify({
+        name,
+        device_ids:[devCode],
+        account_ids:[],
+        daily_actions:{
+          min_scrolls: minScrolls,
+          max_scrolls: maxScrolls,
+          like_probability: likeProb || 0.2,
+          follow_probability: followProb || 0.05,
+          comment_probability: 0.02,
+          browse_minutes: browseMinutes
+        }
+      })
+    });
+    lastNurturePlanId = r.id;
+    document.getElementById('nurtureStatus').textContent = '已创建计划 #' + r.id + '（状态 ' + r.status + '），可点「开始养号」';
+    log('✅ 已创建养号计划 #' + r.id + '，可点「开始养号」');
+  } catch(e) { log('❌ 创建失败: ' + e.message); }
+}
+
+async function _latestNurturePlanId() {
+  if (lastNurturePlanId) return lastNurturePlanId;
+  try {
+    const d = await api('/api/biz/v2/nurture-plans/?limit=1');
+    if (d.results && d.results.length) { lastNurturePlanId = d.results[0].id; return lastNurturePlanId; }
+  } catch(e) {}
+  return null;
+}
+
+async function startNurturePlan() {
+  const pid = await _latestNurturePlanId();
+  if (!pid) { log('⚠️ 还没有养号计划，请先「创建养号计划」'); return; }
+  log(`⏳ 开始养号: 计划#${pid}`);
+  try {
+    const r = await api('/api/biz/v2/nurture-plans/' + pid + '/start/', {method:'POST', body:'{}'});
+    log('✅ ' + (r.message || JSON.stringify(r)));
+  } catch(e) { log('❌ 开始失败: ' + e.message); }
+}
+
+async function pauseNurturePlan() {
+  const pid = await _latestNurturePlanId();
+  if (!pid) { log('⚠️ 还没有养号计划，请先「创建养号计划」'); return; }
+  log(`⏳ 暂停养号: 计划#${pid}`);
+  try {
+    const r = await api('/api/biz/v2/nurture-plans/' + pid + '/pause/', {method:'POST', body:'{}'});
+    log('✅ ' + (r.message || JSON.stringify(r)));
+  } catch(e) { log('❌ 暂停失败: ' + e.message); }
+}
+
+async function saveQuickCommand() {
+  const name = document.getElementById('qcName').value.trim();
+  const action = document.getElementById('qcAction').value.trim();
+  if (!action) { log('⚠️ 请输入 Action'); return; }
+  let params = {};
+  try { params = JSON.parse(document.getElementById('qcParams').value || '{}'); }
+  catch(e) { log('❌ Params 不是合法 JSON'); return; }
+  log(`⏳ 保存快捷指令: ${name || action}`);
+  try {
+    const r = await api('/api/biz/v2/quick-commands/', {
+      method:'POST',
+      body: JSON.stringify({
+        name: name || action,
+        action,
+        params,
+        description: document.getElementById('qcDesc').value.trim()
+      })
+    });
+    lastQuickCommandId = r.id;
+    document.getElementById('qcStatus').textContent = '已保存指令 #' + r.id + '：' + action;
+    log('✅ 已保存快捷指令 #' + r.id);
+  } catch(e) { log('❌ 保存失败: ' + e.message); }
+}
+
+async function dispatchLatestQuickCommand() {
+  const devCode = selectedDeviceCode();
+  if (!devCode) { log('⚠️ 请先选择设备'); return; }
+  if (!lastQuickCommandId) {
+    try {
+      const d = await api('/api/biz/v2/quick-commands/?limit=1');
+      if (d.results && d.results.length) lastQuickCommandId = d.results[0].id;
+    } catch(e) {}
+  }
+  if (!lastQuickCommandId) { log('⚠️ 还没有快捷指令，请先「保存快捷指令」'); return; }
+  log(`⏳ 下发快捷指令 #${lastQuickCommandId} → ${devCode}`);
+  try {
+    const r = await api('/api/biz/v2/quick-commands/' + lastQuickCommandId + '/dispatch/', {
+      method:'POST',
+      body: JSON.stringify({device_id: devCode})
+    });
+    log('✅ ' + (r.message || JSON.stringify(r)));
+  } catch(e) { log('❌ 下发失败: ' + e.message); }
+}
+
+async function registerAccount() {
+  const email = document.getElementById('regEmail').value.trim();
+  const phone = document.getElementById('regPhone').value.trim();
+  const password = document.getElementById('regPassword').value.trim();
+  if (!email && !phone) { log('⚠️ 邮箱和手机号至少填一个'); return; }
+  await cmd('register_account', {email, phone, password});
 }
 
 function log(msg) {

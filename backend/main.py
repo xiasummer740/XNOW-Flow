@@ -3,9 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os, mimetypes
+import threading
+import logging
 
 from config import settings
 from database import engine, Base
+
+logger = logging.getLogger(__name__)
 
 # 导入所有模型确保注册 (these will be created in Task 2, but we import them now)
 from models.user import User
@@ -23,6 +27,8 @@ from models.collected_data import CollectedData
 from models.material import MaterialGroup, Material
 from models.video_post import VideoPost
 from models.dm_task import DmTask
+from models.nurture_plan import NurturePlan
+from models.quick_command import QuickCommand
 
 # 创建表
 Base.metadata.create_all(bind=engine)
@@ -43,6 +49,7 @@ from routers import timed_tasks, feedback, announcements, reply_templates
 from routers import media, collected_data, execution_stats
 from routers import materials, video_posts
 from routers import dm_tasks
+from routers import nurture, quick_commands
 from routers import ws as ws_router
 from routers import device_commands
 
@@ -62,6 +69,8 @@ app.include_router(execution_stats.router)
 app.include_router(materials.router)
 app.include_router(video_posts.router)
 app.include_router(dm_tasks.router)
+app.include_router(nurture.router)
+app.include_router(quick_commands.router)
 app.include_router(ws_router.router)
 app.include_router(device_commands.router)
 
@@ -102,3 +111,39 @@ async def serve_spa(full_path: str):
     if not os.path.exists(file_path) or os.path.isdir(file_path):
         file_path = os.path.join(static_dir, "index.html")
     return FileResponse(file_path)
+
+
+# ========== 养号计划后台调度线程 ==========
+# 每 N 秒为所有 active 养号计划下发 nurture_tick（不阻塞事件循环）。
+# 下发通过 connection_manager.send_or_enqueue_command（WebSocket 直发 → HTTP 轮询队列）。
+_NURTURE_TICK_INTERVAL = 30 * 60  # 30 分钟
+
+_nurture_scheduler_stop = threading.Event()
+_nurture_scheduler_thread = None
+
+
+def _nurture_scheduler_loop():
+    logger.info("[nurture-scheduler] started")
+    while not _nurture_scheduler_stop.is_set():
+        try:
+            # 延迟导入，避免启动时循环依赖
+            from routers.nurture import dispatch_tick_for_active_plans
+            dispatch_tick_for_active_plans()
+        except Exception as e:
+            logger.error(f"[nurture-scheduler] tick error: {e}")
+        _nurture_scheduler_stop.wait(_NURTURE_TICK_INTERVAL)
+
+
+def _start_nurture_scheduler():
+    global _nurture_scheduler_thread
+    if _nurture_scheduler_thread is not None and _nurture_scheduler_thread.is_alive():
+        return
+    _nurture_scheduler_thread = threading.Thread(
+        target=_nurture_scheduler_loop,
+        daemon=True,
+        name="nurture-scheduler",
+    )
+    _nurture_scheduler_thread.start()
+
+
+_start_nurture_scheduler()

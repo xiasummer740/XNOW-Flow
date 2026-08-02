@@ -60,6 +60,11 @@ typedef NS_ENUM(NSInteger, CommandAction) {
     CommandActionSendDm,        // params: target/content（best-effort UI 自动化）
     CommandActionSendCard,      // params: target?（发名片，best-effort）
     CommandActionShareLive,     // params: target?（分享直播间，best-effort）
+
+    // 批量注册 + 自动养号 (Feature 5)
+    CommandActionNurtureTick,       // 养号心跳：一次短随机浏览会话（params: min_scrolls/max_scrolls/like_probability/follow_probability/comment_probability/browse_minutes）
+    CommandActionNurtureStop,       // 停止养号（tick 为一次性指令，停止是隐式的）
+    CommandActionRegisterAccount,   // 批量注册账号（params: email/phone/password，best-effort UI 自动化）
 };
 
 @interface CommandEngine : NSObject

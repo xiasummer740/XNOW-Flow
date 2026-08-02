@@ -146,10 +146,63 @@ def _migrate_dm_tasks():
         print(f"[migration] dm_tasks 表迁移失败（可忽略）: {e}")
 
 
+def _migrate_nurture_plans():
+    """SQLite 迁移：确保 nurture_plans 表存在。
+
+    新库由 create_all 自动建表，此迁移仅处理旧库（create_all 不会给已存在的库补表）。
+    使用与现有迁移一致的原始 SQL，幂等可重复执行。
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS nurture_plans (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(200) DEFAULT '',
+                    device_ids TEXT DEFAULT '[]',
+                    account_ids TEXT DEFAULT '[]',
+                    daily_actions TEXT DEFAULT '{}',
+                    status VARCHAR(20) DEFAULT 'paused',
+                    start_date DATETIME,
+                    end_date DATETIME,
+                    api_id VARCHAR(64) DEFAULT '',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+    except Exception as e:
+        print(f"[migration] nurture_plans 表迁移失败（可忽略）: {e}")
+
+
+def _migrate_quick_commands():
+    """SQLite 迁移：确保 quick_commands 表存在。
+
+    新库由 create_all 自动建表，此迁移仅处理旧库（create_all 不会给已存在的库补表）。
+    使用与现有迁移一致的原始 SQL，幂等可重复执行。
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS quick_commands (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(200) DEFAULT '',
+                    action VARCHAR(50) DEFAULT '',
+                    params TEXT DEFAULT '{}',
+                    description VARCHAR(500) DEFAULT '',
+                    api_id VARCHAR(64) DEFAULT '',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+    except Exception as e:
+        print(f"[migration] quick_commands 表迁移失败（可忽略）: {e}")
+
+
 _migrate_tenant_columns()
 _migrate_collected_data_columns()
 _migrate_video_posts()
 _migrate_dm_tasks()
+_migrate_nurture_plans()
+_migrate_quick_commands()
 
 def get_db():
     db = SessionLocal()

@@ -97,6 +97,10 @@ static const CGFloat kAvatarRatioY = 0.82;
             @"send_dm":           @(CommandActionSendDm),
             @"send_card":         @(CommandActionSendCard),
             @"share_live":        @(CommandActionShareLive),
+            // 批量注册 + 自动养号
+            @"nurture_tick":      @(CommandActionNurtureTick),
+            @"nurture_stop":      @(CommandActionNurtureStop),
+            @"register_account":  @(CommandActionRegisterAccount),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -307,6 +311,23 @@ static const CGFloat kAvatarRatioY = 0.82;
             }
             case CommandActionShareLive: {
                 result = [self _performShareLive:params];
+                hasResult = YES;
+                break;
+            }
+
+            // === 批量注册 + 自动养号 ===
+            case CommandActionNurtureTick: {
+                result = [self _performNurtureTick:params];
+                hasResult = YES;
+                break;
+            }
+            case CommandActionNurtureStop: {
+                result = [self _performNurtureStop];
+                hasResult = YES;
+                break;
+            }
+            case CommandActionRegisterAccount: {
+                result = [self _performRegisterAccount:params];
                 hasResult = YES;
                 break;
             }
@@ -950,6 +971,20 @@ static const CGFloat kAvatarRatioY = 0.82;
         if (result) return result;
     }
     return nil;
+}
+
+/// 枚举视图中的所有可用输入框（用于注册流程中找密码框等）
+- (void)_enumerateTextFieldsInView:(UIView *)view
+                             block:(void(^)(UITextField *tf))block {
+    if ([view isKindOfClass:[UITextField class]]) {
+        UITextField *tf = (UITextField *)view;
+        if (tf.isEnabled && !tf.isHidden) {
+            block(tf);
+        }
+    }
+    for (UIView *subview in view.subviews) {
+        [self _enumerateTextFieldsInView:subview block:block];
+    }
 }
 
 /// 枚举视图中的所有 UILabel 文本
@@ -1650,6 +1685,218 @@ static const CGFloat kAvatarRatioY = 0.82;
         return @{@"status": @"failed", @"message": @"未找到直播间分享选项"};
     }
     return @{@"status": @"success", @"message": @"已触发分享直播间"};
+}
+
+#pragma mark - 批量注册 + 自动养号 (Feature 5)
+
+/// 养号心跳：一次短随机浏览会话（2~5 次滑动 + 按概率点赞/关注/评论），约 1~2 分钟
+/// params: {min_scrolls, max_scrolls, like_probability, follow_probability, comment_probability, browse_minutes}
+- (NSDictionary *)_performNurtureTick:(NSDictionary *)params {
+    int minScrolls = [params[@"min_scrolls"] intValue];
+    if (minScrolls < 1) minScrolls = 2;
+    int maxScrolls = [params[@"max_scrolls"] intValue];
+    if (maxScrolls < minScrolls) maxScrolls = minScrolls + 3;
+
+    double likeProb = [params[@"like_probability"] doubleValue];
+    if (likeProb <= 0) likeProb = 0.2;
+    double followProb = [params[@"follow_probability"] doubleValue];
+    if (followProb <= 0) followProb = 0.05;
+    double commentProb = [params[@"comment_probability"] doubleValue];
+    if (commentProb <= 0) commentProb = 0.02;
+
+    int scrollCount = minScrolls + arc4random_uniform(maxScrolls - minScrolls + 1);
+    if (scrollCount < minScrolls) scrollCount = minScrolls;
+
+    // 用 browse_minutes 折算每步观看秒数，使总时长接近目标分钟数
+    int browseMinutes = [params[@"browse_minutes"] intValue];
+    if (browseMinutes < 1) browseMinutes = 1;
+    if (browseMinutes > 10) browseMinutes = 10;
+    int perStepSeconds = (browseMinutes * 60) / MAX(1, scrollCount);
+    if (perStepSeconds < 10) perStepSeconds = 10;
+    if (perStepSeconds > 45) perStepSeconds = 45;
+
+    __block int likes = 0;
+    __block int follows = 0;
+    __block int comments = 0;
+    NSMutableArray *doneActions = [NSMutableArray array];
+
+    for (int i = 0; i < scrollCount; i++) {
+        // 每步随机观看 perStepSeconds±5 秒
+        int watchTime = perStepSeconds - 5 + arc4random_uniform(11);
+        if (watchTime < 5) watchTime = 5;
+        [NSThread sleepForTimeInterval:watchTime];
+
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            // 按概率点赞
+            if ((double)(arc4random_uniform(1000)) / 1000.0 < likeProb) {
+                [self _performLike];
+                likes++;
+                [doneActions addObject:@"like"];
+                [NSThread sleepForTimeInterval:0.6];
+            }
+            // 按概率关注
+            if ((double)(arc4random_uniform(1000)) / 1000.0 < followProb) {
+                [self _performFollow];
+                follows++;
+                [doneActions addObject:@"follow"];
+                [NSThread sleepForTimeInterval:0.6];
+            }
+            // 按概率评论
+            if ((double)(arc4random_uniform(1000)) / 1000.0 < commentProb) {
+                [self _performComment:@"Nice!"];
+                comments++;
+                [doneActions addObject:@"comment"];
+                [NSThread sleepForTimeInterval:1.5];
+                // 关闭评论面板
+                [self _performSwipeDown];
+                [NSThread sleepForTimeInterval:0.5];
+            }
+            // 上滑到下一个视频
+            [self _performSwipeUp];
+        });
+
+        [NSThread sleepForTimeInterval:0.5];
+    }
+
+    return @{
+        @"status": @"success",
+        @"message": [NSString stringWithFormat:@"养号 tick 完成: %d 滑, %d 赞, %d 关注, %d 评论",
+                     scrollCount, likes, follows, comments],
+        @"scrolls": @(scrollCount),
+        @"likes": @(likes),
+        @"follows": @(follows),
+        @"comments": @(comments),
+        @"actions": doneActions,
+    };
+}
+
+/// 停止养号：tick 为一次性指令，停止是隐式的，仅返回状态
+- (NSDictionary *)_performNurtureStop {
+    return @{
+        @"status": @"stopped",
+        @"message": @"养号已停止（tick 为一次性指令，无需显式停止）",
+    };
+}
+
+/// 注册新账号：导航到个人页 → 点"登录/注册" → 切"注册" → 填邮箱/手机 → 密码 → 继续
+/// params: {email, phone, password, nickname?}
+/// 说明：滑块/验证码无法通过纯 UI 自动化解决，需人工介入或专用打码工具（best-effort）
+- (NSDictionary *)_performRegisterAccount:(NSDictionary *)params {
+    NSString *email = params[@"email"] ?: @"";
+    NSString *phone = params[@"phone"] ?: @"";
+    NSString *password = params[@"password"] ?: @"";
+    NSString *credential = email.length > 0 ? email : phone;
+
+    if (credential.length == 0) {
+        return @{@"status": @"failed", @"message": @"缺少邮箱或手机号"};
+    }
+
+    // Step 1: 导航到个人主页（点底部"我"）
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        [self _navigateToProfile];
+    });
+    [NSThread sleepForTimeInterval:2.0];
+
+    // Step 2: 若在登录页，找 "登录/注册" 入口
+    __block BOOL loginTap = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        UIButton *loginBtn = [self _findButtonWithAnyLabel:@[@"Log in", @"Sign up", @"Sign Up",
+                                                             @"登录", @"注册"]
+                                                    inView:window];
+        if (loginBtn) {
+            [self _safeTapAtPoint:[loginBtn.superview convertPoint:loginBtn.center toView:nil]];
+            loginTap = YES;
+        }
+    });
+    if (!loginTap) {
+        // 可能已经在登录/注册页
+        return @{@"status": @"failed", @"message": @"未找到登录/注册入口（请确认处于未登录状态）"};
+    }
+    [NSThread sleepForTimeInterval:1.5];
+
+    // Step 3: 切到 "注册/Sign up" tab
+    __block BOOL signUpTap = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        UIButton *signUpBtn = [self _findButtonWithAnyLabel:@[@"Sign up", @"Sign Up", @"注册", @"Register"]
+                                                     inView:window];
+        if (signUpBtn) {
+            [self _safeTapAtPoint:[signUpBtn.superview convertPoint:signUpBtn.center toView:nil]];
+            signUpTap = YES;
+        } else {
+            // 坐标回退：注册 tab 通常在登录页上部
+            CGSize screen = [UIScreen mainScreen].bounds.size;
+            [self _safeTapAtPoint:CGPointMake(screen.width * 0.5, screen.height * 0.12)];
+            signUpTap = YES;
+        }
+    });
+    [NSThread sleepForTimeInterval:1.5];
+
+    // Step 4: 填邮箱/手机号
+    __block BOOL fieldFound = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        UITextField *tf = [self _findTextFieldInView:window];
+        if (tf) {
+            tf.text = credential;
+            [tf becomeFirstResponder];
+            [tf sendActionsForControlEvents:UIControlEventEditingChanged];
+            [[NSNotificationCenter defaultCenter]
+             postNotificationName:UITextFieldTextDidChangeNotification object:tf];
+            fieldFound = YES;
+        }
+    });
+    if (!fieldFound) {
+        return @{@"status": @"failed", @"message": @"未找到邮箱/手机号输入框"};
+    }
+    [NSThread sleepForTimeInterval:0.8];
+
+    // Step 5: 填密码（若提供，且存在第二个输入框）
+    if (password.length > 0) {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            UIWindow *window = XN_ActiveWindow();
+            __block UITextField *secondTf = nil;
+            __block int count = 0;
+            [self _enumerateTextFieldsInView:window block:^(UITextField *tf) {
+                count++;
+                if (count == 2) secondTf = tf;
+            }];
+            if (secondTf) {
+                secondTf.text = password;
+                [secondTf becomeFirstResponder];
+                [secondTf sendActionsForControlEvents:UIControlEventEditingChanged];
+                [[NSNotificationCenter defaultCenter]
+                 postNotificationName:UITextFieldTextDidChangeNotification object:secondTf];
+            }
+        });
+        [NSThread sleepForTimeInterval:0.5];
+    }
+
+    // Step 6: 点 "继续/下一步"
+    __block BOOL continueTap = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        UIButton *nextBtn = [self _findButtonWithAnyLabel:@[@"Continue", @"continue", @"下一步",
+                                                            @"继续", @"Next", @"Sign up"]
+                                                   inView:window];
+        if (nextBtn) {
+            [self _safeTapAtPoint:[nextBtn.superview convertPoint:nextBtn.center toView:nil]];
+            continueTap = YES;
+        }
+    });
+    [NSThread sleepForTimeInterval:1.0];
+
+    if (!continueTap) {
+        return @{@"status": @"failed", @"message": @"未找到继续按钮（滑块/验证码需人工处理）"};
+    }
+
+    return @{
+        @"status": @"success",
+        @"message": @"已触发注册流程（best-effort UI 自动化；滑块/验证码需人工或专用打码工具）",
+        @"credential": credential,
+        @"note": @"滑块/验证码无法纯 UI 自动化解决",
+    };
 }
 
 #pragma mark - 辅助: 手势模拟
