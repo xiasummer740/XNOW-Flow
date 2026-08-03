@@ -82,6 +82,7 @@ static NSArray *kCountries;
         _logLines = [NSMutableArray array];
         [self _buildMainMenu];
         [self _setupViews];
+        [self _restoreSavedPosition];  // 恢复上次记忆的浮窗位置
     }
     return self;
 }
@@ -916,8 +917,29 @@ static NSArray *kCountries;
             nc.y = MAX(50+hh, MIN([UIScreen mainScreen].bounds.size.height-100-hh, nc.y));
             self.center = nc; break;
         }
-        case UIGestureRecognizerStateEnded: _isDragging = NO; break;
+        case UIGestureRecognizerStateEnded: {
+            _isDragging = NO;
+            // 记忆浮窗位置（下次启动恢复）
+            [[NSUserDefaults standardUserDefaults] setDouble:self.center.x forKey:@"XN_PanelPosX"];
+            [[NSUserDefaults standardUserDefaults] setDouble:self.center.y forKey:@"XN_PanelPosY"];
+            [[NSUserDefaults standardUserDefaults] synchronize];
+            break;
+        }
         default: break;
+    }
+}
+
+/// 恢复上次保存的浮窗位置
+- (void)_restoreSavedPosition {
+    if ([[NSUserDefaults standardUserDefaults] objectForKey:@"XN_PanelPosX"] != nil) {
+        CGFloat px = [[NSUserDefaults standardUserDefaults] doubleForKey:@"XN_PanelPosX"];
+        CGFloat py = [[NSUserDefaults standardUserDefaults] doubleForKey:@"XN_PanelPosY"];
+        // 边界保护（防止屏幕旋转/分辨率变化导致位置越界）
+        CGFloat hw = kCollapsedSize / 2;
+        CGFloat hh = kCollapsedSize / 2;
+        px = MAX(hw, MIN([UIScreen mainScreen].bounds.size.width - hw, px));
+        py = MAX(50 + hh, MIN([UIScreen mainScreen].bounds.size.height - 100 - hh, py));
+        self.center = CGPointMake(px, py);
     }
 }
 
@@ -1086,6 +1108,30 @@ static NSArray *kCountries;
     if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"account_mgmt"]) {
         dispatch_async(dispatch_get_main_queue(), ^{ [self->_menuTable reloadData]; });
     }
+}
+
+#pragma mark - 触摸穿透
+
+/// 点击穿透：浮窗只拦截自身区域内的触摸，其余触摸穿透给 TikTok。
+/// 根因：浮窗放在全屏 overlayWindow 上，若不穿透，窗口会拦截整个屏幕的点击
+///（即使浮窗 view 只有 56x56，承载它的全屏窗口也挡住了下面的 TikTok）。
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    // 浮窗不可见 → 全部穿透
+    if (self.hidden || self.alpha <= 0.01) return nil;
+
+    if (_isExpanded) {
+        // 展开状态：面板区域正常响应（菜单/按钮）
+        return [super hitTest:point withEvent:event];
+    }
+
+    // 收起状态：只响应徽章按钮（点徽章展开，点其它穿透）
+    if (_badgeButton && !_badgeButton.hidden) {
+        CGPoint p = [self convertPoint:point toView:_badgeButton];
+        if ([_badgeButton pointInside:p withEvent:event]) {
+            return _badgeButton;
+        }
+    }
+    return nil;  // 浮窗区域外 → 穿透给 TikTok
 }
 
 @end
