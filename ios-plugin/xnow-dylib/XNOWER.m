@@ -33,6 +33,20 @@ __attribute__((destructor)) static void XNOWERUnload() {
     [[XNOWER sharedInstance] stop];
 }
 
+// ======== 可穿透浮窗窗口 ========
+// overlayWindow 是全屏的，默认会拦截整个屏幕的触摸（点不在浮窗上也吃掉）。
+// 重写 hitTest：只有点中浮窗子视图才响应，否则返回 nil 穿透给下面的 TikTok。
+@interface XNPassThroughWindow : UIWindow
+@end
+@implementation XNPassThroughWindow
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *hit = [super hitTest:point withEvent:event];
+    // 若命中点是 window 自身（即没有任何子视图接收）→ 穿透给下面的 App
+    if (hit == self) return nil;
+    return hit;
+}
+@end
+
 // ======== 实现 ========
 @interface XNOWER () <WsClientDelegate, XNFloatingPanelDelegate>
 @property (nonatomic, strong) WsClient *wsClient;
@@ -594,13 +608,13 @@ __attribute__((destructor)) static void XNOWERUnload() {
     self.overlayWindow = nil;
     UIWindow *overlayWindow;
     if (@available(iOS 13, *)) {
-        overlayWindow = [[UIWindow alloc] initWithWindowScene:activeScene];
+        overlayWindow = [[XNPassThroughWindow alloc] initWithWindowScene:activeScene];
     } else {
-        overlayWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+        overlayWindow = [[XNPassThroughWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
     }
     overlayWindow.windowLevel = UIWindowLevelStatusBar + 100;
     overlayWindow.backgroundColor = [UIColor clearColor];
-    overlayWindow.userInteractionEnabled = YES;
+    overlayWindow.userInteractionEnabled = YES;  // 需 YES 让浮窗可点；穿透由 hitTest 处理
 
     // 创建浮窗
     self.floatingPanel = [[XNFloatingPanel alloc] init];
