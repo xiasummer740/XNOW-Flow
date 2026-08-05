@@ -5,6 +5,7 @@
 #import "CommandEngine.h"
 #import "AccountManager.h"
 #import "XNWindowHelper.h"
+#import "XNTouchSimulator.h"
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
@@ -363,28 +364,14 @@ static const CGFloat kAvatarRatioY = 0.82;
 
 #pragma mark - 滑动手势（安全版，避免私有API崩溃）
 
-/// 通过 UIScrollView setContentOffset 实现安全滑动
+/// 按 deltaY 转真实滑动（注入触摸事件，让 TikTok 手势识别器真正滚动）
 - (void)_safeScrollBy:(CGFloat)deltaY {
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        UIWindow *window = XN_ActiveWindow();
-        if (!window) return;
-
-        // 找到主要 UIScrollView（TikTok 的 feed 页）
-        __block UIScrollView *feedScroll = nil;
-        [self _findFeedScrollViewInView:window result:&feedScroll];
-        if (feedScroll) {
-            CGPoint offset = feedScroll.contentOffset;
-            offset.y = MAX(0, offset.y + deltaY);
-            [feedScroll setContentOffset:offset animated:YES];
-            NSLog(@"[XNOWER] ScrollView 滑动 %.0fpt", deltaY);
-        } else {
-            // 回退：发 UIScrollView 通知
-            [[NSNotificationCenter defaultCenter] postNotificationName:@"XNOWER_ScrollRequest"
-                                                                object:nil
-                                                              userInfo:@{@"delta": @(deltaY)}];
-            NSLog(@"[XNOWER] 未找到 ScrollView，发送通知");
-        }
-    });
+    CGSize s = [UIScreen mainScreen].bounds.size;
+    CGFloat fromY = s.height * 0.5;
+    CGFloat toY = MAX(s.height * 0.1, MIN(s.height * 0.9, fromY + deltaY));
+    [XNTouchSimulator swipeFrom:CGPointMake(s.width * 0.5, fromY)
+                             to:CGPointMake(s.width * 0.5, toY)];
+    NSLog(@"[XNOWER] 真实滑动 delta=%.0fpt", deltaY);
 }
 
 /// 递归查找主要 UIScrollView
@@ -405,36 +392,20 @@ static const CGFloat kAvatarRatioY = 0.82;
     }
 }
 
-/// 上滑（下一个视频）
+/// 上滑（下一个视频）— 真实手势注入
 - (void)_performSwipeUp {
-    [self _safeScrollBy:-[UIScreen mainScreen].bounds.size.height * 0.6];
+    [XNTouchSimulator swipeUp];
 }
 
-/// 下滑（上一个视频）
+/// 下滑（上一个视频）— 真实手势注入
 - (void)_performSwipeDown {
-    [self _safeScrollBy:[UIScreen mainScreen].bounds.size.height * 0.6];
+    [XNTouchSimulator swipeDown];
 }
 
-/// 安全模拟点击（通过 sendActionsForControlEvents 或直接调用）
+/// 真实模拟点击（注入 UITouch/UIEvent，让 TikTok 手势识别器真正响应）
 - (void)_safeTapAtPoint:(CGPoint)point {
-    UIWindow *window = XN_ActiveWindow();
-    if (!window) return;
-    UIView *targetView = [window hitTest:point withEvent:nil];
-    if (!targetView) return;
-
-    @try {
-        // 对于 UIControl，直接触发 action
-        if ([targetView isKindOfClass:[UIControl class]]) {
-            [(UIControl *)targetView sendActionsForControlEvents:UIControlEventTouchUpInside];
-        } else {
-            // 对于普通 UIView，通过响应链传递
-            [targetView touchesBegan:[NSSet set] withEvent:nil];
-            [targetView touchesEnded:[NSSet set] withEvent:nil];
-        }
-        NSLog(@"[XNOWER] 点击 (%.0f, %.0f) 完成", point.x, point.y);
-    } @catch (NSException *e) {
-        NSLog(@"[XNOWER] 点击失败: %@", e.reason);
-    }
+    [XNTouchSimulator tapAtPoint:point];
+    NSLog(@"[XNOWER] 点击 (%.0f, %.0f) 完成", point.x, point.y);
 }
 
 #pragma mark - 点赞
@@ -1901,25 +1872,10 @@ static const CGFloat kAvatarRatioY = 0.82;
 
 #pragma mark - 辅助: 手势模拟
 
-/// 模拟滑动手势（通过 touchesBegan/Moved/Ended）
+/// 真实滑动手势（注入 UITouch/UIEvent）
 - (void)_simulateSwipeFrom:(CGPoint)from to:(CGPoint)to {
-    UIWindow *window = XN_ActiveWindow();
-    if (!window) return;
-    UIView *target = [window hitTest:from withEvent:nil];
-    if (!target) return;
-    @try {
-        [target touchesBegan:[NSSet set] withEvent:nil];
-        [target touchesMoved:[NSSet set] withEvent:nil];
-        [target touchesEnded:[NSSet set] withEvent:nil];
-        // 发滚动通知
-        CGFloat deltaY = to.y - from.y;
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"XNOWER_ScrollRequest"
-                                                            object:nil
-                                                          userInfo:@{@"delta": @(deltaY)}];
-        NSLog(@"[XNOWER] 模拟滑动 %.0fpt", deltaY);
-    } @catch (NSException *e) {
-        NSLog(@"[XNOWER] 滑动失败: %@", e.reason);
-    }
+    [XNTouchSimulator swipeFrom:from to:to];
+    NSLog(@"[XNOWER] 真实滑动 %.0fpt", to.y - from.y);
 }
 
 @end

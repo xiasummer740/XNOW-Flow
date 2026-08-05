@@ -11,6 +11,7 @@
 #import "AccountSnapshotter.h"
 #import "CommandEngine.h"
 #import "XNWindowHelper.h"
+#import "XNTouchSimulator.h"
 #import <UIKit/UIKit.h>
 
 #define SW_LOG(fmt, ...) NSLog(@"[XNOWER][Switcher] " fmt, ##__VA_ARGS__)
@@ -386,12 +387,7 @@ static AccountSwitcher *gShared = nil;
 }
 
 - (void)_safeTapAtPoint:(CGPoint)point {
-    UIWindow *window = XN_ActiveWindow();
-    if (!window) return;
-    UIView *target = [window hitTest:point withEvent:nil];
-    if ([target isKindOfClass:[UIControl class]]) {
-        [(UIControl *)target sendActionsForControlEvents:UIControlEventTouchUpInside];
-    }
+    [XNTouchSimulator tapAtPoint:point];
 }
 
 @end

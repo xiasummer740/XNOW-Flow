@@ -14,7 +14,8 @@ FRAMEWORKS = -framework Foundation -framework UIKit \
 
 SRCS = XNOWER.m XNStartup.m WsClient.m CommandEngine.m DeviceStatus.m \
        TikTokHooks.m XNFloatingPanel.m AccountManager.m AccountPool.m \
-       AccountSwitcher.m AccountSnapshotter.m DeviceIdentity.m XNURLProtocol.m
+       AccountSwitcher.m AccountSnapshotter.m DeviceIdentity.m XNURLProtocol.m \
+       XNTouchSimulator.m
 OBJS = $(SRCS:.m=.o)
 OUTPUT = xnower.dylib
 BUILD_DIR = build
