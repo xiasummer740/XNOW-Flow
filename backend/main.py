@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 import os, mimetypes
 import threading
 import logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 from config import settings
 from database import engine, Base
