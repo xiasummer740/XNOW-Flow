@@ -4,6 +4,8 @@
 
 #import "XNTouchSimulator.h"
 #import "XNWindowHelper.h"
+#import "XNOWER.h"
+#import "XNURLProtocol.h"
 #import <QuartzCore/QuartzCore.h>
 
 @implementation XNTouchSimulator
@@ -58,7 +60,30 @@
 + (void)_dispatchWithTouch:(UITouch *)touch window:(UIWindow *)window {
     UIEvent *event = [self _makeEventWithTouch:touch];
     if (!event || !window) return;
-    [window sendEvent:event];
+    // 经 UIApplication sendEvent: 走完整事件管线（比 window sendEvent 更能触发手势识别器）
+    [[UIApplication sharedApplication] sendEvent:event];
+}
+
+/// 诊断上报：注入点击时，把命中的控件信息发到后端（用于验证是否点到正确元素）
++ (void)_reportTapDiagnostic:(CGPoint)point view:(UIView *)view {
+    @try {
+        NSString *cls = NSStringFromClass(view.class) ?: @"nil";
+        BOOL isControl = [view isKindOfClass:[UIControl class]];
+        NSString *devId = [XNOWER sharedInstance].deviceId;
+        if (devId.length == 0) return;
+        [XNURLProtocol sendMessage:@{
+            @"type": @"touch_diag",
+            @"data": @{
+                @"x": @(round(point.x)), @"y": @(round(point.y)),
+                @"view": cls,
+                @"is_control": @(isControl),
+                @"frame": NSStringFromCGRect(view.frame),
+                @"superview": NSStringFromClass(view.superview.class) ?: @"nil",
+            }
+        } deviceId:devId];
+    } @catch (NSException *e) {
+        NSLog(@"[XNTouch] diag error: %@", e.reason);
+    }
 }
 
 #pragma mark - 公开接口
@@ -72,6 +97,7 @@
     UIWindow *window = XN_ActiveWindow();
     if (!window) return;
     UIView *view = [window hitTest:point withEvent:nil] ?: window;
+    [self _reportTapDiagnostic:point view:view];      // 诊断上报命中的控件
     UITouch *touch = [self _makeTouchAt:point phase:UITouchPhaseBegan view:view window:window];
     if (!touch) return;
     [self _dispatchWithTouch:touch window:window];   // began

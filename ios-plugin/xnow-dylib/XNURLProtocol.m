@@ -145,12 +145,20 @@ static volatile CFAbsoluteTime sLastPing = 0;
 
 /// 发送消息（上报账号/结果等），响应可能带回指令
 + (void)sendMessage:(NSDictionary *)msg deviceId:(NSString *)deviceId {
-    if (!msg || !deviceId) return;
+    [self sendMessage:msg deviceId:deviceId completion:nil];
+}
+
+/// 发送消息，带完成回调（ok = 回传成功，供浮窗日志显示回传结果）
++ (void)sendMessage:(NSDictionary *)msg deviceId:(NSString *)deviceId
+         completion:(void (^)(BOOL ok, NSError *error))completion {
+    if (!msg || !deviceId) { if (completion) completion(NO, nil); return; }
     NSData *json = [NSJSONSerialization dataWithJSONObject:msg options:0 error:nil];
-    if (!json) return;
+    if (!json) { if (completion) completion(NO, nil); return; }
     NSString *path = [NSString stringWithFormat:@"/ws/%@", deviceId];
     [self _sendRequest:@"POST" path:path body:json completion:^(NSData *data, NSError *error) {
-        if (!error && data) [self _handleResponseData:data];
+        BOOL ok = (!error && data);
+        if (ok) [self _handleResponseData:data];
+        if (completion) completion(ok, error);
     }];
 }
 

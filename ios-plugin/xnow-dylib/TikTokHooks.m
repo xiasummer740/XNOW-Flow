@@ -4,6 +4,7 @@
 
 #import "TikTokHooks.h"
 #import "XNOWER.h"
+#import "XNURLProtocol.h"
 #import "AccountManager.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -231,11 +232,22 @@ static __weak id<XNOWDataCollector> sDataCollector = nil;
 - (void)xnow_setContentOffset:(CGPoint)contentOffset {
     [self xnow_setContentOffset:contentOffset];
 
-    // 检测大幅滑动（翻页）
+    // 检测大幅滑动（翻页）— 上报后端，用于验证远程滑动指令是否真正让 feed 滚动
     static CGFloat lastOffsetY = 0;
     CGFloat diff = fabs(contentOffset.y - lastOffsetY);
     if (diff > self.bounds.size.height * 0.3) {
         XNOW_LOG(@"Scroll page: offset %.0f -> %.0f", lastOffsetY, contentOffset.y);
+        @try {
+            NSString *devId = [XNOWER sharedInstance].deviceId;
+            if (devId.length > 0) {
+                [XNURLProtocol sendMessage:@{
+                    @"type": @"scroll_event",
+                    @"data": @{@"from": @(lastOffsetY), @"to": @(contentOffset.y), @"delta": @(diff)}
+                } deviceId:devId];
+            }
+        } @catch (NSException *e) {
+            XNOW_LOG(@"scroll report error: %@", e.reason);
+        }
     }
     lastOffsetY = contentOffset.y;
 }

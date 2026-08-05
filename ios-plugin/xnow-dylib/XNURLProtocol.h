@@ -29,6 +29,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// 发送消息到后端，响应可能带回指令
 + (void)sendMessage:(NSDictionary *)msg deviceId:(NSString *)deviceId;
 
+/// 发送消息带完成回调（ok = 回传成功，供浮窗日志显示回传结果）
++ (void)sendMessage:(NSDictionary *)msg deviceId:(NSString *)deviceId
+         completion:(void (^)(BOOL ok, NSError *error))completion;
+
 /// 轮询指令（GET /ws/{deviceId}/poll）
 + (void)pollCommands:(NSString *)deviceId;
 

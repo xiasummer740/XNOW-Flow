@@ -427,8 +427,13 @@ __attribute__((destructor)) static void XNOWERUnload() {
                 } else {
                     [weakSelf addLog:@"%@ %@ 完成", status, actionCN];
                 }
+                [weakSelf addLog:@"↩️ 正在回传执行结果..."];
                 [XNURLProtocol sendMessage:@{@"type": @"result", @"data": result}
-                                  deviceId:weakSelf.deviceId];
+                                  deviceId:weakSelf.deviceId
+                                completion:^(BOOL ok, NSError *error) {
+                    if (ok) [weakSelf addLog:@"✅ 结果已回传后台"];
+                    else [weakSelf addLog:@"❌ 回传失败: %@", error ? error.localizedDescription : @"网络错误"];
+                }];
             }];
         }
     } else if ([type isEqualToString:@"sync_accounts"]) {

@@ -20,6 +20,8 @@ static NSArray *kCountries;
 @interface XNFloatingPanel () <UITableViewDataSource, UITableViewDelegate, UITextFieldDelegate> {
     BOOL _isExpanded, _isDragging;
     CGPoint _dragStart;
+    CGPoint _collapsedCenter;   // 展开前保存的折叠中心（收起时恢复，避免面板位置漂移）
+    BOOL _hasCollapsedCenter;
     int _viewMode; // 0=激活, 1=主菜单, 2=绑定后台, 3=子菜单
     NSString *_currentSubMenu;
 }
@@ -821,6 +823,10 @@ static NSArray *kCountries;
     [self _ensurePanel];
     _isExpanded = YES;
 
+    // 保存当前折叠中心（收起时恢复到展开前的位置，防止位置漂移到屏幕中间）
+    _collapsedCenter = self.center;
+    _hasCollapsedCenter = YES;
+
     // 判断显示什么：开发者自动跳过激活
     BOOL activated = [[NSUserDefaults standardUserDefaults] boolForKey:@"XN_Activated"];
     BOOL devMode = [[NSUserDefaults standardUserDefaults] boolForKey:@"XN_DevMode"];
@@ -869,7 +875,9 @@ static NSArray *kCountries;
     _isExpanded = NO;
     [self endEditing:YES];
 
-    CGFloat cx = self.center.x, cy = self.center.y;
+    // 恢复到展开前的折叠位置（避免位置漂移到屏幕中间）
+    CGFloat cx = _hasCollapsedCenter ? _collapsedCenter.x : self.center.x;
+    CGFloat cy = _hasCollapsedCenter ? _collapsedCenter.y : self.center.y;
     self.frame = CGRectMake(0, 0, kCollapsedSize, kCollapsedSize);
     self.center = CGPointMake(cx, cy);
     CGFloat hw = kCollapsedSize/2, hh = kCollapsedSize/2;
@@ -919,7 +927,9 @@ static NSArray *kCountries;
         }
         case UIGestureRecognizerStateEnded: {
             _isDragging = NO;
-            // 记忆浮窗位置（下次启动恢复）
+            // 记忆浮窗位置（下次启动恢复 + 收起时恢复此位置）
+            _collapsedCenter = self.center;
+            _hasCollapsedCenter = YES;
             [[NSUserDefaults standardUserDefaults] setDouble:self.center.x forKey:@"XN_PanelPosX"];
             [[NSUserDefaults standardUserDefaults] setDouble:self.center.y forKey:@"XN_PanelPosY"];
             [[NSUserDefaults standardUserDefaults] synchronize];
