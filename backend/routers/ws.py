@@ -218,6 +218,14 @@ def _handle_device_message(device_id: str, msg: dict):
         if isinstance(data, dict) and isinstance(data.get("users"), list):
             _insert_collected_data(device_id, data)
 
+    elif msg_type == "touch_diag":
+        # 触摸注入诊断（点击落点控件信息）— 用于验证远程指令是否点到正确元素
+        logger.info(f"Device {device_id} touch_diag: {msg.get('data', {})}")
+
+    elif msg_type == "scroll_event":
+        # 页面滚动事件（TikTok feed 真的翻页时）— 用于验证远程滑动是否生效
+        logger.info(f"Device {device_id} scroll_event: {msg.get('data', {})}")
+
     elif msg_type == "collect_result":
         data = msg.get("data", {})
         logger.info(f"Device {device_id} collect_result: {data.get('source_type', '')}")
