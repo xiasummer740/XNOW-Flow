@@ -14,6 +14,8 @@ from dependencies import get_current_user
 from models.user import User
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/biz/v2", tags=["device_commands"])
 
 
