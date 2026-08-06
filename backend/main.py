@@ -153,7 +153,7 @@ def _offline_sweep_loop():
             from models.device import DeviceBinding
             db = SessionLocal()
             try:
-                cutoff = datetime.utcnow() - timedelta(seconds=35)
+                cutoff = datetime.utcnow() - timedelta(seconds=120)
                 from sqlalchemy import or_
                 stale = db.query(DeviceBinding).filter(
                     DeviceBinding.is_online == True,

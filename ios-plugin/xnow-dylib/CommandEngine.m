@@ -1824,81 +1824,57 @@ static const CGFloat kAvatarRatioY = 0.82;
 /// 养号心跳：一次短随机浏览会话（2~5 次滑动 + 按概率点赞/关注/评论），约 1~2 分钟
 /// params: {min_scrolls, max_scrolls, like_probability, follow_probability, comment_probability, browse_minutes}
 - (NSDictionary *)_performNurtureTick:(NSDictionary *)params {
-    int minScrolls = [params[@"min_scrolls"] intValue];
-    if (minScrolls < 1) minScrolls = 2;
-    int maxScrolls = [params[@"max_scrolls"] intValue];
-    if (maxScrolls < minScrolls) maxScrolls = minScrolls + 3;
-
-    double likeProb = [params[@"like_probability"] doubleValue];
-    if (likeProb <= 0) likeProb = 0.2;
-    double followProb = [params[@"follow_probability"] doubleValue];
-    if (followProb <= 0) followProb = 0.05;
-    double commentProb = [params[@"comment_probability"] doubleValue];
-    if (commentProb <= 0) commentProb = 0.02;
-
-    int scrollCount = minScrolls + arc4random_uniform(maxScrolls - minScrolls + 1);
-    if (scrollCount < minScrolls) scrollCount = minScrolls;
-
-    // 用 browse_minutes 折算每步观看秒数，使总时长接近目标分钟数
-    int browseMinutes = [params[@"browse_minutes"] intValue];
-    if (browseMinutes < 1) browseMinutes = 1;
-    if (browseMinutes > 10) browseMinutes = 10;
-    int perStepSeconds = (browseMinutes * 60) / MAX(1, scrollCount);
-    if (perStepSeconds < 10) perStepSeconds = 10;
-    if (perStepSeconds > 45) perStepSeconds = 45;
+    // 养号两模式（祥哥需求）：
+    //  模式1：随机间隔10-20秒 上滑
+    //  模式2：随机间隔10-20秒 上滑 + 随机点赞或评论
+    int mode = [params[@"mode"] intValue] ?: 1;
+    if (mode < 1 || mode > 2) mode = 1;
+    int cycles = [params[@"cycles"] intValue] ?: 3;
+    if (cycles < 1) cycles = 1;
+    if (cycles > 10) cycles = 10;
+    int minInt = [params[@"min_interval"] intValue] ?: 10;
+    int maxInt = [params[@"max_interval"] intValue] ?: 20;
+    if (minInt < 5) minInt = 5;
+    if (maxInt < minInt) maxInt = minInt + 10;
 
     __block int likes = 0;
-    __block int follows = 0;
     __block int comments = 0;
-    NSMutableArray *doneActions = [NSMutableArray array];
 
-    for (int i = 0; i < scrollCount; i++) {
-        // 每步随机观看 perStepSeconds±5 秒
-        int watchTime = perStepSeconds - 5 + arc4random_uniform(11);
-        if (watchTime < 5) watchTime = 5;
-        [NSThread sleepForTimeInterval:watchTime];
+    for (int i = 0; i < cycles; i++) {
+        // 随机间隔 10-20 秒（模拟真实观看停留）
+        int delay = minInt + (int)arc4random_uniform(maxInt - minInt + 1);
+        if (delay < 5) delay = 5;
+        [NSThread sleepForTimeInterval:delay];
 
+        // 上滑到下一个视频
         dispatch_sync(dispatch_get_main_queue(), ^{
-            // 按概率点赞
-            if ((double)(arc4random_uniform(1000)) / 1000.0 < likeProb) {
-                [self _performLike];
-                likes++;
-                [doneActions addObject:@"like"];
-                [NSThread sleepForTimeInterval:0.6];
-            }
-            // 按概率关注
-            if ((double)(arc4random_uniform(1000)) / 1000.0 < followProb) {
-                [self _performFollow];
-                follows++;
-                [doneActions addObject:@"follow"];
-                [NSThread sleepForTimeInterval:0.6];
-            }
-            // 按概率评论
-            if ((double)(arc4random_uniform(1000)) / 1000.0 < commentProb) {
-                [self _performComment:@"Nice!"];
-                comments++;
-                [doneActions addObject:@"comment"];
-                [NSThread sleepForTimeInterval:1.5];
-                // 关闭评论面板
-                [self _performSwipeDown];
-                [NSThread sleepForTimeInterval:0.5];
-            }
-            // 上滑到下一个视频
             [self _performSwipeUp];
         });
 
-        [NSThread sleepForTimeInterval:0.5];
+        // 模式2：随机点赞或评论
+        if (mode == 2) {
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                if (arc4random_uniform(2) == 0) {
+                    [self _performLike];
+                    likes++;
+                } else {
+                    [self _performComment:@"nice!"];
+                    comments++;
+                    // 等评论发出，再下滑关掉评论面板回视频
+                    [NSThread sleepForTimeInterval:1.2];
+                    [self _performSwipeDown];
+                }
+            });
+        }
     }
 
     return @{
         @"status": @"success",
-        @"message": [NSString stringWithFormat:@"养号 tick 完成: %d 滑, %d 赞, %d 关注, %d 评论",
-                     scrollCount, likes, follows, comments],
-        @"scrolls": @(scrollCount),
+        @"message": [NSString stringWithFormat:@"养号完成(%d轮): %d滑, %d赞, %d评", cycles, cycles, likes, comments],
+        @"mode": @(mode),
+        @"cycles": @(cycles),
         @"likes": @(likes),
-        @"follows": @(follows),
         @"comments": @(comments),
-        @"actions": doneActions,
     };
 }
 
