@@ -180,7 +180,7 @@ static NSArray *kNurtureComments = @[
                 break;
 
             case CommandActionBackupAccount: {
-                // 先导航到个人页（账号信息可见），再检测账号，最后备份
+                // 先导航到个人页（触发 TikTok 个人页 API → 网络捕获当前账号）
                 dispatch_sync(dispatch_get_main_queue(), ^{
                     UIView *profileTab = [self _findViewWithAccessibilityIdentifier:@"a11y_vo_profile"
                                                                              inView:XN_ActiveWindow()];
@@ -189,16 +189,29 @@ static NSArray *kNurtureComments = @[
                         [XNTouchSimulator tapAtPoint:center];
                     }
                 });
-                [NSThread sleepForTimeInterval:2.5];  // 等个人页加载
 
-                // 检测当前账号（扫描个人页 UI 的昵称/ID）
-                dispatch_semaphore_t sema = dispatch_semaphore_create(0);
-                [[AccountManager sharedManager] detectCurrentAccountWithCompletion:^(NSDictionary *account) {
-                    dispatch_semaphore_signal(sema);
-                }];
-                dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+                // 轮询等待网络捕获的当前账号（个人页 API 响应解析，最多 10 秒）
+                NSDictionary *account = nil;
+                for (int i = 0; i < 20; i++) {
+                    [NSThread sleepForTimeInterval:0.5];
+                    account = [[AccountManager sharedManager] currentAccount];
+                    if (account.count > 0) break;
+                }
 
-                NSInteger savedId = [[AccountSwitcher sharedSwitcher] backupCurrentAccount];
+                // 兜底：UI 扫描检测（个人页昵称/ID）
+                if (!account || account.count == 0) {
+                    dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+                    [[AccountManager sharedManager] detectCurrentAccountWithCompletion:^(NSDictionary *a) {
+                        dispatch_semaphore_signal(sema);
+                    }];
+                    dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+                    account = [[AccountManager sharedManager] currentAccount];
+                }
+
+                NSInteger savedId = 0;
+                if (account && account.count > 0) {
+                    savedId = [[AccountSwitcher sharedSwitcher] backupCurrentAccount];
+                }
                 result = @{
                     @"status": savedId > 0 ? @"success" : @"failed",
                     @"message": savedId > 0 ? [NSString stringWithFormat:@"已备份账号 #%ld 登录态", (long)savedId]
@@ -1955,13 +1968,15 @@ static NSArray *kNurtureComments = @[
     self.nurtureMode = mode;
     self.nurtureRunning = YES;
     __weak typeof(self) weakSelf = self;
+    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"▶️ 养号模式%d 已启动（24小时不限时）", mode]];
     dispatch_async(_execQueue, ^{
-        __block int cycles = 0, likes = 0, comments = 0;
+        __block int cycles = 0, likes = 0, follows = 0, comments = 0;
         while (weakSelf.nurtureRunning) {
             cycles++;
-            // 随机间隔 10-20 秒（模拟真实观看停留）
+            // 随机间隔 10-20 秒（模拟真实观看停留，日志显示本次分配时长）
             int delay = 10 + (int)arc4random_uniform(11);
             if (delay < 5) delay = 5;
+            [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏱ 本次观看 %d 秒（随机10-20秒）", delay]];
             [NSThread sleepForTimeInterval:delay];
             if (!weakSelf.nurtureRunning) break;
 
@@ -1969,23 +1984,37 @@ static NSArray *kNurtureComments = @[
             dispatch_sync(dispatch_get_main_queue(), ^{
                 [weakSelf _performSwipeUp];
             });
+            [[XNOWER sharedInstance] addLog:@"📱 已上滑到下一条视频"];
             if (!weakSelf.nurtureRunning) break;
 
-            // 模式2：随机点赞或评论
+            // 模式2：随机做一种互动（点赞/关注/评论）
             if (mode == 2) {
+                uint32_t r = arc4random_uniform(3);
                 dispatch_sync(dispatch_get_main_queue(), ^{
-                    if (arc4random_uniform(2) == 0) {
+                    if (r == 0) {
                         [weakSelf _performLike];
-                        likes++;
+                    } else if (r == 1) {
+                        [weakSelf _performFollow];
                     } else {
                         [weakSelf _performComment:[weakSelf _randomComment]];
-                        comments++;
                         [NSThread sleepForTimeInterval:1.2];
                         [weakSelf _performSwipeDown];  // 下滑关评论面板回视频
                     }
                 });
+                if (r == 0) {
+                    likes++;
+                    [[XNOWER sharedInstance] addLog:@"❤️ 随机点赞"];
+                } else if (r == 1) {
+                    follows++;
+                    [[XNOWER sharedInstance] addLog:@"👤 随机关注"];
+                } else {
+                    comments++;
+                    [[XNOWER sharedInstance] addLog:@"💬 随机评论"];
+                }
             }
         }
+        [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏹ 养号已停止：共%d轮，%d赞，%d关注，%d评",
+                                         cycles, likes, follows, comments]];
         // 汇报停止（含运行统计）
         @try {
             NSString *devId = [XNOWER sharedInstance].deviceId;
@@ -1995,9 +2024,9 @@ static NSArray *kNurtureComments = @[
                     @"data": @{
                         @"action": @"nurture",
                         @"status": @"success",
-                        @"message": [NSString stringWithFormat:@"养号已停止：共%ld轮，%ld赞，%ld评",
-                                     (long)cycles, (long)likes, (long)comments],
-                        @"cycles": @(cycles), @"likes": @(likes), @"comments": @(comments),
+                        @"message": [NSString stringWithFormat:@"养号已停止：共%d轮，%d赞，%d关注，%d评",
+                                     cycles, likes, follows, comments],
+                        @"cycles": @(cycles), @"likes": @(likes), @"follows": @(follows), @"comments": @(comments),
                     }
                 } deviceId:devId];
             }

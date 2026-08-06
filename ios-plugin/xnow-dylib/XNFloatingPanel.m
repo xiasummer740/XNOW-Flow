@@ -101,9 +101,7 @@ static NSArray *kCountries;
         @{@"icon": @"trash.fill", @"label": @"一键清理所有数据", @"action": @"clear_data"},
         @{@"icon": @"power", @"label": @"关闭服务器链接", @"action": @"disconnect"},
         @{@"icon": @"heart.fill", @"label": @"采集点赞", @"action": @"collect_likes"},
-        @{@"icon": @"leaf.fill", @"label": @"养号-纯浏览", @"action": @"nurture_mode1"},
-        @{@"icon": @"leaf.fill", @"label": @"养号-浏览互动", @"action": @"nurture_mode2"},
-        @{@"icon": @"stop.circle.fill", @"label": @"停止养号", @"action": @"nurture_stop"},
+        @{@"icon": @"leaf.fill", @"label": @"养号", @"action": @"nurture"},
         @{@"icon": @"doc.on.doc.fill", @"label": @"复制机器码", @"action": @"copy_device_id"},
         @{@"icon": @"doc.plaintext.fill", @"label": @"显示/关闭日志", @"action": @"toggle_log"},
         @{@"icon": @"xmark.circle.fill", @"label": @"关闭", @"action": @"close_panel"},
@@ -671,6 +669,34 @@ static NSArray *kCountries;
     [self _presentAlert:alert];
 }
 
+/// 养号子菜单（模式1纯浏览/模式2浏览+互动/停止，24小时不限时运行）
+- (void)_promptNurtureMode {
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:@"🌱 养号"
+        message:@"选择养号模式（24小时不限时运行）"
+        preferredStyle:UIAlertControllerStyleActionSheet];
+    [alert addAction:[UIAlertAction actionWithTitle:@"模式1：纯浏览（随机10-20秒上滑）"
+        style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureMode:)]) {
+                [self.delegate floatingPanelDidStartNurtureMode:1];
+            }
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"模式2：浏览+互动（上滑+随机点赞/关注/评论）"
+        style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureMode:)]) {
+                [self.delegate floatingPanelDidStartNurtureMode:2];
+            }
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"⏹ 停止养号"
+        style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStopNurture)]) {
+                [self.delegate floatingPanelDidStopNurture];
+            }
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self _presentAlert:alert];
+}
+
 /// 统一弹 Alert（兼容多场景）
 - (void)_presentAlert:(UIAlertController *)alert {
     UIWindow *topWin = nil;
@@ -776,25 +802,8 @@ static NSArray *kCountries;
         [self.delegate floatingPanelDidTapCollectLikes:self];
         return;
     }
-    if ([action isEqualToString:@"nurture_mode1"]) {
-        [self addLog:@"▶️ 养号模式1：纯浏览 已启动（24小时不限时，菜单可停止）"];
-        if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureMode:)]) {
-            [self.delegate floatingPanelDidStartNurtureMode:1];
-        }
-        return;
-    }
-    if ([action isEqualToString:@"nurture_mode2"]) {
-        [self addLog:@"▶️ 养号模式2：浏览+互动 已启动（24小时不限时，菜单可停止）"];
-        if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureMode:)]) {
-            [self.delegate floatingPanelDidStartNurtureMode:2];
-        }
-        return;
-    }
-    if ([action isEqualToString:@"nurture_stop"]) {
-        [self addLog:@"⏹ 已停止养号"];
-        if ([self.delegate respondsToSelector:@selector(floatingPanelDidStopNurture)]) {
-            [self.delegate floatingPanelDidStopNurture];
-        }
+    if ([action isEqualToString:@"nurture"]) {
+        [self _promptNurtureMode];
         return;
     }
     if ([action isEqualToString:@"dl_video"]) {
