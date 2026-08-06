@@ -38,6 +38,8 @@ static const CGFloat kAvatarRatioY = 0.82;
 @property (nonatomic, strong) NSMutableDictionary *collectedFans;
 @property (nonatomic, strong) NSMutableDictionary *collectedVideos;
 @property (nonatomic, assign) BOOL isCollectingData;
+@property (nonatomic, assign) BOOL nurtureRunning;   // 连续养号运行标志（后台循环检查）
+@property (nonatomic, assign) int nurtureMode;       // 当前养号模式 1/2
 @end
 
 @implementation CommandEngine
@@ -1880,10 +1882,73 @@ static const CGFloat kAvatarRatioY = 0.82;
 
 /// 停止养号：tick 为一次性指令，停止是隐式的，仅返回状态
 - (NSDictionary *)_performNurtureStop {
+    [self stopNurture];
     return @{
         @"status": @"stopped",
-        @"message": @"养号已停止（tick 为一次性指令，无需显式停止）",
+        @"message": @"养号已停止",
     };
+}
+
+// ===== 连续养号（不限时，24小时运行，直到 stopNurture）=====
+
+- (void)startNurtureWithMode:(int)mode {
+    if (mode < 1 || mode > 2) mode = 1;
+    if (self.nurtureRunning) [self stopNurture];
+    self.nurtureMode = mode;
+    self.nurtureRunning = YES;
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(_execQueue, ^{
+        __block int cycles = 0, likes = 0, comments = 0;
+        while (weakSelf.nurtureRunning) {
+            cycles++;
+            // 随机间隔 10-20 秒（模拟真实观看停留）
+            int delay = 10 + (int)arc4random_uniform(11);
+            if (delay < 5) delay = 5;
+            [NSThread sleepForTimeInterval:delay];
+            if (!weakSelf.nurtureRunning) break;
+
+            // 上滑到下一个视频
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                [weakSelf _performSwipeUp];
+            });
+            if (!weakSelf.nurtureRunning) break;
+
+            // 模式2：随机点赞或评论
+            if (mode == 2) {
+                dispatch_sync(dispatch_get_main_queue(), ^{
+                    if (arc4random_uniform(2) == 0) {
+                        [weakSelf _performLike];
+                        likes++;
+                    } else {
+                        [weakSelf _performComment:@"nice!"];
+                        comments++;
+                        [NSThread sleepForTimeInterval:1.2];
+                        [weakSelf _performSwipeDown];  // 下滑关评论面板回视频
+                    }
+                });
+            }
+        }
+        // 汇报停止（含运行统计）
+        @try {
+            NSString *devId = [XNOWER sharedInstance].deviceId;
+            if (devId.length > 0) {
+                [XNURLProtocol sendMessage:@{
+                    @"type": @"result",
+                    @"data": @{
+                        @"action": @"nurture",
+                        @"status": @"success",
+                        @"message": [NSString stringWithFormat:@"养号已停止：共%ld轮，%ld赞，%ld评",
+                                     (long)cycles, (long)likes, (long)comments],
+                        @"cycles": @(cycles), @"likes": @(likes), @"comments": @(comments),
+                    }
+                } deviceId:devId];
+            }
+        } @catch (NSException *e) {}
+    });
+}
+
+- (void)stopNurture {
+    self.nurtureRunning = NO;
 }
 
 /// 注册新账号：导航到个人页 → 点"登录/注册" → 切"注册" → 填邮箱/手机 → 密码 → 继续

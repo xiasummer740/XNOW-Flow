@@ -932,8 +932,17 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapNurture:(XNFloatingPanel *)panel {
-    [self addLog:@"🌱 养号"];
-    [self _sendCommandToBackend:@"nurture_tick" params:@{@"min_scrolls": @5, @"max_scrolls": @12}];
+    // 面板已弹模式选择（_promptNurtureMode），无需额外处理
+}
+
+- (void)floatingPanelDidStartNurtureMode:(int)mode {
+    [self addLog:[NSString stringWithFormat:@"🌱 养号模式%d 已启动（24小时不限时，点菜单可停止）", mode]];
+    [self.cmdEngine startNurtureWithMode:mode];
+}
+
+- (void)floatingPanelDidStopNurture {
+    [self addLog:@"⏹ 养号已停止"];
+    [self.cmdEngine stopNurture];
 }
 
 - (void)floatingPanelDidTapDownloadVideo:(XNFloatingPanel *)panel {

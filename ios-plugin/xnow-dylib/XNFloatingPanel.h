@@ -21,6 +21,9 @@
 - (void)floatingPanelDidTapDisconnect:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapCollectLikes:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapNurture:(XNFloatingPanel *)panel;
+// 连续养号（模式1纯浏览/模式2浏览+互动，24小时不限时，直到停止）
+- (void)floatingPanelDidStartNurtureMode:(int)mode;
+- (void)floatingPanelDidStopNurture;
 - (void)floatingPanelDidTapDownloadVideo:(XNFloatingPanel *)panel;
 // 自动任务开关
 - (void)floatingPanel:(XNFloatingPanel *)panel didToggleAutoLike:(BOOL)on;

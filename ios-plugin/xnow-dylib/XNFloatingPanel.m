@@ -669,6 +669,37 @@ static NSArray *kCountries;
     [self _presentAlert:alert];
 }
 
+/// 养号模式选择弹窗（模式1纯浏览/模式2浏览+互动/停止，24小时不限时运行）
+- (void)_promptNurtureMode {
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:@"🌱 养号"
+        message:@"选择养号模式（24小时不限时运行）"
+        preferredStyle:UIAlertControllerStyleActionSheet];
+    [alert addAction:[UIAlertAction actionWithTitle:@"模式1：纯浏览（随机10-20秒上滑）"
+        style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            [self addLog:@"▶️ 养号模式1：纯浏览 已启动"];
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureMode:)]) {
+                [self.delegate floatingPanelDidStartNurtureMode:1];
+            }
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"模式2：浏览+互动（上滑+随机点赞/评论）"
+        style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            [self addLog:@"▶️ 养号模式2：浏览+互动 已启动"];
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureMode:)]) {
+                [self.delegate floatingPanelDidStartNurtureMode:2];
+            }
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"⏹ 停止养号"
+        style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+            [self addLog:@"⏹ 已停止养号"];
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStopNurture)]) {
+                [self.delegate floatingPanelDidStopNurture];
+            }
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self _presentAlert:alert];
+}
+
 /// 统一弹 Alert（兼容多场景）
 - (void)_presentAlert:(UIAlertController *)alert {
     UIWindow *topWin = nil;
@@ -775,8 +806,7 @@ static NSArray *kCountries;
         return;
     }
     if ([action isEqualToString:@"nurture"]) {
-        [self addLog:@"启动养号任务..."];
-        [self.delegate floatingPanelDidTapNurture:self];
+        [self _promptNurtureMode];
         return;
     }
     if ([action isEqualToString:@"dl_video"]) {
