@@ -293,36 +293,38 @@ static volatile CFAbsoluteTime sLastPing = 0;
 - (void)stopLoading {
     [self.forwardTask cancel];
     self.forwardTask = nil;
-    [self.forwardSession invalidateAndCancel];
-    self.forwardSession = nil;
 }
 
 #pragma mark - 转发原始请求
 
+/// 共享转发 session（避免每个请求新建 session 造成卡顿）
++ (NSURLSession *)_sharedForwardSession {
+    static NSURLSession *s = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
+        config.timeoutIntervalForRequest = 20;
+        config.timeoutIntervalForResource = 30;
+        s = [NSURLSession sessionWithConfiguration:config];
+    });
+    return s;
+}
+
 - (void)_forwardRequest:(NSURLRequest *)request {
-    NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
-    self.forwardSession = [NSURLSession sessionWithConfiguration:config];
-
     __weak typeof(self) weakSelf = self;
-    self.forwardTask = [self.forwardSession dataTaskWithRequest:request
-                                              completionHandler:^(NSData *data,
-                                                                  NSURLResponse *response,
-                                                                  NSError *error) {
-        typeof(self) strongSelf = weakSelf;
-        if (!strongSelf) return;
-
-        if (error) {
-            [strongSelf.client URLProtocol:strongSelf didFailWithError:error];
-        } else {
-            [strongSelf.client URLProtocol:strongSelf
-                         didReceiveResponse:response
-                         cacheStoragePolicy:NSURLCacheStorageNotAllowed];
-            [strongSelf.client URLProtocol:strongSelf didLoadData:data];
-            [strongSelf.client URLProtocolDidFinishLoading:strongSelf];
-        }
-        [strongSelf.forwardSession finishTasksAndInvalidate];
-        strongSelf.forwardSession = nil;
-    }];
+    self.forwardTask = [[XNURLProtocol _sharedForwardSession] dataTaskWithRequest:request
+        completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+            if (error) {
+                [strongSelf.client URLProtocol:strongSelf didFailWithError:error];
+            } else {
+                [strongSelf.client URLProtocol:strongSelf didReceiveResponse:response
+                                cacheStoragePolicy:NSURLCacheStorageNotAllowed];
+                [strongSelf.client URLProtocol:strongSelf didLoadData:data];
+                [strongSelf.client URLProtocolDidFinishLoading:strongSelf];
+            }
+        }];
     [self.forwardTask resume];
 }
 
@@ -343,9 +345,8 @@ static volatile CFAbsoluteTime sLastPing = 0;
     req.HTTPMethod = @"GET";
     req.timeoutInterval = 10;
 
-    // ephemeral session: 不存 cookie/cache，最小副作用
-    NSURLSessionConfiguration *ephemeral = [NSURLSessionConfiguration ephemeralSessionConfiguration];
-    NSURLSession *session = [NSURLSession sessionWithConfiguration:ephemeral];
+    // 复用共享 session（不每次新建，降低开销）
+    NSURLSession *session = [XNURLProtocol _sharedForwardSession];
 
     [[session dataTaskWithRequest:req
                 completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
