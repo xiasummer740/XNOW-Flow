@@ -6,6 +6,8 @@
 #import "AccountManager.h"
 #import "XNWindowHelper.h"
 #import "XNTouchSimulator.h"
+#import "XNOWER.h"
+#import "XNURLProtocol.h"
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
@@ -375,7 +377,7 @@ static const CGFloat kAvatarRatioY = 0.82;
     NSLog(@"[XNOWER] 真实滑动 delta=%.0fpt", deltaY);
 }
 
-/// 尝试直接翻页 feed（TikTok feed 是 UITableView，用 scrollToRowAtIndexPath）
+/// 尝试直接翻页 feed（TikTok feed 是 UITableView/UICollectionView，用 scrollToRow/Item + setContentOffset 兜底）
 - (BOOL)_tryPageFeed:(CGFloat)deltaY {
     UIWindow *window = XN_ActiveWindow();
     if (!window) return NO;
@@ -383,33 +385,62 @@ static const CGFloat kAvatarRatioY = 0.82;
     [self _findLargeFeedScrollViewInView:window result:&feedScroll];
     if (!feedScroll) {
         NSLog(@"[XNOWER] feed 滚动视图未找到");
+        [self _reportScrollDiag:@{@"found": @NO}];
         return NO;
     }
     NSLog(@"[XNOWER] feed scroll view = %@", NSStringFromClass(feedScroll.class));
 
+    BOOL scrolled = NO;
+    NSString *feedClass = NSStringFromClass(feedScroll.class);
     if ([feedScroll isKindOfClass:[UITableView class]]) {
         UITableView *tv = (UITableView *)feedScroll;
         NSIndexPath *current = [tv indexPathsForVisibleRows].firstObject;
-        if (!current) return NO;
-        NSInteger targetRow = (deltaY < 0) ? current.row + 1 : MAX(0, current.row - 1);
-        if (targetRow >= [tv numberOfRowsInSection:current.section]) return NO;
-        NSIndexPath *target = [NSIndexPath indexPathForRow:targetRow inSection:current.section];
-        [tv scrollToRowAtIndexPath:target atScrollPosition:UITableViewScrollPositionMiddle animated:YES];
-        NSLog(@"[XNOWER] feed 表翻页到 row=%ld", (long)targetRow);
-        return YES;
-    }
-    if ([feedScroll isKindOfClass:[UICollectionView class]]) {
+        if (current) {
+            NSInteger targetRow = (deltaY < 0) ? current.row + 1 : MAX(0, current.row - 1);
+            if (targetRow < [tv numberOfRowsInSection:current.section]) {
+                NSIndexPath *target = [NSIndexPath indexPathForRow:targetRow inSection:current.section];
+                [tv scrollToRowAtIndexPath:target atScrollPosition:UITableViewScrollPositionMiddle animated:YES];
+                NSLog(@"[XNOWER] feed 表翻页到 row=%ld", (long)targetRow);
+                [self _reportScrollDiag:@{@"found": @YES, @"class": feedClass, @"type": @"table", @"target": @(targetRow)}];
+                scrolled = YES;
+            }
+        }
+    } else if ([feedScroll isKindOfClass:[UICollectionView class]]) {
         UICollectionView *cv = (UICollectionView *)feedScroll;
         NSIndexPath *current = [cv indexPathsForVisibleItems].firstObject;
-        if (!current) return NO;
-        NSInteger targetItem = (deltaY < 0) ? current.item + 1 : MAX(0, current.item - 1);
-        if (targetItem >= [cv numberOfItemsInSection:current.section]) return NO;
-        NSIndexPath *target = [NSIndexPath indexPathForItem:targetItem inSection:current.section];
-        [cv scrollToItemAtIndexPath:target atScrollPosition:UICollectionViewScrollPositionCenteredVertically animated:YES];
-        NSLog(@"[XNOWER] feed 集合翻页到 item=%ld", (long)targetItem);
-        return YES;
+        if (current) {
+            NSInteger targetItem = (deltaY < 0) ? current.item + 1 : MAX(0, current.item - 1);
+            if (targetItem < [cv numberOfItemsInSection:current.section]) {
+                NSIndexPath *target = [NSIndexPath indexPathForItem:targetItem inSection:current.section];
+                [cv scrollToItemAtIndexPath:target atScrollPosition:UICollectionViewScrollPositionCenteredVertically animated:YES];
+                NSLog(@"[XNOWER] feed 集合翻页到 item=%ld", (long)targetItem);
+                [self _reportScrollDiag:@{@"found": @YES, @"class": feedClass, @"type": @"collection", @"target": @(targetItem)}];
+                scrolled = YES;
+            }
+        }
     }
-    return NO;
+
+    // 兜底：直接用 setContentOffset 整页滚动（部分版本 scrollToRow 不触发视频切换）
+    if (!scrolled) {
+        CGFloat pageH = feedScroll.bounds.size.height;
+        CGFloat targetY = (deltaY < 0) ? feedScroll.contentOffset.y + pageH
+                                       : MAX(0, feedScroll.contentOffset.y - pageH);
+        [feedScroll setContentOffset:CGPointMake(0, targetY) animated:YES];
+        NSLog(@"[XNOWER] feed setContentOffset 到 y=%.0f", targetY);
+        [self _reportScrollDiag:@{@"found": @YES, @"class": feedClass, @"type": @"offset", @"target": @(targetY)}];
+        scrolled = YES;
+    }
+    return scrolled;
+}
+
+/// 上报 feed 翻页诊断（供后端确认 feed 是否找到/滚动）
+- (void)_reportScrollDiag:(NSDictionary *)info {
+    @try {
+        NSString *devId = [XNOWER sharedInstance].deviceId;
+        if (devId.length > 0) {
+            [XNURLProtocol sendMessage:@{@"type": @"scroll_diag", @"data": info} deviceId:devId];
+        }
+    } @catch (NSException *e) {}
 }
 
 /// 递归查找大面积 UIScrollView（feed，UITableView 或 UICollectionView）
