@@ -79,11 +79,34 @@
                 @"is_control": @(isControl),
                 @"frame": NSStringFromCGRect(view.frame),
                 @"superview": NSStringFromClass(view.superview.class) ?: @"nil",
+                @"gestures": [self _gestureInfo:view],
             }
         } deviceId:devId];
     } @catch (NSException *e) {
         NSLog(@"[XNTouch] diag error: %@", e.reason);
     }
+}
+
+/// 诊断：view 上的手势识别器 + target-action 列表（用于判断 TikTok 按钮怎么接线）
++ (NSArray *)_gestureInfo:(UIView *)view {
+    NSMutableArray *info = [NSMutableArray array];
+    @try {
+        for (UIGestureRecognizer *gr in view.gestureRecognizers) {
+            NSMutableDictionary *d = [@{@"class": NSStringFromClass(gr.class)} mutableCopy];
+            NSArray *targets = [gr valueForKey:@"_targets"];
+            NSMutableArray *acts = [NSMutableArray array];
+            for (id t in targets) {
+                id target = [t valueForKey:@"_target"];
+                id actionVal = [t valueForKey:@"_action"];
+                if ([actionVal isKindOfClass:[NSString class]]) {
+                    [acts addObject:[NSString stringWithFormat:@"%@->%@", NSStringFromClass([target class]), actionVal]];
+                }
+            }
+            if (acts.count) d[@"actions"] = acts;
+            [info addObject:d];
+        }
+    } @catch (NSException *e) {}
+    return info;
 }
 
 #pragma mark - 公开接口
@@ -141,12 +164,34 @@
         }
     }
 
-    // 同时注入合成触摸（三重保险）
+    // 合成触摸（三重保险）：began → 短按下 → ended，模拟真实点击时序
     UITouch *touch = [self _makeTouchAt:point phase:UITouchPhaseBegan view:view window:window];
     if (!touch) return;
-    [self _dispatchWithTouch:touch window:window];   // began
+    NSSet *touchSet = [NSSet setWithObject:touch];
+
+    // 1) 直接调用 view 的 touchesBegan（按钮常重写此方法，直接命中）
+    @try {
+        if ([view respondsToSelector:@selector(touchesBegan:withEvent:)]) {
+            [view touchesBegan:touchSet withEvent:[self _makeEventWithTouch:touch]];
+        }
+    } @catch (NSException *e) { NSLog(@"[XNTouch] touchesBegan err: %@", e.reason); }
+
+    // 2) 经 UIApplication 分发 began
+    [self _dispatchWithTouch:touch window:window];
+
+    // 3) 按下时长（真实点击约 50-100ms）
+    [NSThread sleepForTimeInterval:0.06];
+
+    // 4) 更新为 ended 并直接调 view 的 touchesEnded
     [self _updateTouch:touch phase:UITouchPhaseEnded at:point];
-    [self _dispatchWithTouch:touch window:window];   // ended
+    @try {
+        if ([view respondsToSelector:@selector(touchesEnded:withEvent:)]) {
+            [view touchesEnded:touchSet withEvent:[self _makeEventWithTouch:touch]];
+        }
+    } @catch (NSException *e) { NSLog(@"[XNTouch] touchesEnded err: %@", e.reason); }
+
+    // 5) 经 UIApplication 分发 ended
+    [self _dispatchWithTouch:touch window:window];
 }
 
 + (void)swipeFrom:(CGPoint)from to:(CGPoint)to {
