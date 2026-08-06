@@ -379,7 +379,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     NSString *type = cmd[@"type"] ?: @"command";
     if ([type isEqualToString:@"command"]) {
         NSString *action = cmd[@"action"] ?: @"";
-        [self addLog:@"📲 收到指令: %@", [XNOWER _displayNameForAction:action]];
+        [self addLog:@"📋 操作：%@", [XNOWER _displayNameForAction:action]];
 
         if ([action isEqualToString:@"batch_login"]) {
             NSDictionary *params = cmd[@"params"] ?: @{};
@@ -411,9 +411,8 @@ __attribute__((destructor)) static void XNOWERUnload() {
                 } deviceId:self.deviceId];
             }];
         } else {
-            // 普通指令
+            // 普通指令 — 结构化日志：操作 → 结果 → 同步 → 下一步（小白可读）
             NSString *actionCN = [XNOWER _displayNameForAction:action];
-            [self addLog:@"⚙️ 执行: %@", actionCN];
             __weak typeof(self) weakSelf = self;
             [self.cmdEngine executeCommand:cmd completion:^(NSDictionary *result) {
                 // CommandEngine 返回 status: success/failed；也兼容 success:YES/NO
@@ -421,18 +420,21 @@ __attribute__((destructor)) static void XNOWERUnload() {
                 BOOL ok = [statusStr isEqualToString:@"success"] ||
                           [statusStr isEqualToString:@"complete"] ||
                           [result[@"success"] boolValue];
-                NSString *status = ok ? @"✅" : @"❌";
-                if (result[@"message"]) {
-                    [weakSelf addLog:@"%@ %@: %@", status, actionCN, result[@"message"]];
+                NSString *detail = [result[@"message"] isKindOfClass:[NSString class]] ? result[@"message"] : @"";
+                if (ok) {
+                    [weakSelf addLog:@"✅ %@成功%@", actionCN, detail.length ? [NSString stringWithFormat:@"：%@", detail] : @""];
                 } else {
-                    [weakSelf addLog:@"%@ %@ 完成", status, actionCN];
+                    [weakSelf addLog:@"❌ %@失败：%@", actionCN, detail.length ? detail : @"请重试"];
                 }
-                [weakSelf addLog:@"↩️ 正在回传执行结果..."];
                 [XNURLProtocol sendMessage:@{@"type": @"result", @"data": result}
                                   deviceId:weakSelf.deviceId
                                 completion:^(BOOL ok, NSError *error) {
-                    if (ok) [weakSelf addLog:@"✅ 结果已回传后台"];
-                    else [weakSelf addLog:@"❌ 回传失败: %@", error ? error.localizedDescription : @"网络错误"];
+                    if (ok) {
+                        [weakSelf addLog:@"↗️ 结果已同步云端"];
+                    } else {
+                        [weakSelf addLog:@"⚠️ 结果同步失败（网络问题，稍后会自动重试）"];
+                    }
+                    [weakSelf addLog:@"➡️ 下一步：等待下一条指令"];
                 }];
             }];
         }
