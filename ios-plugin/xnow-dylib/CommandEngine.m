@@ -468,7 +468,7 @@ static const CGFloat kAvatarRatioY = 0.82;
 }
 
 - (void)_scanInteractiveViewsInView:(UIView *)view depth:(int)depth result:(NSMutableArray *)result {
-    if (depth > 14 || !view || result.count > 200) return;
+    if (depth > 28 || !view || result.count > 400) return;
     BOOL interactive = [view isKindOfClass:[UIControl class]] ||
                        (view.accessibilityIdentifier.length > 0) ||
                        (view.accessibilityLabel.length > 0) ||
