@@ -98,6 +98,32 @@
     if (!window) return;
     UIView *view = [window hitTest:point withEvent:nil] ?: window;
     [self _reportTapDiagnostic:point view:view];      // 诊断上报命中的控件
+
+    // 若是 UIControl（按钮），直接触发其 action（比合成触摸更可靠，不依赖手势识别）
+    if ([view isKindOfClass:[UIControl class]]) {
+        UIControl *ctrl = (UIControl *)view;
+        @try {
+            [ctrl sendActionsForControlEvents:UIControlEventTouchUpInside];
+        } @catch (NSException *e) {
+            NSLog(@"[XNTouch] sendActions error: %@", e.reason);
+        }
+        // 枚举所有 target-action 直接发送（覆盖 sendActions 漏掉的）
+        @try {
+            for (id target in [ctrl allTargets]) {
+                NSArray *acts = [ctrl actionsForTarget:target forControlEvent:UIControlEventTouchUpInside];
+                for (NSString *selStr in acts) {
+                    SEL sel = NSSelectorFromString(selStr);
+                    if (sel && [target respondsToSelector:sel]) {
+                        [UIApplication.sharedApplication sendAction:sel to:target from:ctrl forEvent:nil];
+                    }
+                }
+            }
+        } @catch (NSException *e) {
+            NSLog(@"[XNTouch] target-action error: %@", e.reason);
+        }
+    }
+
+    // 同时注入合成触摸（双保险）
     UITouch *touch = [self _makeTouchAt:point phase:UITouchPhaseBegan view:view window:window];
     if (!touch) return;
     [self _dispatchWithTouch:touch window:window];   // began
