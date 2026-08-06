@@ -478,14 +478,14 @@ static const CGFloat kAvatarRatioY = 0.82;
     }
 }
 
-/// 上滑（下一个视频）— 真实手势注入
+/// 上滑（下一个视频）— 优先 feed 翻页，失败再注入真实手势
 - (void)_performSwipeUp {
-    [XNTouchSimulator swipeUp];
+    [self _safeScrollBy:-[UIScreen mainScreen].bounds.size.height];
 }
 
-/// 下滑（上一个视频）— 真实手势注入
+/// 下滑（上一个视频）— 优先 feed 翻页，失败再注入真实手势
 - (void)_performSwipeDown {
-    [XNTouchSimulator swipeDown];
+    [self _safeScrollBy:[UIScreen mainScreen].bounds.size.height];
 }
 
 /// 真实模拟点击（注入 UITouch/UIEvent，让 TikTok 手势识别器真正响应）
