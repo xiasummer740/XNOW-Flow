@@ -160,11 +160,29 @@ static const CGFloat kAvatarRatioY = 0.82;
                 break;
 
             case CommandActionBackupAccount: {
+                // 先导航到个人页（账号信息可见），再检测账号，最后备份
+                dispatch_sync(dispatch_get_main_queue(), ^{
+                    UIView *profileTab = [self _findViewWithAccessibilityIdentifier:@"a11y_vo_profile"
+                                                                             inView:XN_ActiveWindow()];
+                    if (profileTab) {
+                        CGPoint center = [profileTab.superview convertPoint:profileTab.center toView:nil];
+                        [XNTouchSimulator tapAtPoint:center];
+                    }
+                });
+                [NSThread sleepForTimeInterval:2.5];  // 等个人页加载
+
+                // 检测当前账号（扫描个人页 UI 的昵称/ID）
+                dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+                [[AccountManager sharedManager] detectCurrentAccountWithCompletion:^(NSDictionary *account) {
+                    dispatch_semaphore_signal(sema);
+                }];
+                dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+
                 NSInteger savedId = [[AccountSwitcher sharedSwitcher] backupCurrentAccount];
                 result = @{
                     @"status": savedId > 0 ? @"success" : @"failed",
                     @"message": savedId > 0 ? [NSString stringWithFormat:@"已备份账号 #%ld 登录态", (long)savedId]
-                                             : @"未检测到当前登录账号",
+                                             : @"未检测到当前登录账号（请确认已登录个人页）",
                     @"account_id": @(savedId),
                 };
                 hasResult = YES;
