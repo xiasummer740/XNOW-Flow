@@ -4,6 +4,7 @@
 
 #import "CommandEngine.h"
 #import "AccountManager.h"
+#import "AccountSwitcher.h"
 #import "XNWindowHelper.h"
 #import "XNTouchSimulator.h"
 #import "XNOWER.h"
@@ -107,6 +108,8 @@ static const CGFloat kAvatarRatioY = 0.82;
             @"register_account":  @(CommandActionRegisterAccount),
             // 调试诊断
             @"ui_scan":           @(CommandActionUIScan),
+            // 账号管理
+            @"backup_account":    @(CommandActionBackupAccount),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -153,6 +156,18 @@ static const CGFloat kAvatarRatioY = 0.82;
             case CommandActionUIScan:
                 [self _performUIScan];
                 break;
+
+            case CommandActionBackupAccount: {
+                NSInteger savedId = [[AccountSwitcher sharedSwitcher] backupCurrentAccount];
+                result = @{
+                    @"status": savedId > 0 ? @"success" : @"failed",
+                    @"message": savedId > 0 ? [NSString stringWithFormat:@"已备份账号 #%ld 登录态", (long)savedId]
+                                             : @"未检测到当前登录账号",
+                    @"account_id": @(savedId),
+                };
+                hasResult = YES;
+                break;
+            }
 
             case CommandActionFollow:
                 [self _performFollow];
