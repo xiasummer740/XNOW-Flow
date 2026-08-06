@@ -33,6 +33,26 @@ static const CGFloat kFollowBtnRatioY = 0.35;
 static const CGFloat kAvatarRatioX = 0.08;
 static const CGFloat kAvatarRatioY = 0.82;
 
+// 随机评论文本池（养号模式2用，多样化避免被限，50+条分类）
+static NSArray *kNurtureComments = @[
+    // 赞美类
+    @"太棒了！", @"拍得真好", @"太美了", @"厉害了", @"这也太强了", @"绝了",
+    @"爱了爱了", @"真不错", @"超级喜欢", @"好有质感", @"太震撼了", @"无敌了",
+    @"神仙视频", @"宝藏博主", @"太优秀了", @"太会拍了",
+    // 互动类
+    @"支持一下", @"收藏了", @"已点赞", @"关注了", @"必须支持", @"推荐给大家",
+    @"学到了", @"说的太对了", @"感同身受", @"一直看你的视频",
+    // 疑问/交流类
+    @"这个怎么做的？", @"用的什么设备？", @"在哪拍的？", @"背景音乐是什么？",
+    @"求教程", @"求同款", @"怎么做到的？", @"下次也带我一起",
+    // 简短类
+    @"哈哈哈", @"哈哈哈哈哈哈", @"好可爱", @"加油加油", @"牛", @"👍👍",
+    @"好棒", @"不错", @"强", @"好", @"可以", @"哇", @"棒棒哒",
+    // 表情/语气类
+    @"😍😍", @"🥰🥰", @"😄😄", @"🔥🔥", @"❤️❤️", @"🫶🫶",
+    @"哈哈哈哈笑死我了", @"这也太搞笑了吧", @"看完心情都好了",
+];
+
 @interface CommandEngine ()
 @property (nonatomic, strong) dispatch_queue_t execQueue;
 @property (nonatomic, strong) NSMutableDictionary *collectedFans;
@@ -662,6 +682,13 @@ static const CGFloat kAvatarRatioY = 0.82;
         // 找到输入框
         UITextField *textField = [self _findTextFieldInView:window];
         UITextView *textView = [self _findTextViewInView:window];
+        UIView *field = textField ?: textView;
+
+        // 先点输入框获得焦点，再填文本（提升输入可靠性）
+        if (field) {
+            [self _safeTapAtPoint:[field.superview convertPoint:field.center toView:nil]];
+            [NSThread sleepForTimeInterval:0.4];
+        }
 
         if (textField) {
             textField.text = text;
@@ -1878,7 +1905,7 @@ static const CGFloat kAvatarRatioY = 0.82;
                     [self _performLike];
                     likes++;
                 } else {
-                    [self _performComment:@"nice!"];
+                    [self _performComment:[self _randomComment]];
                     comments++;
                     // 等评论发出，再下滑关掉评论面板回视频
                     [NSThread sleepForTimeInterval:1.2];
@@ -1909,6 +1936,19 @@ static const CGFloat kAvatarRatioY = 0.82;
 
 // ===== 连续养号（不限时，24小时运行，直到 stopNurture）=====
 
+/// 随机选一条养号评论（避免连续重复）
+- (NSString *)_randomComment {
+    NSUInteger count = kNurtureComments.count;
+    if (count == 0) return @"太棒了";
+    static NSUInteger sLastIdx = NSUIntegerMax;
+    NSUInteger idx = arc4random_uniform((uint32_t)count);
+    if (idx == sLastIdx && count > 1) {
+        idx = (idx + 1) % count;  // 换一条，避免连续相同
+    }
+    sLastIdx = idx;
+    return kNurtureComments[idx];
+}
+
 - (void)startNurtureWithMode:(int)mode {
     if (mode < 1 || mode > 2) mode = 1;
     if (self.nurtureRunning) [self stopNurture];
@@ -1938,7 +1978,7 @@ static const CGFloat kAvatarRatioY = 0.82;
                         [weakSelf _performLike];
                         likes++;
                     } else {
-                        [weakSelf _performComment:@"nice!"];
+                        [weakSelf _performComment:[weakSelf _randomComment]];
                         comments++;
                         [NSThread sleepForTimeInterval:1.2];
                         [weakSelf _performSwipeDown];  // 下滑关评论面板回视频
