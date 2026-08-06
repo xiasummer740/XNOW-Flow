@@ -245,7 +245,15 @@
     UIView *view = [window hitTest:from withEvent:nil] ?: window;
     UITouch *touch = [self _makeTouchAt:from phase:UITouchPhaseBegan view:view window:window];
     if (!touch) return;
-    [self _dispatchWithTouch:touch window:window];   // began
+    NSSet *touchSet = [NSSet setWithObject:touch];
+
+    // began：直接调 view 的 touchesBegan + sendEvent（与 tap 生效方式一致）
+    @try {
+        if ([view respondsToSelector:@selector(touchesBegan:withEvent:)]) {
+            [view touchesBegan:touchSet withEvent:[self _makeEventWithTouch:touch]];
+        }
+    } @catch (NSException *e) { NSLog(@"[XNTouch] swipe began err: %@", e.reason); }
+    [self _dispatchWithTouch:touch window:window];
 
     // 10 步中间移动，让 UIScrollView/手势识别器识别为拖动
     int steps = 10;
@@ -254,12 +262,23 @@
         CGPoint p = CGPointMake(from.x + (to.x - from.x) * t,
                                 from.y + (to.y - from.y) * t);
         [self _updateTouch:touch phase:UITouchPhaseMoved at:p];
+        @try {
+            if ([view respondsToSelector:@selector(touchesMoved:withEvent:)]) {
+                [view touchesMoved:touchSet withEvent:[self _makeEventWithTouch:touch]];
+            }
+        } @catch (NSException *e) { NSLog(@"[XNTouch] swipe moved err: %@", e.reason); }
         [self _dispatchWithTouch:touch window:window];
         [NSThread sleepForTimeInterval:0.016];
     }
 
+    // ended：直接调 view 的 touchesEnded + sendEvent
     [self _updateTouch:touch phase:UITouchPhaseEnded at:to];
-    [self _dispatchWithTouch:touch window:window];   // ended
+    @try {
+        if ([view respondsToSelector:@selector(touchesEnded:withEvent:)]) {
+            [view touchesEnded:touchSet withEvent:[self _makeEventWithTouch:touch]];
+        }
+    } @catch (NSException *e) { NSLog(@"[XNTouch] swipe ended err: %@", e.reason); }
+    [self _dispatchWithTouch:touch window:window];
 }
 
 + (void)swipeUp {
