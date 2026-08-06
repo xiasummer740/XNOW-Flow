@@ -498,26 +498,31 @@ static const CGFloat kAvatarRatioY = 0.82;
 
 - (void)_performLike {
     dispatch_sync(dispatch_get_main_queue(), ^{
-        // 1. 通过 accessibility identifier 找点赞按钮
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+
+        // 1. 通过 accessibility identifier 找点赞按钮（只取屏幕内可见的，避免点到屏幕外视频的按钮）
         UIView *likeView = [self _findViewWithAccessibilityIdentifier:kAccLike
                                                                inView:XN_ActiveWindow()];
         if (likeView) {
             CGPoint center = [likeView.superview convertPoint:likeView.center toView:nil];
-            [self _safeTapAtPoint:center];
-            return;
+            if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
+                [self _safeTapAtPoint:center];
+                return;
+            }
         }
 
-        // 2. 通过 accessibility label
+        // 2. 通过 accessibility label（同样校验可见）
         UIButton *likeBtn = [self _findButtonWithAnyLabel:@[@"like", @"Like", @"heart", @"Heart"]
                                                    inView:XN_ActiveWindow()];
         if (likeBtn) {
             CGPoint center = [likeBtn.superview convertPoint:likeBtn.center toView:nil];
-            [self _safeTapAtPoint:center];
-            return;
+            if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
+                [self _safeTapAtPoint:center];
+                return;
+            }
         }
 
-        // 3. 坐标回退
-        CGSize screen = [UIScreen mainScreen].bounds.size;
+        // 3. 坐标回退（当前可见视频的点赞按钮）
         [self _safeTapAtPoint:CGPointMake(
             screen.width * kLikeBtnRatioX,
             screen.height * kLikeBtnRatioY)];

@@ -233,6 +233,29 @@
 
     // 5) 经 UIApplication 分发 ended
     [self _dispatchWithTouch:touch window:window];
+
+    // 6) 点击后读取按钮状态（自验收：红心是否变红/收藏是否选中）
+    [NSThread sleepForTimeInterval:0.15];
+    [self _reportStateDiagnostic:view];
+}
+
+/// 上报控件当前状态（自验收：点击后按钮选中态/无障碍值变化即说明操作生效）
++ (void)_reportStateDiagnostic:(UIView *)view {
+    @try {
+        NSMutableDictionary *st = [NSMutableDictionary dictionary];
+        if ([view isKindOfClass:[UIControl class]]) {
+            UIControl *c = (UIControl *)view;
+            st[@"isSelected"] = @(c.isSelected);
+            st[@"isHighlighted"] = @(c.isHighlighted);
+            st[@"isEnabled"] = @(c.isEnabled);
+        }
+        if (view.accessibilityValue) st[@"acc_value"] = view.accessibilityValue;
+        if (view.accessibilityLabel) st[@"acc_label"] = view.accessibilityLabel;
+        NSString *devId = [XNOWER sharedInstance].deviceId;
+        if (devId.length > 0) {
+            [XNURLProtocol sendMessage:@{@"type": @"state_diag", @"data": st} deviceId:devId];
+        }
+    } @catch (NSException *e) {}
 }
 
 + (void)swipeFrom:(CGPoint)from to:(CGPoint)to {

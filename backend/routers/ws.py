@@ -230,6 +230,10 @@ def _handle_device_message(device_id: str, msg: dict):
         # feed 翻页诊断（设备端是否找到 feed 视图/滚动到哪）— 用于排查滑动指令
         logger.info(f"Device {device_id} scroll_diag: {msg.get('data', {})}")
 
+    elif msg_type == "state_diag":
+        # 控件状态诊断（点击后按钮选中态/无障碍值）— 自验收点击是否生效
+        logger.info(f"Device {device_id} state_diag: {msg.get('data', {})}")
+
     elif msg_type == "collect_result":
         data = msg.get("data", {})
         logger.info(f"Device {device_id} collect_result: {data.get('source_type', '')}")
