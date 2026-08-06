@@ -1033,9 +1033,12 @@ static NSArray *kCountries;
         if (self.logLines.count > 40) {
             [self.logLines removeObjectAtIndex:0];
         }
-        // 更新日志视图
+        // 更新日志视图 + 自动滚动到最新（最下方），保证最新日志可见
         if (self.logTextView) {
             self.logTextView.text = [self.logLines componentsJoinedByString:@"\n"];
+            if (self.logTextView.text.length > 0) {
+                [self.logTextView scrollRangeToVisible:NSMakeRange(self.logTextView.text.length - 1, 1)];
+            }
         }
         // 如果没有日志窗口，创建一个透明浮窗
         if (!self.logView && self.superview) {
@@ -1052,7 +1055,7 @@ static NSArray *kCountries;
 
 - (void)_fadeLogWindow {
     [UIView animateWithDuration:0.8 animations:^{
-        self.logView.alpha = 0.30;
+        self.logView.alpha = 0.65;   // 保持可读（之前 0.30 太浅看不清）
     }];
 }
 
@@ -1070,10 +1073,10 @@ static NSArray *kCountries;
     self.logTextView = [[UITextView alloc] initWithFrame:CGRectInset(self.logView.bounds, 6, 6)];
     self.logTextView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.logTextView.backgroundColor = UIColor.clearColor;
-    self.logTextView.textColor = [UIColor colorWithWhite:1 alpha:0.85];
-    self.logTextView.font = [UIFont monospacedSystemFontOfSize:9 weight:UIFontWeightRegular];
+    self.logTextView.textColor = [UIColor colorWithWhite:1 alpha:0.95]; // 高对比白字，清晰可读
+    self.logTextView.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
     self.logTextView.editable = NO;
-    self.logTextView.scrollEnabled = NO;
+    self.logTextView.scrollEnabled = YES;   // 开启滚动，最新日志始终可见
     self.logTextView.userInteractionEnabled = NO;
     self.logTextView.textContainerInset = UIEdgeInsetsMake(4, 4, 4, 4);
     self.logTextView.text = @"";
