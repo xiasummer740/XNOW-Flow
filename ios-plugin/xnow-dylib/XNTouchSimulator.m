@@ -80,6 +80,8 @@
                 @"frame": NSStringFromCGRect(view.frame),
                 @"superview": NSStringFromClass(view.superview.class) ?: @"nil",
                 @"gestures": [self _gestureInfo:view],
+                @"target_actions": [self _targetActionInfo:view],
+                @"super_gestures": [self _superGestureChain:view],
             }
         } deviceId:devId];
     } @catch (NSException *e) {
@@ -107,6 +109,45 @@
         }
     } @catch (NSException *e) {}
     return info;
+}
+
+/// 诊断：UIControl 的 target-action 接线（所有常见 control event）
++ (NSArray *)_targetActionInfo:(UIView *)view {
+    NSMutableArray *info = [NSMutableArray array];
+    if (![view isKindOfClass:[UIControl class]]) return info;
+    UIControl *ctrl = (UIControl *)view;
+    @try {
+        NSArray *events = @[@(UIControlEventTouchDown), @(UIControlEventTouchDownRepeat),
+                            @(UIControlEventTouchUpInside), @(UIControlEventTouchUpOutside),
+                            @(UIControlEventValueChanged), @(UIControlEventAllTouchEvents)];
+        for (id target in [ctrl allTargets]) {
+            for (NSNumber *evt in events) {
+                NSArray *acts = [ctrl actionsForTarget:target forControlEvent:[evt unsignedIntegerValue]];
+                for (NSString *selStr in acts) {
+                    [info addObject:[NSString stringWithFormat:@"%@/0x%lx:%@",
+                                     NSStringFromClass([target class]),
+                                     (unsigned long)[evt unsignedIntegerValue], selStr]];
+                }
+            }
+        }
+    } @catch (NSException *e) {}
+    return info;
+}
+
+/// 诊断：superview 链上每层的手势识别器（TikTok 可能把点击手势挂在父视图）
++ (NSArray *)_superGestureChain:(UIView *)view {
+    NSMutableArray *chain = [NSMutableArray array];
+    UIView *superV = view.superview;
+    int depth = 0;
+    while (superV && depth < 6) {
+        [chain addObject:@{
+            @"class": NSStringFromClass(superV.class) ?: @"nil",
+            @"gestures": [self _gestureInfo:superV],
+        }];
+        superV = superV.superview;
+        depth++;
+    }
+    return chain;
 }
 
 #pragma mark - 公开接口
