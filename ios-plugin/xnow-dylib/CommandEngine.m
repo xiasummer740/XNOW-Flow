@@ -364,14 +364,49 @@ static const CGFloat kAvatarRatioY = 0.82;
 
 #pragma mark - 滑动手势（安全版，避免私有API崩溃）
 
-/// 按 deltaY 转真实滑动（注入触摸事件，让 TikTok 手势识别器真正滚动）
+/// 按 deltaY 转滑动：优先直接翻页 feed UICollectionView，失败再注入真实手势
 - (void)_safeScrollBy:(CGFloat)deltaY {
+    if ([self _tryPageFeed:deltaY]) return;
     CGSize s = [UIScreen mainScreen].bounds.size;
     CGFloat fromY = s.height * 0.5;
     CGFloat toY = MAX(s.height * 0.1, MIN(s.height * 0.9, fromY + deltaY));
     [XNTouchSimulator swipeFrom:CGPointMake(s.width * 0.5, fromY)
                              to:CGPointMake(s.width * 0.5, toY)];
     NSLog(@"[XNOWER] 真实滑动 delta=%.0fpt", deltaY);
+}
+
+/// 尝试直接翻页 feed（scrollToItemAtIndexPath，比手势注入更可靠）
+- (BOOL)_tryPageFeed:(CGFloat)deltaY {
+    UIWindow *window = XN_ActiveWindow();
+    if (!window) return NO;
+    __block UICollectionView *feedCV = nil;
+    [self _findLargeCollectionViewInView:window result:&feedCV];
+    if (!feedCV) return NO;
+    NSIndexPath *current = [[feedCV indexPathsForVisibleItems] firstObject];
+    if (!current) return NO;
+    NSInteger targetItem = (deltaY < 0) ? current.item + 1 : MAX(0, current.item - 1);
+    if (targetItem >= [feedCV numberOfItemsInSection:current.section]) return NO;
+    NSIndexPath *target = [NSIndexPath indexPathForItem:targetItem inSection:current.section];
+    [feedCV scrollToItemAtIndexPath:target atScrollPosition:UICollectionViewScrollPositionCenteredVertically animated:YES];
+    NSLog(@"[XNOWER] feed 翻页到 item=%ld (delta=%.0f)", (long)targetItem, deltaY);
+    return YES;
+}
+
+/// 递归查找大面积 UICollectionView（feed 页）
+- (void)_findLargeCollectionViewInView:(UIView *)view result:(UICollectionView **)result {
+    if (*result) return;
+    if ([view isKindOfClass:[UICollectionView class]]) {
+        UICollectionView *cv = (UICollectionView *)view;
+        if (cv.frame.size.width >= [UIScreen mainScreen].bounds.size.width * 0.8 &&
+            cv.frame.size.height >= [UIScreen mainScreen].bounds.size.height * 0.5) {
+            *result = cv;
+            return;
+        }
+    }
+    for (UIView *sub in view.subviews) {
+        [self _findLargeCollectionViewInView:sub result:result];
+        if (*result) return;
+    }
 }
 
 /// 递归查找主要 UIScrollView
@@ -466,8 +501,9 @@ static const CGFloat kAvatarRatioY = 0.82;
         if (commentView) {
             [self _safeTapAtPoint:[commentView.superview convertPoint:commentView.center toView:nil]];
         } else {
+            // 右侧操作栏评论按钮位置（like下方）
             CGSize screen = [UIScreen mainScreen].bounds.size;
-            [self _safeTapAtPoint:CGPointMake(screen.width * 0.5, screen.height * 0.15)];
+            [self _safeTapAtPoint:CGPointMake(screen.width * 0.91, screen.height * 0.55)];
         }
     });
 

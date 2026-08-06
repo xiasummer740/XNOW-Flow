@@ -123,7 +123,25 @@
         }
     }
 
-    // 同时注入合成触摸（双保险）
+    // 直接触发 view 上所有手势识别器的 target-action（TikTok 按钮多用手势识别器，不响应 sendActions）
+    for (UIGestureRecognizer *gr in view.gestureRecognizers) {
+        @try {
+            NSArray *targets = [gr valueForKey:@"_targets"];
+            for (id t in targets) {
+                id target = [t valueForKey:@"_target"];
+                id actionVal = [t valueForKey:@"_action"];
+                SEL sel = [actionVal isKindOfClass:[NSString class]] ? NSSelectorFromString(actionVal)
+                                                                    : (SEL)(uintptr_t)[actionVal pointerValue];
+                if (sel && target && [target respondsToSelector:sel]) {
+                    [target performSelector:sel withObject:gr];
+                }
+            }
+        } @catch (NSException *e) {
+            NSLog(@"[XNTouch] gesture invoke error: %@", e.reason);
+        }
+    }
+
+    // 同时注入合成触摸（三重保险）
     UITouch *touch = [self _makeTouchAt:point phase:UITouchPhaseBegan view:view window:window];
     if (!touch) return;
     [self _dispatchWithTouch:touch window:window];   // began
