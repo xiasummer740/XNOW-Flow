@@ -33,4 +33,7 @@ extern NSString *const kXnowConfigKeyDebugOverlay;
 /// 隐藏控制浮窗
 - (void)hideFloatingPanel;
 
+/// 追加日志到浮窗日志窗口（供 CommandEngine 等模块记录操作日志）
+- (void)addLog:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2);
+
 @end
