@@ -104,6 +104,8 @@ static const CGFloat kAvatarRatioY = 0.82;
             @"nurture_tick":      @(CommandActionNurtureTick),
             @"nurture_stop":      @(CommandActionNurtureStop),
             @"register_account":  @(CommandActionRegisterAccount),
+            // 调试诊断
+            @"ui_scan":           @(CommandActionUIScan),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -145,6 +147,10 @@ static const CGFloat kAvatarRatioY = 0.82;
 
             case CommandActionLike:
                 [self _performLike];
+                break;
+
+            case CommandActionUIScan:
+                [self _performUIScan];
                 break;
 
             case CommandActionFollow:
@@ -441,6 +447,54 @@ static const CGFloat kAvatarRatioY = 0.82;
             [XNURLProtocol sendMessage:@{@"type": @"scroll_diag", @"data": info} deviceId:devId];
         }
     } @catch (NSException *e) {}
+}
+
+/// UI 结构扫描：遍历视图树，上报所有可交互控件（类型/位置/无障碍标识/状态）
+- (void)_performUIScan {
+    UIWindow *window = XN_ActiveWindow();
+    if (!window) return;
+    NSMutableArray *elements = [NSMutableArray array];
+    [self _scanInteractiveViewsInView:window depth:0 result:elements];
+    NSLog(@"[XNOWER] UI扫描: %lu 个控件", (unsigned long)elements.count);
+    @try {
+        NSString *devId = [XNOWER sharedInstance].deviceId;
+        if (devId.length > 0) {
+            [XNURLProtocol sendMessage:@{
+                @"type": @"ui_scan",
+                @"data": @{@"count": @(elements.count), @"elements": elements}
+            } deviceId:devId];
+        }
+    } @catch (NSException *e) {}
+}
+
+- (void)_scanInteractiveViewsInView:(UIView *)view depth:(int)depth result:(NSMutableArray *)result {
+    if (depth > 14 || !view || result.count > 200) return;
+    BOOL interactive = [view isKindOfClass:[UIControl class]] ||
+                       (view.accessibilityIdentifier.length > 0) ||
+                       (view.accessibilityLabel.length > 0) ||
+                       view.gestureRecognizers.count > 0;
+    if (interactive) {
+        @try {
+            CGRect frameInWindow = [view convertRect:view.bounds toView:nil];
+            CGPoint center = CGPointMake(CGRectGetMidX(frameInWindow), CGRectGetMidY(frameInWindow));
+            NSMutableDictionary *d = [NSMutableDictionary dictionary];
+            d[@"class"] = NSStringFromClass(view.class) ?: @"nil";
+            d[@"frame"] = NSStringFromCGRect(frameInWindow);
+            d[@"x"] = @(round(center.x));
+            d[@"y"] = @(round(center.y));
+            if (view.accessibilityIdentifier.length) d[@"acc_id"] = view.accessibilityIdentifier;
+            if (view.accessibilityLabel.length) d[@"acc_label"] = view.accessibilityLabel;
+            if ([view isKindOfClass:[UIControl class]]) {
+                UIControl *c = (UIControl *)view;
+                d[@"isSelected"] = @(c.isSelected);
+                d[@"isEnabled"] = @(c.isEnabled);
+            }
+            [result addObject:d];
+        } @catch (NSException *e) {}
+    }
+    for (UIView *sub in view.subviews) {
+        [self _scanInteractiveViewsInView:sub depth:depth + 1 result:result];
+    }
 }
 
 /// 递归查找大面积 UIScrollView（feed，UITableView 或 UICollectionView）

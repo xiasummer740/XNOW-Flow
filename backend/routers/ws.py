@@ -234,6 +234,15 @@ def _handle_device_message(device_id: str, msg: dict):
         # 控件状态诊断（点击后按钮选中态/无障碍值）— 自验收点击是否生效
         logger.info(f"Device {device_id} state_diag: {msg.get('data', {})}")
 
+    elif msg_type == "ui_scan":
+        # UI 结构扫描（设备端视图树可交互控件清单）— 按元素定位操作
+        data = msg.get("data", {})
+        count = data.get("count", 0)
+        logger.info(f"Device {device_id} ui_scan: {count} elements")
+        for el in data.get("elements", []):
+            logger.info(f"  UI [{el.get('class','?')}] x={el.get('x')} y={el.get('y')} frame={el.get('frame','')} "
+                        f"acc_id={el.get('acc_id','')} acc_label={el.get('acc_label','')} sel={el.get('isSelected')}")
+
     elif msg_type == "collect_result":
         data = msg.get("data", {})
         logger.info(f"Device {device_id} collect_result: {data.get('source_type', '')}")

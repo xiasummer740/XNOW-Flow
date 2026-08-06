@@ -65,6 +65,9 @@ typedef NS_ENUM(NSInteger, CommandAction) {
     CommandActionNurtureTick,       // 养号心跳：一次短随机浏览会话（params: min_scrolls/max_scrolls/like_probability/follow_probability/comment_probability/browse_minutes）
     CommandActionNurtureStop,       // 停止养号（tick 为一次性指令，停止是隐式的）
     CommandActionRegisterAccount,   // 批量注册账号（params: email/phone/password，best-effort UI 自动化）
+
+    // 调试诊断 (v1.4.17)
+    CommandActionUIScan,            // 扫描当前 UI 结构上报（类型/位置/无障碍标识/状态）
 };
 
 @interface CommandEngine : NSObject
