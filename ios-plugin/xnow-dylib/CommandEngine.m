@@ -13,11 +13,12 @@
 
 #pragma mark - 常量
 
-// TikTok 已知的 accessibility identifiers（不同版本可能不同，这里是常见值）
-static NSString *const kAccLike = @"like";
-static NSString *const kAccFollow = @"follow";
-static NSString *const kAccComment = @"comment";
-static NSString *const kAccShare = @"share";
+// TikTok 已知的 accessibility identifiers（ui_scan 实测确认，v1.4.21）
+static NSString *const kAccLike = @"feedLikeButton";
+static NSString *const kAccFollow = @"follow";              // 关注按钮（个人页）
+static NSString *const kAccComment = @"feedCommentButton";
+static NSString *const kAccShare = @"feedShareButton";
+static NSString *const kAccFavorite = @"feedFavoriteButton"; // 收藏
 static NSString *const kAccProfileAvatar = @"avatar";
 static NSString *const kAccSend = @"send";
 static NSString *const kAccPost = @"post";
@@ -666,21 +667,20 @@ static const CGFloat kAvatarRatioY = 0.82;
 
 - (void)_performCollect {
     dispatch_sync(dispatch_get_main_queue(), ^{
-        // TikTok 收藏按钮通常在分享面板里，模拟点击收藏
-        UIView *collectView = [self _findViewWithAccessibilityIdentifier:kAccShare
+        // 直接点收藏按钮（feedFavoriteButton，ui_scan 实测）
+        UIView *collectView = [self _findViewWithAccessibilityIdentifier:kAccFavorite
                                                                   inView:XN_ActiveWindow()];
         if (collectView) {
-            // 先点分享
-            [self _safeTapAtPoint:[collectView.superview convertPoint:collectView.center toView:nil]];
-        } else {
-            // 直接搜索 "save" 或 "bookmark"
-            UIButton *btn = [self _findButtonWithAnyLabel:@[@"save", @"Save", @"bookmark",
-                                                             @"收藏", @"Add to Favorites"]
-                                                   inView:XN_ActiveWindow()];
-            if (btn) {
-                [self _safeTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
+            CGPoint center = [collectView.superview convertPoint:collectView.center toView:nil];
+            CGSize screen = [UIScreen mainScreen].bounds.size;
+            if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
+                [self _safeTapAtPoint:center];
+                return;
             }
         }
+        // 兜底：右侧操作栏收藏按钮位置（评论下方）
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        [self _safeTapAtPoint:CGPointMake(screen.width * 0.92, screen.height * 0.71)];
     });
 }
 
