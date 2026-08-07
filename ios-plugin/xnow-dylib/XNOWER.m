@@ -459,6 +459,10 @@ __attribute__((destructor)) static void XNOWERUnload() {
             if (!licensed) {
                 s->_isConnected = NO;
                 [s.floatingPanel setConnected:NO];
+                // 清除本地激活标志（防止旧备份残留导致跳过激活界面）
+                [[NSUserDefaults standardUserDefaults] setBool:NO forKey:@"XN_Activated"];
+                [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"XN_ActivationCode"];
+                [[NSUserDefaults standardUserDefaults] synchronize];
                 [s addLog:@"⚠️ 设备未激活，请先输入卡密激活"];
                 [s.floatingPanel showActivationView];
                 // 自动重连：每 5 秒重新检查授权，激活成功后自动恢复
