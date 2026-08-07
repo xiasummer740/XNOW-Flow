@@ -16,6 +16,7 @@ import ReplyConfig from './pages/ReplyConfig'
 import UsageGuide from './pages/UsageGuide'
 import Placeholder from './pages/Placeholder'
 import CardManagement from './pages/CardManagement'
+import DeviceControl from './pages/DeviceControl'
 
 const getMenuData = (role?: string) => {
   const isAdmin = role === 'admin'
@@ -27,6 +28,7 @@ const getMenuData = (role?: string) => {
     ]},
     { group: '设备账号', items: [
       { icon: '💻', label: '设备管理' }, { icon: '👤', label: '账号管理' },
+      { icon: '🎮', label: '设备控制' },
     ]},
     { group: '内容', items: [
       { icon: '📦', label: '素材管理' }, { icon: '📡', label: '采集数据' },
@@ -189,6 +191,7 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
               switch (activeMenu) {
                 case '设备管理': return <DeviceManagement token={token} />
                 case '账号管理': return <AccountManagement token={token} />
+                case '设备控制': return <DeviceControl token={token} user={user} />
                 case '批量任务': return <TaskList token={token} />
                 case '任务日志': return <TaskLog token={token} />
                 case '用户管理': return <UserManagement token={token} />
