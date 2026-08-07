@@ -20,6 +20,7 @@ typedef NS_ENUM(NSInteger, CommandAction) {
     CommandActionCollectVideos,
     CommandActionCollectComments,
     CommandActionCollectLiveUsers,
+    CommandActionCollectLikes,       // 采集直播间点赞用户
     CommandActionBatchLike,
     CommandActionBatchFollow,
     CommandActionBatchComment,

@@ -857,13 +857,15 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapCollectFans:(XNFloatingPanel *)panel {
-    [self addLog:@"👥 采集粉丝(20)"];
+    [self addLog:@"👥 采集粉丝(20)…"];
     [self _sendCommandToBackend:@"collect_fans" params:@{@"count": @20}];
+    [self _runCollectLocally:@"collect_fans" count:20];
 }
 
 - (void)floatingPanelDidTapCollectVideos:(XNFloatingPanel *)panel {
-    [self addLog:@"🎬 采集视频(10)"];
+    [self addLog:@"🎬 采集视频(10)…"];
     [self _sendCommandToBackend:@"collect_videos" params:@{@"count": @10}];
+    [self _runCollectLocally:@"collect_videos" count:10];
 }
 
 - (void)floatingPanelDidTapAccountInfo:(XNFloatingPanel *)panel {
@@ -907,8 +909,11 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapSmartBrowse:(XNFloatingPanel *)panel {
-    [self addLog:@"🌐 智能浏览"];
+    [self addLog:@"🌐 智能浏览…"];
     [self _sendCommandToBackend:@"smart_browse" params:@{@"min_scrolls": @5, @"max_scrolls": @12}];
+    @try {
+        [self.cmdEngine executeCommand:@{@"action": @"smart_browse", @"params": @{@"min_scrolls": @5, @"max_scrolls": @12}} completion:nil];
+    } @catch (id e) {}
 }
 
 // H4: 独立回调（之前错误映射到下滑/智能浏览）
@@ -928,12 +933,27 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapCollectLikes:(XNFloatingPanel *)panel {
-    [self addLog:@"❤️ 采集点赞"];
+    [self addLog:@"❤️ 采集直播间点赞用户(20)…"];
     [self _sendCommandToBackend:@"collect_likes" params:@{@"count": @20}];
+    [self _runCollectLocally:@"collect_likes" count:20];
+}
+
+/// 浮窗本地执行采集指令并上报结果（piggyback result 通道入库 collected_data）
+- (void)_runCollectLocally:(NSString *)action count:(int)count {
+    @try {
+        [self.cmdEngine executeCommand:@{@"action": action, @"params": @{@"count": @(count)}} completion:^(NSDictionary *result) {
+            [self addLog:@"✅ %@", result[@"message"] ?: @"采集完成"];
+            if ([result[@"users"] isKindOfClass:[NSArray class]]) {
+                [XNURLProtocol sendMessage:@{@"type": @"result", @"data": result} deviceId:self.deviceId];
+            }
+        }];
+    } @catch (id e) {
+        [self addLog:@"❌ 采集失败：%@", e];
+    }
 }
 
 - (void)floatingPanelDidTapNurture:(XNFloatingPanel *)panel {
-    // 面板已弹模式选择（_promptNurtureMode），无需额外处理
+    // 旧 delegate 保留（面板已用直接菜单项），无额外处理
 }
 
 - (void)floatingPanelDidStartNurtureMode:(int)mode {

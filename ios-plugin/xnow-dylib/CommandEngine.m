@@ -92,6 +92,7 @@ static NSArray *kNurtureComments = @[
             @"collect_videos":   @(CommandActionCollectVideos),
             @"collect_comments": @(CommandActionCollectComments),
             @"collect_live_users": @(CommandActionCollectLiveUsers),
+            @"collect_likes":     @(CommandActionCollectLikes),
             @"batch_like":       @(CommandActionBatchLike),
             @"batch_follow":     @(CommandActionBatchFollow),
             @"batch_comment":    @(CommandActionBatchComment),
@@ -245,6 +246,13 @@ static NSArray *kNurtureComments = @[
             case CommandActionCollectLiveUsers: {
                 int count = [params[@"count"] intValue] ?: 20;
                 result = [self _performCollectLiveUsers:count];
+                hasResult = YES;
+                break;
+            }
+
+            case CommandActionCollectLikes: {
+                int count = [params[@"count"] intValue] ?: 20;
+                result = [self _performCollectLikes:count];
                 hasResult = YES;
                 break;
             }
@@ -1004,8 +1012,9 @@ static NSArray *kNurtureComments = @[
 }
 
 /// 采集直播间用户：在当前直播页面滚动收集用户名（best-effort）
-- (NSDictionary *)_performCollectLiveUsers:(int)count {
-    __block NSMutableArray *users = [NSMutableArray array];
+/// 在直播间采集可见用户（上滑翻列表收集用户名，去重）— 采集直播间用户/点赞用户共用
+- (NSDictionary *)_collectLiveRoomUsers:(int)count sourceType:(NSString *)sourceType {
+    NSMutableArray *users = [NSMutableArray array];
 
     // 直播间页面假设用户已进入；等页面稳定
     [NSThread sleepForTimeInterval:1.0];
@@ -1029,10 +1038,19 @@ static NSArray *kNurtureComments = @[
     return @{
         @"status": @"success",
         @"message": [NSString stringWithFormat:@"采集直播间用户 %lu 人", (unsigned long)users.count],
-        @"source_type": @"live_users",
+        @"source_type": sourceType ?: @"live_users",
         @"users": users,
         @"count": @(users.count),
     };
+}
+
+- (NSDictionary *)_performCollectLiveUsers:(int)count {
+    return [self _collectLiveRoomUsers:count sourceType:@"live_users"];
+}
+
+/// 采集直播间点赞用户（在直播间采集点赞过的其它用户数据）
+- (NSDictionary *)_performCollectLikes:(int)count {
+    return [self _collectLiveRoomUsers:count sourceType:@"live_likes"];
 }
 
 /// 从当前可见视图采集疑似用户名文本（去重）
