@@ -1891,12 +1891,12 @@ static NSArray *kNurtureComments = @[
 
 #pragma mark - 批量注册 + 自动养号 (Feature 5)
 
-/// 养号心跳：一次短随机浏览会话（2~5 次滑动 + 按概率点赞/关注/评论），约 1~2 分钟
-/// params: {min_scrolls, max_scrolls, like_probability, follow_probability, comment_probability, browse_minutes}
+/// 养号心跳：一次短随机浏览会话（上滑 + 随机点赞，模式2再加随机评论），约 1~2 分钟
+/// params: {mode, cycles, min_interval, max_interval}
 - (NSDictionary *)_performNurtureTick:(NSDictionary *)params {
     // 养号两模式（祥哥需求）：
-    //  模式1：随机间隔10-20秒 上滑
-    //  模式2：随机间隔10-20秒 上滑 + 随机点赞或评论
+    //  模式1纯浏览：随机间隔10-20秒 上滑 + 随机点赞
+    //  模式2互动：模式1 + 再随机选择一条评论发布
     int mode = [params[@"mode"] intValue] ?: 1;
     if (mode < 1 || mode > 2) mode = 1;
     int cycles = [params[@"cycles"] intValue] ?: 3;
@@ -1921,19 +1921,23 @@ static NSArray *kNurtureComments = @[
             [self _performSwipeUp];
         });
 
-        // 模式2：随机点赞或评论
-        if (mode == 2) {
+        // 随机点赞（模式1纯浏览 / 模式2互动 都做）
+        if (arc4random_uniform(100) < 50) {
             dispatch_sync(dispatch_get_main_queue(), ^{
-                if (arc4random_uniform(2) == 0) {
-                    [self _performLike];
-                    likes++;
-                } else {
-                    [self _performComment:[self _randomComment]];
-                    comments++;
-                    // 等评论发出，再下滑关掉评论面板回视频
-                    [NSThread sleepForTimeInterval:1.2];
-                    [self _performSwipeDown];
-                }
+                [self _performLike];
+            });
+            likes++;
+        }
+
+        // 模式2互动：在模式1基础上，再随机选择一条评论发布
+        if (mode == 2 && arc4random_uniform(100) < 40) {
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                [self _performComment:[self _randomComment]];
+            });
+            [NSThread sleepForTimeInterval:1.2];  // 等评论发出
+            comments++;
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                [self _performSwipeDown];  // 下滑关掉评论面板回视频
             });
         }
     }
@@ -1978,9 +1982,9 @@ static NSArray *kNurtureComments = @[
     self.nurtureMode = mode;
     self.nurtureRunning = YES;
     __weak typeof(self) weakSelf = self;
-    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"▶️ 养号模式%d 已启动（24小时不限时）", mode]];
+    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"▶️ 养号模式%d 已启动（24小时不限时，点停止养号可停）", mode]];
     dispatch_async(_execQueue, ^{
-        __block int cycles = 0, likes = 0, follows = 0, comments = 0;
+        __block int cycles = 0, likes = 0, comments = 0;
         while (weakSelf.nurtureRunning) {
             cycles++;
             // 随机间隔 10-20 秒（模拟真实观看停留，日志显示本次分配时长）
@@ -1997,34 +2001,30 @@ static NSArray *kNurtureComments = @[
             [[XNOWER sharedInstance] addLog:@"📱 已上滑到下一条视频"];
             if (!weakSelf.nurtureRunning) break;
 
-            // 模式2：随机做一种互动（点赞/关注/评论）
-            if (mode == 2) {
-                uint32_t r = arc4random_uniform(3);
+            // 随机点赞（模式1纯浏览 / 模式2互动 都做）
+            if (arc4random_uniform(100) < 50) {
                 dispatch_sync(dispatch_get_main_queue(), ^{
-                    if (r == 0) {
-                        [weakSelf _performLike];
-                    } else if (r == 1) {
-                        [weakSelf _performFollow];
-                    } else {
-                        [weakSelf _performComment:[weakSelf _randomComment]];
-                        [NSThread sleepForTimeInterval:1.2];
-                        [weakSelf _performSwipeDown];  // 下滑关评论面板回视频
-                    }
+                    [weakSelf _performLike];
                 });
-                if (r == 0) {
-                    likes++;
-                    [[XNOWER sharedInstance] addLog:@"❤️ 随机点赞"];
-                } else if (r == 1) {
-                    follows++;
-                    [[XNOWER sharedInstance] addLog:@"👤 随机关注"];
-                } else {
-                    comments++;
-                    [[XNOWER sharedInstance] addLog:@"💬 随机评论"];
-                }
+                likes++;
+                [[XNOWER sharedInstance] addLog:@"❤️ 随机点赞"];
+            }
+
+            // 模式2互动：在模式1基础上，再随机选择一条评论发布
+            if (mode == 2 && arc4random_uniform(100) < 40) {
+                dispatch_sync(dispatch_get_main_queue(), ^{
+                    [weakSelf _performComment:[weakSelf _randomComment]];
+                });
+                [NSThread sleepForTimeInterval:1.2];  // 等评论发出
+                comments++;
+                [[XNOWER sharedInstance] addLog:@"💬 随机评论"];
+                dispatch_sync(dispatch_get_main_queue(), ^{
+                    [weakSelf _performSwipeDown];  // 下滑关评论面板回视频
+                });
             }
         }
-        [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏹ 养号已停止：共%d轮，%d赞，%d关注，%d评",
-                                         cycles, likes, follows, comments]];
+        [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏹ 养号已停止：共%d轮，%d赞，%d评",
+                                         cycles, likes, comments]];
         // 汇报停止（含运行统计）
         @try {
             NSString *devId = [XNOWER sharedInstance].deviceId;
@@ -2034,9 +2034,9 @@ static NSArray *kNurtureComments = @[
                     @"data": @{
                         @"action": @"nurture",
                         @"status": @"success",
-                        @"message": [NSString stringWithFormat:@"养号已停止：共%d轮，%d赞，%d关注，%d评",
-                                     cycles, likes, follows, comments],
-                        @"cycles": @(cycles), @"likes": @(likes), @"follows": @(follows), @"comments": @(comments),
+                        @"message": [NSString stringWithFormat:@"养号已停止：共%d轮，%d赞，%d评",
+                                     cycles, likes, comments],
+                        @"cycles": @(cycles), @"likes": @(likes), @"comments": @(comments),
                     }
                 } deviceId:devId];
             }

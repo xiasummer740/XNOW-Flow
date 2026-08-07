@@ -947,8 +947,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapDownloadVideo:(XNFloatingPanel *)panel {
-    [self addLog:@"💾 下载无水印视频（需在视频页）"];
+    [self addLog:@"💾 正在下载无水印视频..."];
     [self _sendCommandToBackend:@"save_video" params:nil];
+    @try { [self.cmdEngine executeCommand:@{@"action": @"save_video"} completion:nil]; } @catch (id e) {}
 }
 
 #pragma mark - 自动任务开关
@@ -1029,14 +1030,20 @@ __attribute__((destructor)) static void XNOWERUnload() {
 }
 
 - (void)floatingPanelDidTapBackupAccount:(XNFloatingPanel *)panel {
-    NSInteger savedId = [[AccountSwitcher sharedSwitcher] backupCurrentAccount];
-    if (savedId > 0) {
-        [self addLog:@"✅ 已备份账号 #%ld 登录态", (long)savedId];
-        [self _sendCommandToBackend:@"account_backed_up" params:@{@"account_id": @(savedId)}];
-        // 刷新账号列表
-        [self.floatingPanel setAccountList:[[AccountPool sharedPool] allAccounts]];
-    } else {
-        [self addLog:@"❌ 备份失败：未检测到当前登录账号"];
+    [self addLog:@"📦 正在检测当前账号并备份登录态..."];
+    @try {
+        // 复用 CommandEngine backup_account：导航个人页→网络捕获→UI扫描兜底→备份登录态
+        [self.cmdEngine executeCommand:@{@"action": @"backup_account"} completion:^(NSDictionary *result) {
+            BOOL ok = [result[@"status"] isEqualToString:@"success"];
+            NSString *msg = result[@"message"] ?: (ok ? @"备份成功" : @"备份失败");
+            [self addLog:@"%@ %@", ok ? @"✅" : @"❌", msg];
+            if (ok) {
+                [self.floatingPanel setAccountList:[[AccountPool sharedPool] allAccounts]];
+                [self _sendCommandToBackend:@"account_backed_up" params:@{@"account_id": result[@"account_id"] ?: @(0)}];
+            }
+        }];
+    } @catch (id e) {
+        [self addLog:@"❌ 备份失败：%@", e];
     }
 }
 
