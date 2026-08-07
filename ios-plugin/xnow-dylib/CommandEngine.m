@@ -180,33 +180,8 @@ static NSArray *kNurtureComments = @[
                 break;
 
             case CommandActionBackupAccount: {
-                // 先导航到个人页（触发 TikTok 个人页 API → 网络捕获当前账号）
-                dispatch_sync(dispatch_get_main_queue(), ^{
-                    UIView *profileTab = [self _findViewWithAccessibilityIdentifier:@"a11y_vo_profile"
-                                                                             inView:XN_ActiveWindow()];
-                    if (profileTab) {
-                        CGPoint center = [profileTab.superview convertPoint:profileTab.center toView:nil];
-                        [XNTouchSimulator tapAtPoint:center];
-                    }
-                });
-
-                // 轮询等待网络捕获的当前账号（个人页 API 响应解析，最多 10 秒）
-                NSDictionary *account = nil;
-                for (int i = 0; i < 20; i++) {
-                    [NSThread sleepForTimeInterval:0.5];
-                    account = [[AccountManager sharedManager] currentAccount];
-                    if (account.count > 0) break;
-                }
-
-                // 兜底：UI 扫描检测（个人页昵称/ID）
-                if (!account || account.count == 0) {
-                    dispatch_semaphore_t sema = dispatch_semaphore_create(0);
-                    [[AccountManager sharedManager] detectCurrentAccountWithCompletion:^(NSDictionary *a) {
-                        dispatch_semaphore_signal(sema);
-                    }];
-                    dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-                    account = [[AccountManager sharedManager] currentAccount];
-                }
+                // 复用共享检测流程：导航个人页 → 等网络捕获 → 兜底 UI 扫描
+                NSDictionary *account = [self _detectCurrentAccountFlow];
 
                 NSInteger savedId = 0;
                 if (account && account.count > 0) {
@@ -286,7 +261,8 @@ static NSArray *kNurtureComments = @[
 
             // === 账号管理 ===
             case CommandActionGetAccountInfo: {
-                result = [[AccountManager sharedManager] currentAccount] ?: @{};
+                // 主动检测：导航个人页 → 等网络捕获当前用户 → 返回
+                result = [self _detectCurrentAccountFlow];
                 hasResult = YES;
                 break;
             }
@@ -516,6 +492,40 @@ static NSArray *kNurtureComments = @[
             [XNURLProtocol sendMessage:@{@"type": @"scroll_diag", @"data": info} deviceId:devId];
         }
     } @catch (NSException *e) {}
+}
+
+/// 主动检测当前账号：导航个人页 → 等网络捕获 → 兜底 UI 扫描 → 返回账号
+/// 供 get_account_info / backup_account 使用（账号信息只在个人页可见）
+- (NSDictionary *)_detectCurrentAccountFlow {
+    // 1. 导航到个人页（触发个人页 API → XNURLProtocol 捕获当前用户）
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIView *profileTab = [self _findViewWithAccessibilityIdentifier:@"a11y_vo_profile"
+                                                                 inView:XN_ActiveWindow()];
+        if (profileTab) {
+            CGPoint center = [profileTab.superview convertPoint:profileTab.center toView:nil];
+            [XNTouchSimulator tapAtPoint:center];
+        }
+    });
+
+    // 2. 轮询等待网络捕获的当前账号（个人页 API 响应解析，最多 10 秒）
+    NSDictionary *account = nil;
+    for (int i = 0; i < 20; i++) {
+        [NSThread sleepForTimeInterval:0.5];
+        account = [[AccountManager sharedManager] currentAccount];
+        if (account.count > 0) break;
+    }
+
+    // 3. 兜底：UI 扫描检测（个人页昵称/ID）
+    if (!account || account.count == 0) {
+        dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+        [[AccountManager sharedManager] detectCurrentAccountWithCompletion:^(NSDictionary *a) {
+            dispatch_semaphore_signal(sema);
+        }];
+        dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+        account = [[AccountManager sharedManager] currentAccount];
+    }
+
+    return account ?: @{};
 }
 
 /// UI 结构扫描：遍历视图树，上报所有可交互控件（类型/位置/无障碍标识/状态）

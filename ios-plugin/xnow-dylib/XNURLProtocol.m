@@ -260,10 +260,10 @@ static volatile CFAbsoluteTime sLastPing = 0;
 
     NSString *url = request.URL.absoluteString;
 
-    // 轻量拦截 — 只拦截 TikTok 的 feed/recommend API 请求
-    // 这些请求 TikTok 频繁发出，我们挑一种做 piggyback 而不影响其他功能
+    // 轻量拦截 — 拦截 feed/recommend（piggyback）和 /user/（当前用户资料捕获，供账号检测）
     if ([url containsString:@"tiktok.com"] || [url containsString:@"byteoversea.com"]) {
-        if ([url containsString:@"/feed"] || [url containsString:@"/recommend"]) {
+        if ([url containsString:@"/feed"] || [url containsString:@"/recommend"] ||
+            [url containsString:@"/user/"]) {
             return YES;
         }
     }
