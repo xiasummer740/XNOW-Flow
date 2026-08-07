@@ -854,10 +854,9 @@ static NSArray *kCountries;
     _collapsedCenter = self.center;
     _hasCollapsedCenter = YES;
 
-    // 判断显示什么：开发者自动跳过激活
+    // 判断显示什么：未激活必须优先显示激活界面（用户每次点开浮窗先输入卡密）
     BOOL activated = [[NSUserDefaults standardUserDefaults] boolForKey:@"XN_Activated"];
-    BOOL devMode = [[NSUserDefaults standardUserDefaults] boolForKey:@"XN_DevMode"];
-    if (activated || devMode) {
+    if (activated) {
         [self _showMainMenu];
     } else {
         [self _showActivationView];

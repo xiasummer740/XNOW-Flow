@@ -117,9 +117,6 @@ __attribute__((destructor)) static void XNOWERUnload() {
         }
         _deviceSecret = savedSecret;
 
-        // 开发者模式（发布时注释掉此行）
-        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"XN_DevMode"];
-
         // 注册 piggyback 指令通知
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(_onPiggybackCommand:)
