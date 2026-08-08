@@ -57,8 +57,9 @@ static void XN_SignalHandler(int sig) {
         write(fd, m, strlen(m));
         close(fd);
     }
-    // 重新注册默认处理，避免死循环后闪退变静默
+    // 恢复默认处理并重抛信号，确保进程真正终止（不吞崩溃）
     signal(sig, SIG_DFL);
+    raise(sig);
 }
 
 // ======== 默认配置 ========
