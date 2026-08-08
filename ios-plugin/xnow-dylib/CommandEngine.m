@@ -2125,6 +2125,7 @@ static NSArray *kNurtureComments = @[
 
     __block int likes = 0;
     __block int comments = 0;
+    __block int follows = 0;
 
     for (int i = 0; i < cycles; i++) {
         // 随机间隔 10-20 秒（模拟真实观看停留）
@@ -2137,12 +2138,19 @@ static NSArray *kNurtureComments = @[
             [self _performSwipeUp];
         });
 
-        // 随机点赞（模式1纯浏览 / 模式2互动 都做）
-        if (arc4random_uniform(100) < 50) {
-            dispatch_sync(dispatch_get_main_queue(), ^{
-                [self _performLike];
-            });
-            likes++;
+        // 随机互动（20% 概率点赞或关注，避免太频繁）
+        if (arc4random_uniform(100) < 20) {
+            if (arc4random_uniform(100) < 50) {
+                dispatch_sync(dispatch_get_main_queue(), ^{
+                    [self _performLike];
+                });
+                likes++;
+            } else {
+                dispatch_sync(dispatch_get_main_queue(), ^{
+                    [self _performFollow];
+                });
+                follows++;
+            }
         }
 
         // 模式2互动：在模式1基础上，随机发评论（v1.4.45: 评论本身单独执行OK，循环里崩因是评论后下滑关面板，已去掉下滑）
@@ -2157,10 +2165,11 @@ static NSArray *kNurtureComments = @[
 
     return @{
         @"status": @"success",
-        @"message": [NSString stringWithFormat:@"养号完成(%d轮): %d滑, %d赞, %d评", cycles, cycles, likes, comments],
+        @"message": [NSString stringWithFormat:@"养号完成(%d轮): %d滑, %d赞, %d关注, %d评", cycles, cycles, likes, follows, comments],
         @"mode": @(mode),
         @"cycles": @(cycles),
         @"likes": @(likes),
+        @"follows": @(follows),
         @"comments": @(comments),
     };
 }
@@ -2233,8 +2242,8 @@ static NSArray *kNurtureComments = @[
             [[XNOWER sharedInstance] addLog:@"📱 已上滑到下一条视频"];
             if (!weakSelf.nurtureRunning) break;
 
-            // 互动模式：随机点赞或关注（各50%）；纯浏览模式不互动
-            if (!browseOnly) {
+            // 互动模式：20% 概率随机点赞或关注（避免太频繁）；纯浏览模式不互动
+            if (!browseOnly && arc4random_uniform(100) < 20) {
                 [[XNOWER sharedInstance] addLog:@"🤖 互动中…"];
                 if (arc4random_uniform(100) < 50) {
                     dispatch_sync(dispatch_get_main_queue(), ^{
