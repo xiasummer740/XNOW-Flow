@@ -17,6 +17,7 @@ import UsageGuide from './pages/UsageGuide'
 import Placeholder from './pages/Placeholder'
 import CardManagement from './pages/CardManagement'
 import DeviceControl from './pages/DeviceControl'
+import PublicLibrary from './pages/PublicLibrary'
 
 const getMenuData = (role?: string) => {
   const isAdmin = role === 'admin'
@@ -32,6 +33,7 @@ const getMenuData = (role?: string) => {
     ]},
     { group: '内容', items: [
       { icon: '📦', label: '素材管理' }, { icon: '📡', label: '采集数据' },
+      { icon: '🌐', label: '公共用户库' },
       { icon: '📢', label: '公告中心' }, { icon: '💬', label: '反馈中心' },
     ]},
     ...(isAdmin ? [{ group: '系统', items: [
@@ -200,6 +202,7 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
                 case '执行统计': return <ExecutionStats token={token} />
                 case '素材管理': return <MediaManagement token={token} />
                 case '采集数据': return <CollectedData token={token} />
+                case '公共用户库': return <PublicLibrary token={token} />
                 case '公告中心': return <Announcements token={token} />
                 case '反馈中心': return <Feedback token={token} />
                 case '回复配置': return <ReplyConfig token={token} />
