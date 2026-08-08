@@ -245,6 +245,34 @@ def _migrate_nurture_plans():
         print(f"[migration] nurture_plans 表迁移失败（可忽略）: {e}")
 
 
+def _migrate_public_users():
+    """SQLite 迁移：确保 public_users 表存在（新库由 create_all 建，旧库补表）。幂等。"""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS public_users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    aweme_id VARCHAR(100) DEFAULT '',
+                    nickname VARCHAR(200) DEFAULT '',
+                    avatar_url VARCHAR(500) DEFAULT '',
+                    gender VARCHAR(20) DEFAULT '',
+                    country VARCHAR(50) DEFAULT '',
+                    followers INTEGER DEFAULT 0,
+                    videos_count INTEGER DEFAULT 0,
+                    signature TEXT DEFAULT '',
+                    keyword TEXT DEFAULT '',
+                    ai_tagged INTEGER DEFAULT 0,
+                    contributed_by VARCHAR(64) DEFAULT '',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_public_users_aweme_id ON public_users(aweme_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_public_users_ai_tagged ON public_users(ai_tagged)"))
+            conn.commit()
+    except Exception as e:
+        print(f"[migration] public_users 表迁移失败（可忽略）: {e}")
+
+
 def _migrate_quick_commands():
     """SQLite 迁移：确保 quick_commands 表存在。
 
@@ -278,6 +306,7 @@ _migrate_video_posts()
 _migrate_dm_tasks()
 _migrate_nurture_plans()
 _migrate_quick_commands()
+_migrate_public_users()
 
 def get_db():
     db = SessionLocal()

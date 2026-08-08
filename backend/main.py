@@ -32,6 +32,7 @@ from models.nurture_plan import NurturePlan
 from models.quick_command import QuickCommand
 from models.license import License
 from models.udid_request import UDIDRequest
+from models.public_user import PublicUser
 
 # 创建表
 Base.metadata.create_all(bind=engine)
@@ -58,6 +59,7 @@ from routers import licenses
 from routers import udid
 from routers import ws as ws_router
 from routers import device_commands
+from routers import public_users
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)
@@ -81,6 +83,7 @@ app.include_router(licenses.router)
 app.include_router(udid.router)
 app.include_router(ws_router.router)
 app.include_router(device_commands.router)
+app.include_router(public_users.router)
 
 @app.get("/api/health")
 def health():
