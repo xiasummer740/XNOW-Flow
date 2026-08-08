@@ -1066,9 +1066,10 @@ __attribute__((destructor)) static void XNOWERUnload() {
     // 旧 delegate 保留（面板已用直接菜单项），无额外处理
 }
 
-- (void)floatingPanelDidStartNurtureMode:(int)mode {
-    [self addLog:[NSString stringWithFormat:@"🌱 养号模式%d 已启动（24小时不限时，点菜单可停止）", mode]];
-    [self.cmdEngine startNurtureWithMode:mode];
+- (void)floatingPanelDidStartNurtureWithDuration:(int)seconds {
+    NSString *durStr = (seconds <= 0) ? @"24小时" : [NSString stringWithFormat:@"%d分钟", seconds / 60];
+    [self addLog:[NSString stringWithFormat:@"🌱 养号已启动（%@，点菜单可停止）", durStr]];
+    [self.cmdEngine startNurtureWithDuration:seconds];
 }
 
 - (void)floatingPanelDidStopNurture {

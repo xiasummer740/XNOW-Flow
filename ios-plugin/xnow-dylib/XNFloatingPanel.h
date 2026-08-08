@@ -21,8 +21,8 @@
 - (void)floatingPanelDidTapDisconnect:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapCollectLikes:(XNFloatingPanel *)panel;
 - (void)floatingPanelDidTapNurture:(XNFloatingPanel *)panel;
-// 连续养号（模式1纯浏览/模式2浏览+互动，24小时不限时，直到停止）
-- (void)floatingPanelDidStartNurtureMode:(int)mode;
+// 连续养号（单模式：浏览10-20秒+随机点赞/关注；seconds>0自定义时长，0=24小时）
+- (void)floatingPanelDidStartNurtureWithDuration:(int)seconds;
 - (void)floatingPanelDidStopNurture;
 - (void)floatingPanelDidTapDownloadVideo:(XNFloatingPanel *)panel;
 // 自动任务开关

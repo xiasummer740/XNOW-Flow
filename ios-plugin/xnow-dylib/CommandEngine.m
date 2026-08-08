@@ -2150,19 +2150,29 @@ static NSArray *kNurtureComments = @[
     return kNurtureComments[idx];
 }
 
-- (void)startNurtureWithMode:(int)mode {
-    if (mode < 1 || mode > 2) mode = 1;
+/// 启动养号（单模式）：随机浏览10-20秒 + 随机点赞或关注；totalSeconds>0 为自定义时长，否则默认24小时
+- (void)startNurtureWithDuration:(int)totalSeconds {
+    if (totalSeconds <= 0) totalSeconds = 86400;  // 默认24小时
     if (self.nurtureRunning) [self stopNurture];
-    self.nurtureMode = mode;
+    self.nurtureMode = 1;
     self.nurtureRunning = YES;
     __weak typeof(self) weakSelf = self;
-    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"▶️ 养号模式%d 已启动（24小时不限时，点停止养号可停）", mode]];
+    NSString *durStr = (totalSeconds >= 86400) ? @"24小时" : [NSString stringWithFormat:@"%d分钟", totalSeconds / 60];
+    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"▶️ 养号已启动（浏览10-20秒+随机点赞/关注，时长%@，点停止可停）", durStr]];
+    NSTimeInterval startTime = [[NSDate date] timeIntervalSince1970];
     dispatch_async(_execQueue, ^{
-        __block int cycles = 0, likes = 0, comments = 0;
+        __block int cycles = 0, likes = 0, follows = 0;
         while (weakSelf.nurtureRunning) {
+            // 时长检查（到点自动停）
+            NSTimeInterval elapsed = [[NSDate date] timeIntervalSince1970] - startTime;
+            if (elapsed >= totalSeconds) {
+                [[XNOWER sharedInstance] addLog:@"⏱ 养号时长已到，自动停止"];
+                weakSelf.nurtureRunning = NO;
+                break;
+            }
             cycles++;
-            [weakSelf _logStep:[NSString stringWithFormat:@"nurture_cycle:%d mode:%d", cycles, mode]];
-            // 随机间隔 10-20 秒（模拟真实观看停留，日志显示本次分配时长）
+            [weakSelf _logStep:[NSString stringWithFormat:@"nurture_cycle:%d", cycles]];
+            // 随机浏览 10-20 秒
             int delay = 10 + (int)arc4random_uniform(11);
             if (delay < 5) delay = 5;
             [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏱ 本次观看 %d 秒（随机10-20秒）", delay]];
@@ -2176,27 +2186,23 @@ static NSArray *kNurtureComments = @[
             [[XNOWER sharedInstance] addLog:@"📱 已上滑到下一条视频"];
             if (!weakSelf.nurtureRunning) break;
 
-            // 随机点赞（模式1纯浏览 / 模式2互动 都做）
+            // 随机点赞或关注（各50%）
             if (arc4random_uniform(100) < 50) {
                 dispatch_sync(dispatch_get_main_queue(), ^{
                     [weakSelf _performLike];
                 });
                 likes++;
                 [[XNOWER sharedInstance] addLog:@"❤️ 随机点赞"];
-            }
-
-            // 模式2互动：在模式1基础上，随机发评论（v1.4.45: 评论单独执行OK，循环里崩因是评论后下滑关面板，已去掉下滑）
-            if (mode == 2 && arc4random_uniform(100) < 40) {
+            } else {
                 dispatch_sync(dispatch_get_main_queue(), ^{
-                    [weakSelf _performComment:[weakSelf _randomComment]];
+                    [weakSelf _performFollow];
                 });
-                comments++;
-                [[XNOWER sharedInstance] addLog:@"💬 随机评论"];
-                // 不再下滑关评论面板（评论面板为复杂弹层，合成滑动易崩；由下次上滑自然离开）
+                follows++;
+                [[XNOWER sharedInstance] addLog:@"👤 随机关注"];
             }
         }
-        [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏹ 养号已停止：共%d轮，%d赞，%d评",
-                                         cycles, likes, comments]];
+        [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏹ 养号已停止：共%d轮，%d赞，%d关注",
+                                         cycles, likes, follows]];
         // 汇报停止（含运行统计）
         @try {
             NSString *devId = [XNOWER sharedInstance].deviceId;
@@ -2206,14 +2212,19 @@ static NSArray *kNurtureComments = @[
                     @"data": @{
                         @"action": @"nurture",
                         @"status": @"success",
-                        @"message": [NSString stringWithFormat:@"养号已停止：共%d轮，%d赞，%d评",
-                                     cycles, likes, comments],
-                        @"cycles": @(cycles), @"likes": @(likes), @"comments": @(comments),
+                        @"message": [NSString stringWithFormat:@"养号已停止：共%d轮，%d赞，%d关注",
+                                     cycles, likes, follows],
+                        @"cycles": @(cycles), @"likes": @(likes), @"follows": @(follows),
                     }
                 } deviceId:devId];
             }
         } @catch (NSException *e) {}
     });
+}
+
+/// 兼容旧调用（模式参数忽略，统一单模式）
+- (void)startNurtureWithMode:(int)mode {
+    [self startNurtureWithDuration:0];  // 默认24小时
 }
 
 - (void)stopNurture {

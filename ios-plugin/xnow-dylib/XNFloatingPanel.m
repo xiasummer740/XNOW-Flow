@@ -550,10 +550,10 @@ static NSArray *kCountries;
         }
         cell.textLabel.text = item[@"label"];
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"nurture"]) {
-        // 养号子菜单：模式1纯浏览 / 模式2互动 / 停止养号
+        // 养号子菜单：开始（24小时默认）/ 自定义时长 / 停止
         NSArray *nurtureItems = @[
-            @{@"icon": @"leaf.fill", @"label": @"模式1：纯浏览（上滑+随机点赞）", @"color": [UIColor systemGreenColor]},
-            @{@"icon": @"sparkles", @"label": @"模式2：互动（上滑+点赞+随机评论）", @"color": [UIColor systemBlueColor]},
+            @{@"icon": @"play.fill", @"label": @"▶️ 开始养号（默认24小时）", @"color": [UIColor systemGreenColor]},
+            @{@"icon": @"timer", @"label": @"⏱ 自定义时长开始（输入分钟）", @"color": [UIColor systemBlueColor]},
             @{@"icon": @"stop.circle.fill", @"label": @"⏹ 停止养号", @"color": [UIColor systemRedColor]},
         ];
         NSDictionary *ni = nurtureItems[ip.row];
@@ -621,17 +621,14 @@ static NSArray *kCountries;
         [_menuTable reloadData];
         [self _showToast:[NSString stringWithFormat:@"国家已切换: %@", _selectedCountry]];
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"nurture"]) {
-        // 养号子菜单：模式1/模式2直接切换，停止养号
+        // 养号子菜单：开始（24小时默认）/ 自定义时长 / 停止
         if (ip.row == 0) {
-            [self addLog:@"▶️ 养号模式1：纯浏览 已启动（24小时不限时）"];
-            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureMode:)]) {
-                [self.delegate floatingPanelDidStartNurtureMode:1];
+            [self addLog:@"▶️ 开始养号（24小时不限时，点停止养号可停）"];
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureWithDuration:)]) {
+                [self.delegate floatingPanelDidStartNurtureWithDuration:0];
             }
         } else if (ip.row == 1) {
-            [self addLog:@"▶️ 养号模式2：互动 已启动（24小时不限时）"];
-            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureMode:)]) {
-                [self.delegate floatingPanelDidStartNurtureMode:2];
-            }
+            [self _promptNurtureDuration];
         } else if (ip.row == 2) {
             [self addLog:@"⏹ 已停止养号"];
             if ([self.delegate respondsToSelector:@selector(floatingPanelDidStopNurture)]) {
@@ -730,6 +727,30 @@ static NSArray *kCountries;
                 [self.delegate floatingPanelDidTapBackupAccount:self];
             }
             [self addLog:@"正在备份当前账号登录态..."];
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self _presentAlert:alert];
+}
+
+/// 自定义养号时长：输入分钟数 → 开始养号
+- (void)_promptNurtureDuration {
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:@"⏱ 自定义养号时长"
+        message:@"输入养号分钟数（如 60 = 1小时；不填默认24小时）"
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+        tf.keyboardType = UIKeyboardTypeNumberPad;
+        tf.placeholder = @"分钟数";
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"开始养号"
+        style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            NSString *input = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            int minutes = [input intValue];
+            int seconds = minutes > 0 ? minutes * 60 : 0;
+            [self addLog:[NSString stringWithFormat:@"▶️ 开始养号（%@）", minutes > 0 ? [NSString stringWithFormat:@"%d分钟", minutes] : @"24小时"]];
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureWithDuration:)]) {
+                [self.delegate floatingPanelDidStartNurtureWithDuration:seconds];
+            }
         }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [self _presentAlert:alert];

@@ -85,8 +85,10 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 /// 当前 TikTok 页面类型（未知/推荐/关注/个人/视频详情等）
 @property (nonatomic, copy) NSString *currentPage;
 
-// ===== 连续养号（不限时，24小时运行，直到停止）=====
-/// 启动连续养号：mode=1 纯浏览（随机10-20秒上滑）；mode=2 浏览+互动（上滑+随机点赞/评论）
+// ===== 连续养号（单模式，默认24小时，直到停止）=====
+/// 启动养号：随机浏览10-20秒 + 随机点赞或关注；totalSeconds>0 自定义时长，0=默认24小时
+- (void)startNurtureWithDuration:(int)totalSeconds;
+/// 兼容旧调用
 - (void)startNurtureWithMode:(int)mode;
 /// 停止连续养号
 - (void)stopNurture;
