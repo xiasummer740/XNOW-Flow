@@ -556,7 +556,7 @@ static NSArray *kCountries;
         NSArray *nurtureItems = @[
             @{@"icon": @"play.fill", @"label": [NSString stringWithFormat:@"▶️ 互动养号（浏览+点赞/关注）%@", durShow], @"color": [UIColor systemGreenColor]},
             @{@"icon": @"eye.fill", @"label": [NSString stringWithFormat:@"📱 纯浏览养号（只上滑）%@", durShow], @"color": [UIColor systemBlueColor]},
-            @{@"icon": @"timer", @"label": @"⏱ 设置养号时长（当前%@）", @"color": [UIColor systemOrangeColor]},
+            @{@"icon": @"timer", @"label": [NSString stringWithFormat:@"⏱ 设置养号时长（当前%@）", durShow], @"color": [UIColor systemOrangeColor]},
             @{@"icon": @"stop.circle.fill", @"label": @"⏹ 停止养号", @"color": [UIColor systemRedColor]},
         ];
         NSDictionary *ni = nurtureItems[ip.row];
@@ -758,7 +758,8 @@ static NSArray *kCountries;
             int minutes = [input intValue];
             [[NSUserDefaults standardUserDefaults] setInteger:minutes forKey:@"XN_NurtureMinutes"];
             [[NSUserDefaults standardUserDefaults] synchronize];
-            [self addLog:[NSString stringWithFormat:@"⏱ 养号时长已设置：%@", minutes > 0 ? [NSString stringWithFormat:@"%d分钟", minutes] : @"24小时（默认）"]];
+            NSString *durStr = minutes > 0 ? [NSString stringWithFormat:@"%d分钟", minutes] : @"24小时（默认）";
+            [self addLog:[NSString stringWithFormat:@"⏱ 养号时长已设置：%@", durStr]];
             [self _menuTable reloadData];
         }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
