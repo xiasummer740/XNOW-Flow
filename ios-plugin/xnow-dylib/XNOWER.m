@@ -47,15 +47,19 @@ static void XN_UncaughtExceptionHandler(NSException *exception) {
 }
 
 static void XN_SignalHandler(int sig) {
+    // 写标记文件（优先 HOME/Documents，回退 TMPDIR——HOME 在注入环境下可能取不到）
     const char *home = getenv("HOME");
-    if (!home) return;
+    const char *tmp = getenv("TMPDIR");
     char path[600];
-    snprintf(path, sizeof(path), "%s/Documents/xn_crash_sig_%d", home, sig);
-    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd >= 0) {
-        const char *m = "signal";
-        write(fd, m, strlen(m));
-        close(fd);
+    if (home) {
+        snprintf(path, sizeof(path), "%s/Documents/xn_crash_sig_%d", home, sig);
+        int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd >= 0) { const char *m = "signal"; write(fd, m, strlen(m)); close(fd); }
+    }
+    if (tmp) {
+        snprintf(path, sizeof(path), "%s/xn_crash_sig_%d", tmp, sig);
+        int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd >= 0) { const char *m = "signal"; write(fd, m, strlen(m)); close(fd); }
     }
     // 恢复默认处理并重抛信号，确保进程真正终止（不吞崩溃）
     signal(sig, SIG_DFL);
@@ -194,7 +198,10 @@ __attribute__((destructor)) static void XNOWERUnload() {
     // 未激活设备打开 TikTok 自动弹激活浮窗，无需手动点"连接到服务器"
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [self startPiggybackPolling];
-        [self reportPendingCrash];
+        // 崩溃上报延迟到 8 秒（等 piggyback 注册完成，避免 3 秒时通道未就绪导致上报丢失）
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self reportPendingCrash];
+        });
     });
 }
 
@@ -221,22 +228,37 @@ __attribute__((destructor)) static void XNOWERUnload() {
             [parts addObject:[NSString stringWithFormat:@"[last_action] %@", lastAction]];
         }
 
-        // 2) 崩溃文件（异常详情 / 信号标记）
+        // 2) 崩溃文件（异常详情 / 信号标记）— 检查 Documents + TMPDIR
         NSFileManager *fm = [NSFileManager defaultManager];
-        NSString *dir = XN_CrashDir();
-        NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
-        for (NSString *f in files ?: @[]) {
-            if (![f hasPrefix:@"xn_crash_"]) continue;
-            NSString *path = [dir stringByAppendingPathComponent:f];
-            NSString *content = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] ?: @"unknown";
-            [parts addObject:[NSString stringWithFormat:@"[%@] %@", f, content]];
-            [fm removeItemAtPath:path error:nil];
+        for (NSString *dir in @[XN_CrashDir(), NSTemporaryDirectory()]) {
+            NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
+            for (NSString *f in files ?: @[]) {
+                if (![f hasPrefix:@"xn_crash_"]) continue;
+                NSString *path = [dir stringByAppendingPathComponent:f];
+                NSString *content = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] ?: @"unknown";
+                [parts addObject:[NSString stringWithFormat:@"[%@] %@", f, content]];
+            }
         }
 
         if (parts.count == 0) return;
         NSString *crashDesc = [parts componentsJoinedByString:@"\n"];
-        [XNURLProtocol sendMessage:@{@"type": @"crash_report", @"data": @{@"crash": crashDesc}} deviceId:self.deviceId];
         NSLog(@"[XNOWER][CRASH] 上报: %@", crashDesc);
+        // 用完成回调确认上报成功后才清除崩溃文件（避免上报失败丢失证据）
+        [XNURLProtocol sendMessage:@{@"type": @"crash_report", @"data": @{@"crash": crashDesc}}
+                          deviceId:self.deviceId
+                        completion:^(BOOL ok, NSError *error) {
+            if (!ok) return;
+            @try {
+                for (NSString *dir in @[XN_CrashDir(), NSTemporaryDirectory()]) {
+                    NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
+                    for (NSString *f in files ?: @[]) {
+                        if ([f hasPrefix:@"xn_crash_"]) {
+                            [fm removeItemAtPath:[dir stringByAppendingPathComponent:f] error:nil];
+                        }
+                    }
+                }
+            } @catch (id e) {}
+        }];
     } @catch (id e) {}
 }
 
