@@ -552,7 +552,10 @@ static NSArray *kCountries;
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"nurture"]) {
         // 养号子菜单：互动养号 / 纯浏览养号 / 设置时长 / 停止
         int minutes = [[NSUserDefaults standardUserDefaults] integerForKey:@"XN_NurtureMinutes"];
-        NSString *durShow = minutes > 0 ? [NSString stringWithFormat:@"%d分钟", minutes] : @"24小时";
+        NSString *durShow = @"24小时";
+        if (minutes > 0) {
+            durShow = [NSString stringWithFormat:@"%d分钟", minutes];
+        }
         NSArray *nurtureItems = @[
             @{@"icon": @"play.fill", @"label": [NSString stringWithFormat:@"▶️ 互动养号（浏览+点赞/关注）%@", durShow], @"color": [UIColor systemGreenColor]},
             @{@"icon": @"eye.fill", @"label": [NSString stringWithFormat:@"📱 纯浏览养号（只上滑）%@", durShow], @"color": [UIColor systemBlueColor]},
@@ -627,13 +630,17 @@ static NSArray *kCountries;
         // 养号子菜单：互动养号 / 纯浏览养号 / 设置时长 / 停止
         int minutes = [[NSUserDefaults standardUserDefaults] integerForKey:@"XN_NurtureMinutes"];
         int seconds = minutes > 0 ? minutes * 60 : 0;
+        NSString *durStr = @"24小时";
+        if (minutes > 0) {
+            durStr = [NSString stringWithFormat:@"%d分钟", minutes];
+        }
         if (ip.row == 0) {
-            [self addLog:[NSString stringWithFormat:@"▶️ 互动养号已启动（%@）", minutes > 0 ? [NSString stringWithFormat:@"%d分钟", minutes] : @"24小时"]];
+            [self addLog:[NSString stringWithFormat:@"▶️ 互动养号已启动（%@）", durStr]];
             if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureWithDuration:browseOnly:)]) {
                 [self.delegate floatingPanelDidStartNurtureWithDuration:seconds browseOnly:NO];
             }
         } else if (ip.row == 1) {
-            [self addLog:[NSString stringWithFormat:@"📱 纯浏览养号已启动（%@）", minutes > 0 ? [NSString stringWithFormat:@"%d分钟", minutes] : @"24小时"]];
+            [self addLog:[NSString stringWithFormat:@"📱 纯浏览养号已启动（%@）", durStr]];
             if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureWithDuration:browseOnly:)]) {
                 [self.delegate floatingPanelDidStartNurtureWithDuration:seconds browseOnly:YES];
             }
@@ -758,7 +765,10 @@ static NSArray *kCountries;
             int minutes = [input intValue];
             [[NSUserDefaults standardUserDefaults] setInteger:minutes forKey:@"XN_NurtureMinutes"];
             [[NSUserDefaults standardUserDefaults] synchronize];
-            NSString *durStr = minutes > 0 ? [NSString stringWithFormat:@"%d分钟", minutes] : @"24小时（默认）";
+            NSString *durStr = @"24小时（默认）";
+            if (minutes > 0) {
+                durStr = [NSString stringWithFormat:@"%d分钟", minutes];
+            }
             [self addLog:[NSString stringWithFormat:@"⏱ 养号时长已设置：%@", durStr]];
             [self _menuTable reloadData];
         }]];
