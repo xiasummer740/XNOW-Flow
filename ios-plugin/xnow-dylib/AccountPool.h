@@ -39,6 +39,9 @@ typedef NS_ENUM(NSInteger, AccountStatus) {
 /// 添加或更新单个账号
 - (void)upsertAccount:(NSDictionary *)account;
 
+/// 新建本地账号（自动分配 id 并标记为活跃），返回新 id；失败返回 0
+- (NSInteger)addLocalAccount:(NSDictionary *)account;
+
 /// 删除账号
 - (void)removeAccountWithId:(NSInteger)accountId;
 

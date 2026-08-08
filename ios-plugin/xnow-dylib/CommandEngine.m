@@ -192,17 +192,12 @@ static NSArray *kNurtureComments = @[
                 break;
 
             case CommandActionBackupAccount: {
-                // 复用共享检测流程：导航个人页 → 等网络捕获 → 兜底 UI 扫描
-                NSDictionary *account = [self _detectCurrentAccountFlow];
-
-                NSInteger savedId = 0;
-                if (account && account.count > 0) {
-                    savedId = [[AccountSwitcher sharedSwitcher] backupCurrentAccount];
-                }
+                // 直接读 TikTok 原生登录数据（session/cookies/Keychain），任意页面可备份，不跳个人页
+                NSInteger savedId = [[AccountSwitcher sharedSwitcher] backupCurrentAccount];
                 result = @{
                     @"status": savedId > 0 ? @"success" : @"failed",
                     @"message": savedId > 0 ? [NSString stringWithFormat:@"已备份账号 #%ld 登录态", (long)savedId]
-                                             : @"未检测到当前登录账号（请确认已登录个人页）",
+                                             : @"未检测到登录态（请确认已登录 TikTok）",
                     @"account_id": @(savedId),
                 };
                 hasResult = YES;
@@ -899,16 +894,27 @@ static NSArray *kNurtureComments = @[
             }
         }
 
-        // 回退：点击当前视频创作者头像
+        // 回退：点击当前视频创作者头像（优先无障碍标识，再按类名，避免点错控件）
         UIView *avatarView = [self _findViewWithAccessibilityIdentifier:kAccProfileAvatar
                                                                  inView:XN_ActiveWindow()];
+        if (!avatarView) {
+            avatarView = [self _findViewByClassContaining:@"AWEPlayInteractionUserAvatarView"
+                                                  inView:XN_ActiveWindow() depth:0];
+        }
         if (avatarView) {
             [self _safeTapAtPoint:[avatarView.superview convertPoint:avatarView.center toView:nil]];
         } else {
-            CGSize screen = [UIScreen mainScreen].bounds.size;
-            [self _safeTapAtPoint:CGPointMake(
-                screen.width * kAvatarRatioX,
-                screen.height * kAvatarRatioY)];
+            // 固定坐标兜底仅当在 feed 页（避免非 feed 页点错控件崩溃）
+            __block UIScrollView *feedScroll = nil;
+            [self _findLargeFeedScrollViewInView:XN_ActiveWindow() result:&feedScroll];
+            if (feedScroll) {
+                CGSize screen = [UIScreen mainScreen].bounds.size;
+                [self _safeTapAtPoint:CGPointMake(
+                    screen.width * kAvatarRatioX,
+                    screen.height * kAvatarRatioY)];
+            } else {
+                NSLog(@"[XNOWER] 未找到头像且不在推荐页，跳过打开主页");
+            }
         }
     });
 }

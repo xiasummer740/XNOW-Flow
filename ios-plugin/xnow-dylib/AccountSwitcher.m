@@ -136,14 +136,23 @@ static AccountSwitcher *gShared = nil;
 }
 
 /// 备份当前登录账号的登录态快照（浮窗「备份」按钮调用）
-/// @return 备份成功的账号 ID；无当前账号返回 0
+/// 直接读 TikTok 原生登录数据（NSUserDefaults session / cookies / Keychain），任意页面可备份，不依赖个人页检测
+/// @return 备份成功的账号 ID；未检测到登录态返回 0
 - (NSInteger)backupCurrentAccount {
-    NSDictionary *active = [[AccountPool sharedPool] activeAccount];
-    NSInteger activeId = [active[@"id"] integerValue];
-    if (activeId <= 0) {
-        SW_LOG(@"备份失败：无当前活跃账号");
+    // 1. 检查是否已登录（原生登录态：session_token 或 tiktok cookies）
+    NSDictionary *login = [self verifyCurrentLogin];
+    if (![login[@"isLoggedIn"] boolValue]) {
+        SW_LOG(@"备份失败：未检测到登录态（session/cookies 为空）");
         return 0;
     }
+
+    // 2. 获取或新建账号记录
+    NSInteger activeId = [login[@"accountId"] integerValue];
+    if (activeId <= 0) {
+        activeId = [[AccountPool sharedPool] addLocalAccount:@{@"nickname": login[@"nickname"] ?: @"账号"}];
+    }
+
+    // 3. 保存快照（快照引擎会捕获 NSUserDefaults 全量 + Keychain + cookies）
     BOOL ok = [[AccountSnapshotter sharedSnapshotter] saveSnapshotForAccount:activeId];
     SW_LOG(@"备份账号 %ld 登录态%@", (long)activeId, ok ? @"成功" : @"失败");
     return ok ? activeId : 0;
@@ -215,13 +224,22 @@ static AccountSwitcher *gShared = nil;
 }
 
 - (NSDictionary *)verifyCurrentLogin {
-    // 从 NSUserDefaults 检查是否有 session token
+    // 1. NSUserDefaults 里的 session token（TikTok 原生登录态）
     NSString *token = [[NSUserDefaults standardUserDefaults] stringForKey:kTKUserDefaultsSessionKey];
     if (token.length > 0) {
         return @{@"isLoggedIn": @YES, @"method": @"token"};
     }
 
-    // 从 AccountPool 检查 activeAccount
+    // 2. tiktok/byteoversea 域 cookies（有说明已登录）
+    NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+    for (NSHTTPCookie *cookie in storage.cookies) {
+        NSString *domain = cookie.domain.lowercaseString;
+        if ([domain containsString:@"tiktok"] || [domain containsString:@"byteoversea"]) {
+            return @{@"isLoggedIn": @YES, @"method": @"cookie"};
+        }
+    }
+
+    // 3. AccountPool activeAccount 兜底（切换过的账号）
     NSDictionary *active = [[AccountPool sharedPool] activeAccount];
     if (active) {
         return @{

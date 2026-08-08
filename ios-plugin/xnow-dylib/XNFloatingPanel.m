@@ -100,10 +100,10 @@ static NSArray *kCountries;
         @{@"icon": @"globe", @"label": @"设置国家", @"action": @"set_country"},
         @{@"icon": @"trash.fill", @"label": @"一键清理所有数据", @"action": @"clear_data"},
         @{@"icon": @"power", @"label": @"关闭服务器链接", @"action": @"disconnect"},
+        @{@"icon": @"person.3.fill", @"label": @"采集粉丝", @"action": @"collect_fans"},
+        @{@"icon": @"play.rectangle.fill", @"label": @"采集视频", @"action": @"collect_videos"},
         @{@"icon": @"heart.fill", @"label": @"采集点赞", @"action": @"collect_likes"},
-        @{@"icon": @"leaf.fill", @"label": @"养号-纯浏览", @"action": @"nurture_mode1"},
-        @{@"icon": @"leaf.fill", @"label": @"养号-浏览互动", @"action": @"nurture_mode2"},
-        @{@"icon": @"stop.circle.fill", @"label": @"停止养号", @"action": @"nurture_stop"},
+        @{@"icon": @"leaf.fill", @"label": @"养号", @"action": @"nurture"},
         @{@"icon": @"doc.on.doc.fill", @"label": @"复制机器码", @"action": @"copy_device_id"},
         @{@"icon": @"doc.plaintext.fill", @"label": @"显示/关闭日志", @"action": @"toggle_log"},
         @{@"icon": @"xmark.circle.fill", @"label": @"关闭", @"action": @"close_panel"},
@@ -512,6 +512,7 @@ static NSArray *kCountries;
             NSArray *a = [[AccountPool sharedPool] allAccounts];
             return MAX(a.count, 1) + 2;
         }
+        if ([_currentSubMenu isEqualToString:@"nurture"]) return 3; // 模式1/模式2/停止
     }
     return 0;
 }
@@ -548,6 +549,19 @@ static NSArray *kCountries;
             cell.imageView.tintColor = [UIColor systemBlueColor];
         }
         cell.textLabel.text = item[@"label"];
+    } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"nurture"]) {
+        // 养号子菜单：模式1纯浏览 / 模式2互动 / 停止养号
+        NSArray *nurtureItems = @[
+            @{@"icon": @"leaf.fill", @"label": @"模式1：纯浏览（上滑+随机点赞）", @"color": [UIColor systemGreenColor]},
+            @{@"icon": @"sparkles", @"label": @"模式2：互动（上滑+点赞+随机评论）", @"color": [UIColor systemBlueColor]},
+            @{@"icon": @"stop.circle.fill", @"label": @"⏹ 停止养号", @"color": [UIColor systemRedColor]},
+        ];
+        NSDictionary *ni = nurtureItems[ip.row];
+        cell.textLabel.text = ni[@"label"];
+        cell.textLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
+        cell.textLabel.textColor = ni[@"color"];
+        cell.imageView.image = [UIImage systemImageNamed:ni[@"icon"]];
+        cell.imageView.tintColor = ni[@"color"];
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"set_country"]) {
         NSString *c = kCountries[ip.row];
         cell.textLabel.text = c;
@@ -603,6 +617,24 @@ static NSArray *kCountries;
         _selectedCountry = kCountries[ip.row];
         [_menuTable reloadData];
         [self _showToast:[NSString stringWithFormat:@"国家已切换: %@", _selectedCountry]];
+    } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"nurture"]) {
+        // 养号子菜单：模式1/模式2直接切换，停止养号
+        if (ip.row == 0) {
+            [self addLog:@"▶️ 养号模式1：纯浏览 已启动（24小时不限时）"];
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureMode:)]) {
+                [self.delegate floatingPanelDidStartNurtureMode:1];
+            }
+        } else if (ip.row == 1) {
+            [self addLog:@"▶️ 养号模式2：互动 已启动（24小时不限时）"];
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureMode:)]) {
+                [self.delegate floatingPanelDidStartNurtureMode:2];
+            }
+        } else if (ip.row == 2) {
+            [self addLog:@"⏹ 已停止养号"];
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStopNurture)]) {
+                [self.delegate floatingPanelDidStopNurture];
+            }
+        }
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"account_mgmt"]) {
         NSArray *accounts = [[AccountPool sharedPool] allAccounts];
         NSUInteger actionRow = MAX(accounts.count, 1);   // 操作按钮起始行
@@ -771,30 +803,25 @@ static NSArray *kCountries;
         [self.delegate floatingPanelDidTapDisconnect:self];
         return;
     }
+    if ([action isEqualToString:@"collect_fans"]) {
+        [self addLog:@"👥 开始采集粉丝..."];
+        [self.delegate floatingPanelDidTapCollectFans:self];
+        return;
+    }
+    if ([action isEqualToString:@"collect_videos"]) {
+        [self addLog:@"🎬 开始采集视频..."];
+        [self.delegate floatingPanelDidTapCollectVideos:self];
+        return;
+    }
     if ([action isEqualToString:@"collect_likes"]) {
-        [self addLog:@"开始采集点赞..."];
+        [self addLog:@"❤️ 开始采集点赞..."];
         [self.delegate floatingPanelDidTapCollectLikes:self];
         return;
     }
-    if ([action isEqualToString:@"nurture_mode1"]) {
-        [self addLog:@"▶️ 养号模式1：纯浏览 已启动（24小时不限时，点停止养号可停）"];
-        if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureMode:)]) {
-            [self.delegate floatingPanelDidStartNurtureMode:1];
-        }
-        return;
-    }
-    if ([action isEqualToString:@"nurture_mode2"]) {
-        [self addLog:@"▶️ 养号模式2：浏览+互动 已启动（24小时不限时，点停止养号可停）"];
-        if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureMode:)]) {
-            [self.delegate floatingPanelDidStartNurtureMode:2];
-        }
-        return;
-    }
-    if ([action isEqualToString:@"nurture_stop"]) {
-        [self addLog:@"⏹ 已停止养号"];
-        if ([self.delegate respondsToSelector:@selector(floatingPanelDidStopNurture)]) {
-            [self.delegate floatingPanelDidStopNurture];
-        }
+    if ([action isEqualToString:@"nurture"]) {
+        // 养号子菜单（模式1纯浏览/模式2互动/停止，带返回按钮）
+        _viewMode = 3; _currentSubMenu = @"nurture"; _backBtn.hidden = NO;
+        _titleLabel.text = @"🌱 养号"; [_menuTable reloadData];
         return;
     }
     if ([action isEqualToString:@"dl_video"]) {

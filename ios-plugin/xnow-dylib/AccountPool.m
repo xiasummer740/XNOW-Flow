@@ -110,6 +110,26 @@ static AccountPool *gShared = nil;
     [self _saveToDisk];
 }
 
+- (NSInteger)addLocalAccount:(NSDictionary *)account {
+    // 自动分配递增 id
+    NSInteger newId = 1;
+    for (NSDictionary *acc in __accounts) {
+        NSInteger aid = [acc[@"id"] integerValue];
+        if (aid >= newId) newId = aid + 1;
+    }
+    NSMutableDictionary *m = [@{@"id": @(newId)} mutableCopy];
+    if ([account isKindOfClass:[NSDictionary class]]) {
+        [m addEntriesFromDictionary:account];
+    }
+    if (!m[@"status"]) m[@"status"] = @"active";
+    m[@"last_used"] = @([[NSDate date] timeIntervalSince1970]);
+    [__accounts addObject:m];
+    [self _saveToDisk];
+    [self markActive:newId];
+    POOL_LOG(@"新建本地账号 id=%ld", (long)newId);
+    return newId;
+}
+
 - (void)removeAccountWithId:(NSInteger)accountId {
     [__accounts filterUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSDictionary *acc, NSDictionary *bindings) {
         return [acc[@"id"] integerValue] != accountId;
