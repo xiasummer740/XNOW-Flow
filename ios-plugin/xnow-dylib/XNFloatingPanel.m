@@ -512,7 +512,7 @@ static NSArray *kCountries;
             NSArray *a = [[AccountPool sharedPool] allAccounts];
             return MAX(a.count, 1) + 2;
         }
-        if ([_currentSubMenu isEqualToString:@"nurture"]) return 3; // 模式1/模式2/停止
+        if ([_currentSubMenu isEqualToString:@"nurture"]) return 4; // 互动/纯浏览/设置时长/停止
     }
     return 0;
 }
@@ -550,10 +550,13 @@ static NSArray *kCountries;
         }
         cell.textLabel.text = item[@"label"];
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"nurture"]) {
-        // 养号子菜单：开始（24小时默认）/ 自定义时长 / 停止
+        // 养号子菜单：互动养号 / 纯浏览养号 / 设置时长 / 停止
+        int minutes = [[NSUserDefaults standardUserDefaults] integerForKey:@"XN_NurtureMinutes"];
+        NSString *durShow = minutes > 0 ? [NSString stringWithFormat:@"%d分钟", minutes] : @"24小时";
         NSArray *nurtureItems = @[
-            @{@"icon": @"play.fill", @"label": @"▶️ 开始养号（默认24小时）", @"color": [UIColor systemGreenColor]},
-            @{@"icon": @"timer", @"label": @"⏱ 自定义时长开始（输入分钟）", @"color": [UIColor systemBlueColor]},
+            @{@"icon": @"play.fill", @"label": [NSString stringWithFormat:@"▶️ 互动养号（浏览+点赞/关注）%@", durShow], @"color": [UIColor systemGreenColor]},
+            @{@"icon": @"eye.fill", @"label": [NSString stringWithFormat:@"📱 纯浏览养号（只上滑）%@", durShow], @"color": [UIColor systemBlueColor]},
+            @{@"icon": @"timer", @"label": @"⏱ 设置养号时长（当前%@）", @"color": [UIColor systemOrangeColor]},
             @{@"icon": @"stop.circle.fill", @"label": @"⏹ 停止养号", @"color": [UIColor systemRedColor]},
         ];
         NSDictionary *ni = nurtureItems[ip.row];
@@ -621,15 +624,22 @@ static NSArray *kCountries;
         [_menuTable reloadData];
         [self _showToast:[NSString stringWithFormat:@"国家已切换: %@", _selectedCountry]];
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"nurture"]) {
-        // 养号子菜单：开始（24小时默认）/ 自定义时长 / 停止
+        // 养号子菜单：互动养号 / 纯浏览养号 / 设置时长 / 停止
+        int minutes = [[NSUserDefaults standardUserDefaults] integerForKey:@"XN_NurtureMinutes"];
+        int seconds = minutes > 0 ? minutes * 60 : 0;
         if (ip.row == 0) {
-            [self addLog:@"▶️ 开始养号（24小时不限时，点停止养号可停）"];
-            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureWithDuration:)]) {
-                [self.delegate floatingPanelDidStartNurtureWithDuration:0];
+            [self addLog:[NSString stringWithFormat:@"▶️ 互动养号已启动（%@）", minutes > 0 ? [NSString stringWithFormat:@"%d分钟", minutes] : @"24小时"]];
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureWithDuration:browseOnly:)]) {
+                [self.delegate floatingPanelDidStartNurtureWithDuration:seconds browseOnly:NO];
             }
         } else if (ip.row == 1) {
-            [self _promptNurtureDuration];
+            [self addLog:[NSString stringWithFormat:@"📱 纯浏览养号已启动（%@）", minutes > 0 ? [NSString stringWithFormat:@"%d分钟", minutes] : @"24小时"]];
+            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureWithDuration:browseOnly:)]) {
+                [self.delegate floatingPanelDidStartNurtureWithDuration:seconds browseOnly:YES];
+            }
         } else if (ip.row == 2) {
+            [self _promptSetNurtureDuration];
+        } else if (ip.row == 3) {
             [self addLog:@"⏹ 已停止养号"];
             if ([self.delegate respondsToSelector:@selector(floatingPanelDidStopNurture)]) {
                 [self.delegate floatingPanelDidStopNurture];
@@ -732,25 +742,24 @@ static NSArray *kCountries;
     [self _presentAlert:alert];
 }
 
-/// 自定义养号时长：输入分钟数 → 开始养号
-- (void)_promptNurtureDuration {
+/// 设置养号时长（分钟数，存 NSUserDefaults；不填=0=24小时）
+- (void)_promptSetNurtureDuration {
     UIAlertController *alert = [UIAlertController
-        alertControllerWithTitle:@"⏱ 自定义养号时长"
+        alertControllerWithTitle:@"⏱ 设置养号时长"
         message:@"输入养号分钟数（如 60 = 1小时；不填默认24小时）"
         preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
         tf.keyboardType = UIKeyboardTypeNumberPad;
         tf.placeholder = @"分钟数";
     }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"开始养号"
+    [alert addAction:[UIAlertAction actionWithTitle:@"确定"
         style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
             NSString *input = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
             int minutes = [input intValue];
-            int seconds = minutes > 0 ? minutes * 60 : 0;
-            [self addLog:[NSString stringWithFormat:@"▶️ 开始养号（%@）", minutes > 0 ? [NSString stringWithFormat:@"%d分钟", minutes] : @"24小时"]];
-            if ([self.delegate respondsToSelector:@selector(floatingPanelDidStartNurtureWithDuration:)]) {
-                [self.delegate floatingPanelDidStartNurtureWithDuration:seconds];
-            }
+            [[NSUserDefaults standardUserDefaults] setInteger:minutes forKey:@"XN_NurtureMinutes"];
+            [[NSUserDefaults standardUserDefaults] synchronize];
+            [self addLog:[NSString stringWithFormat:@"⏱ 养号时长已设置：%@", minutes > 0 ? [NSString stringWithFormat:@"%d分钟", minutes] : @"24小时（默认）"]];
+            [self _menuTable reloadData];
         }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [self _presentAlert:alert];

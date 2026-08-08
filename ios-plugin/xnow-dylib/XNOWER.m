@@ -1066,10 +1066,11 @@ __attribute__((destructor)) static void XNOWERUnload() {
     // 旧 delegate 保留（面板已用直接菜单项），无额外处理
 }
 
-- (void)floatingPanelDidStartNurtureWithDuration:(int)seconds {
+- (void)floatingPanelDidStartNurtureWithDuration:(int)seconds browseOnly:(BOOL)browseOnly {
     NSString *durStr = (seconds <= 0) ? @"24小时" : [NSString stringWithFormat:@"%d分钟", seconds / 60];
-    [self addLog:[NSString stringWithFormat:@"🌱 养号已启动（%@，点菜单可停止）", durStr]];
-    [self.cmdEngine startNurtureWithDuration:seconds];
+    NSString *modeStr = browseOnly ? @"只上滑浏览" : @"浏览+随机点赞/关注";
+    [self addLog:[NSString stringWithFormat:@"🌱 养号已启动（%@，%@，点菜单可停止）", modeStr, durStr]];
+    [self.cmdEngine startNurtureWithDuration:seconds browseOnly:browseOnly];
 }
 
 - (void)floatingPanelDidStopNurture {

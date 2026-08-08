@@ -2150,15 +2150,17 @@ static NSArray *kNurtureComments = @[
     return kNurtureComments[idx];
 }
 
-/// 启动养号（单模式）：随机浏览10-20秒 + 随机点赞或关注；totalSeconds>0 为自定义时长，否则默认24小时
-- (void)startNurtureWithDuration:(int)totalSeconds {
+/// 启动养号：随机浏览10-20秒；browseOnly=YES 只上滑浏览；NO 则随机点赞或关注
+/// totalSeconds>0 自定义时长，0=默认24小时
+- (void)startNurtureWithDuration:(int)totalSeconds browseOnly:(BOOL)browseOnly {
     if (totalSeconds <= 0) totalSeconds = 86400;  // 默认24小时
     if (self.nurtureRunning) [self stopNurture];
-    self.nurtureMode = 1;
+    self.nurtureMode = browseOnly ? 0 : 1;
     self.nurtureRunning = YES;
     __weak typeof(self) weakSelf = self;
     NSString *durStr = (totalSeconds >= 86400) ? @"24小时" : [NSString stringWithFormat:@"%d分钟", totalSeconds / 60];
-    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"▶️ 养号已启动（浏览10-20秒+随机点赞/关注，时长%@，点停止可停）", durStr]];
+    NSString *modeStr = browseOnly ? @"只上滑浏览" : @"浏览+随机点赞/关注";
+    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"▶️ 养号已启动（%@，时长%@，点停止可停）", modeStr, durStr]];
     NSTimeInterval startTime = [[NSDate date] timeIntervalSince1970];
     dispatch_async(_execQueue, ^{
         __block int cycles = 0, likes = 0, follows = 0;
@@ -2186,19 +2188,21 @@ static NSArray *kNurtureComments = @[
             [[XNOWER sharedInstance] addLog:@"📱 已上滑到下一条视频"];
             if (!weakSelf.nurtureRunning) break;
 
-            // 随机点赞或关注（各50%）
-            if (arc4random_uniform(100) < 50) {
-                dispatch_sync(dispatch_get_main_queue(), ^{
-                    [weakSelf _performLike];
-                });
-                likes++;
-                [[XNOWER sharedInstance] addLog:@"❤️ 随机点赞"];
-            } else {
-                dispatch_sync(dispatch_get_main_queue(), ^{
-                    [weakSelf _performFollow];
-                });
-                follows++;
-                [[XNOWER sharedInstance] addLog:@"👤 随机关注"];
+            // 互动模式：随机点赞或关注（各50%）；纯浏览模式不互动
+            if (!browseOnly) {
+                if (arc4random_uniform(100) < 50) {
+                    dispatch_sync(dispatch_get_main_queue(), ^{
+                        [weakSelf _performLike];
+                    });
+                    likes++;
+                    [[XNOWER sharedInstance] addLog:@"❤️ 随机点赞"];
+                } else {
+                    dispatch_sync(dispatch_get_main_queue(), ^{
+                        [weakSelf _performFollow];
+                    });
+                    follows++;
+                    [[XNOWER sharedInstance] addLog:@"👤 随机关注"];
+                }
             }
         }
         [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏹ 养号已停止：共%d轮，%d赞，%d关注",
@@ -2222,9 +2226,12 @@ static NSArray *kNurtureComments = @[
     });
 }
 
-/// 兼容旧调用（模式参数忽略，统一单模式）
+/// 兼容旧调用
+- (void)startNurtureWithDuration:(int)totalSeconds {
+    [self startNurtureWithDuration:totalSeconds browseOnly:NO];
+}
 - (void)startNurtureWithMode:(int)mode {
-    [self startNurtureWithDuration:0];  // 默认24小时
+    [self startNurtureWithDuration:0 browseOnly:NO];  // 默认24小时互动
 }
 
 - (void)stopNurture {
