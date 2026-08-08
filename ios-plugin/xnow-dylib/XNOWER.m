@@ -16,6 +16,50 @@
 #import "XNWindowHelper.h"
 #import <objc/runtime.h>
 #import <pthread.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <signal.h>
+
+// ======== 崩溃诊断 ========
+// 未捕获 ObjC 异常 → 写文件；SIGSEGV/SIGABRT → 写标记文件。下次启动上报后端。
+static NSString *XN_CrashDir(void) {
+    NSString *home = NSHomeDirectory();
+    if (home.length == 0) return NSTemporaryDirectory();
+    return [home stringByAppendingPathComponent:@"Documents"];
+}
+
+static void XN_WriteCrashFile(NSString *name, NSString *content) {
+    @try {
+        NSString *dir = XN_CrashDir();
+        [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+        [content writeToFile:[dir stringByAppendingPathComponent:name] atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    } @catch (id e) {}
+}
+
+static void XN_UncaughtExceptionHandler(NSException *exception) {
+    NSString *desc = [NSString stringWithFormat:@"UncaughtException %@: %@\n%@",
+                      exception.name, exception.reason,
+                      [[exception callStackSymbols] componentsJoinedByString:@"\n"]];
+    XN_WriteCrashFile(@"xn_crash_exc.txt", desc);
+    NSLog(@"[XNOWER][CRASH] %@", desc);
+}
+
+static void XN_SignalHandler(int sig) {
+    const char *home = getenv("HOME");
+    if (!home) return;
+    char path[600];
+    snprintf(path, sizeof(path), "%s/Documents/xn_crash_sig_%d", home, sig);
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd >= 0) {
+        const char *m = "signal";
+        write(fd, m, strlen(m));
+        close(fd);
+    }
+    // 重新注册默认处理，避免死循环后闪退变静默
+    signal(sig, SIG_DFL);
+}
 
 // ======== 默认配置 ========
 NSString *const kXnowDefaultServerURL = @"wss://yunkong.taikon.top";
@@ -135,6 +179,13 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)start {
     NSLog(@"[XNOWER] 🚀 start() 已执行 — dylib 加载成功");
 
+    // 崩溃诊断：捕获未处理异常 + 段错误，写文件下次启动上报
+    NSSetUncaughtExceptionHandler(&XN_UncaughtExceptionHandler);
+    signal(SIGSEGV, XN_SignalHandler);
+    signal(SIGABRT, XN_SignalHandler);
+    signal(SIGBUS, XN_SignalHandler);
+    signal(SIGILL, XN_SignalHandler);
+
     // 显示浮窗
     [self showFloatingPanel];
 
@@ -142,6 +193,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     // 未激活设备打开 TikTok 自动弹激活浮窗，无需手动点"连接到服务器"
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [self startPiggybackPolling];
+        [self reportPendingCrash];
     });
 }
 
@@ -155,6 +207,25 @@ __attribute__((destructor)) static void XNOWERUnload() {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.floatingPanel addLog:msg];
     });
+}
+
+/// 启动时检查是否有上次崩溃记录，上报后端后清除
+- (void)reportPendingCrash {
+    @try {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSString *dir = XN_CrashDir();
+        NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
+        if (!files) return;
+        for (NSString *f in files) {
+            if (![f hasPrefix:@"xn_crash_"]) continue;
+            NSString *path = [dir stringByAppendingPathComponent:f];
+            NSString *content = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] ?: @"unknown";
+            NSString *crashDesc = [NSString stringWithFormat:@"[%@] %@", f, content];
+            [XNURLProtocol sendMessage:@{@"type": @"crash_report", @"data": @{@"crash": crashDesc}} deviceId:self.deviceId];
+            NSLog(@"[XNOWER][CRASH] 上报: %@", crashDesc);
+            [fm removeItemAtPath:path error:nil];
+        }
+    } @catch (id e) {}
 }
 
 - (void)stop {

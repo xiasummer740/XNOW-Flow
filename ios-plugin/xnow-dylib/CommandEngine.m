@@ -1134,37 +1134,55 @@ static NSArray *kNurtureComments = @[
 
 /// 通过 accessibilityIdentifier 找视图
 - (UIView *)_findViewWithAccessibilityIdentifier:(NSString *)identifier inView:(UIView *)view {
-    if ([view.accessibilityIdentifier.lowercaseString isEqualToString:identifier.lowercaseString]) {
-        return view;
-    }
-    for (UIView *subview in view.subviews) {
-        UIView *result = [self _findViewWithAccessibilityIdentifier:identifier inView:subview];
-        if (result) return result;
+    return [self _findViewWithAccessibilityIdentifier:identifier inView:view depth:0];
+}
+
+- (UIView *)_findViewWithAccessibilityIdentifier:(NSString *)identifier inView:(UIView *)view depth:(int)depth {
+    if (depth > 28 || !view) return nil;
+    @try {
+        if ([view.accessibilityIdentifier.lowercaseString isEqualToString:identifier.lowercaseString]) {
+            return view;
+        }
+        for (UIView *subview in view.subviews) {
+            UIView *result = [self _findViewWithAccessibilityIdentifier:identifier inView:subview depth:depth + 1];
+            if (result) return result;
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] 视图查找异常: %@", e.reason);
     }
     return nil;
 }
 
 /// 通过 accessibility label 找按钮
 - (UIButton *)_findButtonWithAnyLabel:(NSArray<NSString *> *)labels inView:(UIView *)view {
-    if ([view isKindOfClass:[UIButton class]]) {
-        UIButton *btn = (UIButton *)view;
-        NSString *accLabel = btn.accessibilityLabel;
-        NSString *accId = btn.accessibilityIdentifier;
-        NSString *title = [btn titleForState:UIControlStateNormal];
+    return [self _findButtonWithAnyLabel:labels inView:view depth:0];
+}
 
-        for (NSString *label in labels) {
-            NSString *lowerLabel = label.lowercaseString;
-            if ([accLabel.lowercaseString isEqualToString:lowerLabel] ||
-                [accLabel.lowercaseString containsString:lowerLabel] ||
-                [accId.lowercaseString containsString:lowerLabel] ||
-                [title.lowercaseString containsString:lowerLabel]) {
-                return btn;
+- (UIButton *)_findButtonWithAnyLabel:(NSArray<NSString *> *)labels inView:(UIView *)view depth:(int)depth {
+    if (depth > 28 || !view) return nil;
+    @try {
+        if ([view isKindOfClass:[UIButton class]]) {
+            UIButton *btn = (UIButton *)view;
+            NSString *accLabel = btn.accessibilityLabel;
+            NSString *accId = btn.accessibilityIdentifier;
+            NSString *title = [btn titleForState:UIControlStateNormal];
+
+            for (NSString *label in labels) {
+                NSString *lowerLabel = label.lowercaseString;
+                if ([accLabel.lowercaseString isEqualToString:lowerLabel] ||
+                    [accLabel.lowercaseString containsString:lowerLabel] ||
+                    [accId.lowercaseString containsString:lowerLabel] ||
+                    [title.lowercaseString containsString:lowerLabel]) {
+                    return btn;
+                }
             }
         }
-    }
-    for (UIView *subview in view.subviews) {
-        UIButton *result = [self _findButtonWithAnyLabel:labels inView:subview];
-        if (result) return result;
+        for (UIView *subview in view.subviews) {
+            UIButton *result = [self _findButtonWithAnyLabel:labels inView:subview depth:depth + 1];
+            if (result) return result;
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] 按钮查找异常: %@", e.reason);
     }
     return nil;
 }
@@ -1503,9 +1521,16 @@ static NSArray *kNurtureComments = @[
     });
 }
 
-/// 分享当前视频（点分享按钮）
+/// 分享当前视频（优先无障碍标识 feedShareButton，回退右侧固定点）
 - (void)_performShare {
     dispatch_sync(dispatch_get_main_queue(), ^{
+        UIView *shareView = [self _findViewWithAccessibilityIdentifier:kAccShare
+                                                               inView:XN_ActiveWindow()];
+        if (shareView) {
+            CGPoint center = [shareView.superview convertPoint:shareView.center toView:nil];
+            [self _safeTapAtPoint:center];
+            return;
+        }
         CGSize screen = [UIScreen mainScreen].bounds.size;
         // 分享按钮通常在右侧下部
         [self _safeTapAtPoint:CGPointMake(screen.width * 0.91, screen.height * 0.55)];

@@ -61,7 +61,12 @@
     UIEvent *event = [self _makeEventWithTouch:touch];
     if (!event || !window) return;
     // 经 UIApplication sendEvent: 走完整事件管线（比 window sendEvent 更能触发手势识别器）
-    [[UIApplication sharedApplication] sendEvent:event];
+    // 必须 @try：合成事件在页面过渡期可能触发 TikTok 内部异常，防止崩溃
+    @try {
+        [[UIApplication sharedApplication] sendEvent:event];
+    } @catch (NSException *e) {
+        NSLog(@"[XNTouch] sendEvent error: %@", e.reason);
+    }
 }
 
 /// 诊断上报：注入点击时，把命中的控件信息发到后端（用于验证是否点到正确元素）
@@ -160,7 +165,12 @@
     }
     UIWindow *window = XN_ActiveWindow();
     if (!window) return;
-    UIView *view = [window hitTest:point withEvent:nil] ?: window;
+    UIView *view = window;
+    @try {
+        view = [window hitTest:point withEvent:nil] ?: window;
+    } @catch (NSException *e) {
+        NSLog(@"[XNTouch] hitTest error: %@", e.reason);
+    }
     [self _reportTapDiagnostic:point view:view];      // 诊断上报命中的控件
 
     // 若是 UIControl（按钮），直接触发其 action（比合成触摸更可靠，不依赖手势识别）
@@ -265,7 +275,12 @@
     }
     UIWindow *window = XN_ActiveWindow();
     if (!window) return;
-    UIView *view = [window hitTest:from withEvent:nil] ?: window;
+    UIView *view = window;
+    @try {
+        view = [window hitTest:from withEvent:nil] ?: window;
+    } @catch (NSException *e) {
+        NSLog(@"[XNTouch] swipe hitTest error: %@", e.reason);
+    }
     UITouch *touch = [self _makeTouchAt:from phase:UITouchPhaseBegan view:view window:window];
     if (!touch) return;
     NSSet *touchSet = [NSSet setWithObject:touch];

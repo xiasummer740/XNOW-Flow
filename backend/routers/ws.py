@@ -288,6 +288,10 @@ def _handle_device_message(device_id: str, msg: dict):
         finally:
             db.close()
 
+    elif msg_type == "crash_report":
+        crash = msg.get("data", {}).get("crash", "")
+        logger.error(f"🚨 Device {device_id} CRASH: {crash[:2000]}")
+
     elif msg_type == "ping":
         pass  # HTTP 轮询的 ping 不需要回复
 
