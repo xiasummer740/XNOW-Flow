@@ -271,6 +271,8 @@ def tag_public_users(
     current_user: User = Depends(get_current_user),
 ):
     """AI 头像打标：处理未打标且有头像的记录（qwen-vl）"""
+    if not settings.DASHSCOPE_API_KEY:
+        raise HTTPException(status_code=400, detail="未配置 DASHSCOPE_API_KEY，请在 VPS 环境变量设置后重试")
     limit = max(1, min(req.limit or 10, 50))
     targets = (
         db.query(PublicUser)
@@ -289,8 +291,7 @@ def tag_public_users(
             u.ai_tagged = 1
             done += 1
         else:
-            # 打标失败：标记为已处理（防止死循环重试），keyword 留空
-            u.ai_tagged = 1
+            # 失败不标记，留待下次重试（不烧记录）
             failed += 1
     db.commit()
-    return MessageResponse(message=f"本次打标 {done} 条成功，{failed} 条失败(已跳过)")
+    return MessageResponse(message=f"本次打标 {done} 条成功，{failed} 条失败(未标记，可重试)")
