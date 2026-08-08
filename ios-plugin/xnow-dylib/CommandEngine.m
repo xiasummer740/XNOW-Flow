@@ -439,12 +439,17 @@ static NSArray *kNurtureComments = @[
 /// 按 deltaY 转滑动：优先直接翻页 feed UICollectionView，失败再注入真实手势
 - (void)_safeScrollBy:(CGFloat)deltaY {
     if ([self _tryPageFeed:deltaY]) return;
+    // feed 未找到时不再注入合成滑动（非 feed 页滑动可能触发 TikTok 崩溃）
+    NSLog(@"[XNOWER] 未在推荐页，跳过滑动");
+    return;
+#if 0
     CGSize s = [UIScreen mainScreen].bounds.size;
     CGFloat fromY = s.height * 0.5;
     CGFloat toY = MAX(s.height * 0.1, MIN(s.height * 0.9, fromY + deltaY));
     [XNTouchSimulator swipeFrom:CGPointMake(s.width * 0.5, fromY)
                              to:CGPointMake(s.width * 0.5, toY)];
     NSLog(@"[XNOWER] 真实滑动 delta=%.0fpt", deltaY);
+#endif
 }
 
 /// 尝试直接翻页 feed（TikTok feed 是 UITableView/UICollectionView，用 scrollToRow/Item + setContentOffset 兜底）
@@ -674,10 +679,16 @@ static NSArray *kNurtureComments = @[
             }
         }
 
-        // 3. 坐标回退（当前可见视频的点赞按钮）
-        [self _safeTapAtPoint:CGPointMake(
-            screen.width * kLikeBtnRatioX,
-            screen.height * kLikeBtnRatioY)];
+        // 3. 坐标回退（仅当在 feed 页才用，避免非 feed 页点错控件导致 TikTok 崩溃）
+        __block UIScrollView *feedScroll = nil;
+        [self _findLargeFeedScrollViewInView:XN_ActiveWindow() result:&feedScroll];
+        if (feedScroll) {
+            [self _safeTapAtPoint:CGPointMake(
+                screen.width * kLikeBtnRatioX,
+                screen.height * kLikeBtnRatioY)];
+        } else {
+            NSLog(@"[XNOWER] 未找到点赞按钮且不在推荐页，跳过点赞");
+        }
     });
 }
 
@@ -691,10 +702,17 @@ static NSArray *kNurtureComments = @[
             [self _safeTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
             return;
         }
-        CGSize screen = [UIScreen mainScreen].bounds.size;
-        [self _safeTapAtPoint:CGPointMake(
-            screen.width * kFollowBtnRatioX,
-            screen.height * kFollowBtnRatioY)];
+        // 仅当在 feed 页才用固定坐标兜底（避免非 feed 页点错控件崩溃）
+        __block UIScrollView *feedScroll = nil;
+        [self _findLargeFeedScrollViewInView:XN_ActiveWindow() result:&feedScroll];
+        if (feedScroll) {
+            CGSize screen = [UIScreen mainScreen].bounds.size;
+            [self _safeTapAtPoint:CGPointMake(
+                screen.width * kFollowBtnRatioX,
+                screen.height * kFollowBtnRatioY)];
+        } else {
+            NSLog(@"[XNOWER] 未找到关注按钮且不在推荐页，跳过关注");
+        }
     });
 }
 
@@ -709,9 +727,15 @@ static NSArray *kNurtureComments = @[
         if (commentView) {
             [self _safeTapAtPoint:[commentView.superview convertPoint:commentView.center toView:nil]];
         } else {
-            // 右侧操作栏评论按钮位置（like下方）
-            CGSize screen = [UIScreen mainScreen].bounds.size;
-            [self _safeTapAtPoint:CGPointMake(screen.width * 0.91, screen.height * 0.55)];
+            // 右侧操作栏评论按钮位置（like下方）— 仅当在 feed 页才用，避免点错控件崩溃
+            __block UIScrollView *feedScroll = nil;
+            [self _findLargeFeedScrollViewInView:XN_ActiveWindow() result:&feedScroll];
+            if (feedScroll) {
+                CGSize screen = [UIScreen mainScreen].bounds.size;
+                [self _safeTapAtPoint:CGPointMake(screen.width * 0.91, screen.height * 0.55)];
+            } else {
+                NSLog(@"[XNOWER] 未找到评论按钮且不在推荐页，跳过评论");
+            }
         }
     });
 
