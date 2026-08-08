@@ -591,11 +591,14 @@ static NSArray *kCountries;
             cell.selectionStyle = UITableViewCellSelectionStyleNone;
         } else {
             NSDictionary *acc = a[ip.row];
-            cell.textLabel.text = acc[@"nickname"] ?: @"未知账号";
+            // 序号 + 昵称 + 国旗
+            NSString *flag = [self _flagEmojiForCountry:acc[@"act_country"] ?: @""];
+            NSString *nick = acc[@"nickname"] ?: @"未知账号";
+            cell.textLabel.text = [NSString stringWithFormat:@"%ld. %@ %@", (long)(ip.row + 1), flag, nick];
             cell.textLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
-            cell.detailTextLabel.text = [NSString stringWithFormat:@"号码:%@  粉丝:%@  关注:%@  国家:%@",
-                                         acc[@"aweme_number"]?:@"", acc[@"followers"]?:@"0",
-                                         acc[@"following_count"]?:@"0", acc[@"act_country"]?:@"—"];
+            cell.detailTextLabel.text = [NSString stringWithFormat:@"粉丝:%@  关注:%@  国家:%@  TK:%@",
+                                         acc[@"followers"]?:@"0", acc[@"following_count"]?:@"0",
+                                         acc[@"act_country"]?:@"—", acc[@"aweme_number"]?:@"—"];
             cell.detailTextLabel.numberOfLines = 1;
         }
     }
@@ -674,6 +677,35 @@ static NSArray *kCountries;
         }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [self _presentAlert:alert];
+}
+
+/// 国家名 → 国旗 emoji（常见国家映射，未命中返回空）
+- (NSString *)_flagEmojiForCountry:(NSString *)country {
+    if (country.length == 0) return @"";
+    NSDictionary *map = @{
+        @"美国": @"🇺🇸", @"日本": @"🇯🇵", @"英国": @"🇬🇧", @"韩国": @"🇰🇷", @"越南": @"🇻🇳",
+        @"泰国": @"🇹🇭", @"新加坡": @"🇸🇬", @"迪拜": @"🇦🇪", @"马来西亚": @"🇲🇾", @"巴西": @"🇧🇷",
+        @"印度尼西亚": @"🇮🇩", @"澳大利亚": @"🇦🇺", @"意大利": @"🇮🇹", @"墨西哥": @"🇲🇽",
+        @"丹麦": @"🇩🇰", @"台湾": @"🇹🇼", @"菲律宾": @"🇵🇭", @"德国": @"🇩🇪", @"法国": @"🇫🇷",
+        @"西班牙": @"🇪🇸", @"荷兰": @"🇳🇱", @"瑞士": @"🇨🇭", @"瑞典": @"🇸🇪", @"挪威": @"🇳🇴",
+        @"芬兰": @"🇫🇮", @"比利时": @"🇧🇪", @"奥地利": @"🇦🇹", @"爱尔兰": @"🇮🇪", @"葡萄牙": @"🇵🇹",
+        @"希腊": @"🇬🇷", @"土耳其": @"🇹🇷", @"沙特": @"🇸🇦", @"卡塔尔": @"🇶🇦", @"阿曼": @"🇴🇲",
+        @"科威特": @"🇰🇼", @"印度": @"🇮🇳", @"巴基斯坦": @"🇵🇰", @"孟加拉": @"🇧🇩",
+        @"斯里兰卡": @"🇱🇰", @"尼泊尔": @"🇳🇵", @"加拿大": @"🇨🇦", @"阿根廷": @"🇦🇷",
+        @"智利": @"🇨🇱", @"哥伦比亚": @"🇨🇴", @"秘鲁": @"🇵🇪", @"南非": @"🇿🇦",
+        @"埃及": @"🇪🇬", @"尼日利亚": @"🇳🇬", @"肯尼亚": @"🇰🇪", @"俄罗斯": @"🇷🇺",
+        @"乌克兰": @"🇺🇦", @"波兰": @"🇵🇱", @"捷克": @"🇨🇿", @"匈牙利": @"🇭🇺",
+        @"罗马尼亚": @"🇷🇴", @"保加利亚": @"🇧🇬", @"克罗地亚": @"🇭🇷",
+    };
+    NSString *flag = map[country];
+    if (flag) return flag;
+    // 兜底：英文国家名
+    NSDictionary *en = @{@"US": @"🇺🇸", @"JP": @"🇯🇵", @"GB": @"🇬🇧", @"KR": @"🇰🇷", @"VN": @"🇻🇳",
+                          @"TH": @"🇹🇭", @"SG": @"🇸🇬", @"AE": @"🇦🇪", @"MY": @"🇲🇾", @"BR": @"🇧🇷",
+                          @"ID": @"🇮🇩", @"AU": @"🇦🇺", @"IT": @"🇮🇹", @"MX": @"🇲🇽", @"DE": @"🇩🇪",
+                          @"FR": @"🇫🇷", @"ES": @"🇪🇸", @"NL": @"🇳🇱", @"CH": @"🇨🇭", @"SE": @"🇸🇪",
+                          @"NO": @"🇳🇴", @"FI": @"🇫🇮", @"IN": @"🇮🇳", @"CA": @"🇨🇦", @"RU": @"🇷🇺"};
+    return en[[country uppercaseString]] ?: @"";
 }
 
 /// 备份当前登录账号的登录态快照

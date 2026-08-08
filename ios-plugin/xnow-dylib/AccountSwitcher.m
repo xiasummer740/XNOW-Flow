@@ -146,16 +146,60 @@ static AccountSwitcher *gShared = nil;
         return 0;
     }
 
-    // 2. 获取或新建账号记录
+    // 2. 从原生 NSUserDefaults 提取账号资料（用户名/粉丝/关注/国家/头像）
+    NSDictionary *profile = [self _extractProfileFromDefaults];
+
+    // 3. 获取或新建账号记录（带完整资料）
     NSInteger activeId = [login[@"accountId"] integerValue];
     if (activeId <= 0) {
-        activeId = [[AccountPool sharedPool] addLocalAccount:@{@"nickname": login[@"nickname"] ?: @"账号"}];
+        activeId = [[AccountPool sharedPool] addLocalAccount:@{
+            @"nickname": profile[@"nickname"] ?: @"账号",
+            @"aweme_number": profile[@"unique_id"] ?: @"",
+            @"followers": profile[@"followers"] ?: @(0),
+            @"following_count": profile[@"following_count"] ?: @(0),
+            @"act_country": profile[@"country"] ?: @"",
+            @"avatar_url": profile[@"avatar_url"] ?: @"",
+        }];
     }
 
-    // 3. 保存快照（快照引擎会捕获 NSUserDefaults 全量 + Keychain + cookies）
+    // 4. 保存快照（快照引擎会捕获 NSUserDefaults 全量 + Keychain + cookies）
     BOOL ok = [[AccountSnapshotter sharedSnapshotter] saveSnapshotForAccount:activeId];
-    SW_LOG(@"备份账号 %ld 登录态%@", (long)activeId, ok ? @"成功" : @"失败");
+    SW_LOG(@"备份账号 %ld 登录态%@ 资料:%@", (long)activeId, ok ? @"成功" : @"失败", profile[@"nickname"] ?: @"-");
     return ok ? activeId : 0;
+}
+
+/// 从 NSUserDefaults 全量数据里提取当前账号资料（TikTok 缓存了用户信息）
+- (NSDictionary *)_extractProfileFromDefaults {
+    @try {
+        NSDictionary *dump = [[NSUserDefaults standardUserDefaults] dictionaryRepresentation];
+
+        // 1) 优先找包含昵称的字典/JSON（递归一层，避免太深）
+        for (NSString *key in dump) {
+            id val = dump[key];
+            NSDictionary *d = nil;
+            if ([val isKindOfClass:[NSDictionary class]]) d = val;
+            else if ([val isKindOfClass:[NSData class]]) {
+                id obj = [NSJSONSerialization JSONObjectWithData:val options:0 error:nil];
+                if ([obj isKindOfClass:[NSDictionary class]]) d = obj;
+            } else if ([val isKindOfClass:[NSString class]] && [val hasPrefix:@"{"]) {
+                id obj = [NSJSONSerialization JSONObjectWithData:[val dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+                if ([obj isKindOfClass:[NSDictionary class]]) d = obj;
+            }
+            if (!d || ![d[@"nickname"] isKindOfClass:[NSString class]]) continue;
+            if (!d[@"followerCount"] && !d[@"followers"] && !d[@"uid"]) continue; // 要像账号而非普通dict
+
+            NSDictionary *stats = d[@"stats"] ?: d[@"stat"] ?: @{};
+            return @{
+                @"nickname": d[@"nickname"] ?: @"",
+                @"unique_id": d[@"uniqueId"] ?: d[@"unique_id"] ?: @"",
+                @"followers": d[@"followerCount"] ?: d[@"followers"] ?: stats[@"followerCount"] ?: stats[@"followers"] ?: @(0),
+                @"following_count": d[@"followingCount"] ?: d[@"following_count"] ?: stats[@"followingCount"] ?: @(0),
+                @"country": d[@"region"] ?: d[@"country"] ?: @"",
+                @"avatar_url": d[@"avatarLarger"] ?: d[@"avatar"] ?: d[@"avatar_url"] ?: @"",
+            };
+        }
+    } @catch (id e) {}
+    return @{};
 }
 
 /// 新增账号：清空当前登录态（无痕），让用户登录全新账号
