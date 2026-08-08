@@ -1108,7 +1108,46 @@ static NSArray *kNurtureComments = @[
 
 /// 采集直播间用户：在当前直播页面滚动收集用户名（best-effort）
 /// 在直播间采集可见用户（上滑翻列表收集用户名，去重）— 采集直播间用户/点赞用户共用
+/// 检测当前是否在直播间（扫描直播房间/播放器类名 + LIVE角标）
+- (BOOL)_isInLiveRoom {
+    __block BOOL found = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        @try {
+            UIView *window = XN_ActiveWindow();
+            if (!window) return;
+            for (NSString *cls in @[@"LiveRoom", @"LivePlayer", @"TTKLive", @"AWELive", @"LiveStream"]) {
+                if ([self _findViewByClassContaining:cls inView:window depth:0]) {
+                    found = YES;
+                    return;
+                }
+            }
+            // 兜底：LIVE/直播中 角标
+            __block BOOL badge = NO;
+            [self _enumerateLabelsInView:window block:^(NSString *text, UIView *view) {
+                if (badge) return;
+                NSString *t = text.uppercaseString;
+                if ([t isEqualToString:@"LIVE"] || [t isEqualToString:@"直播中"] || [t isEqualToString:@"直播"]) {
+                    badge = YES;
+                }
+            }];
+            found = badge;
+        } @catch (id e) {}
+    });
+    return found;
+}
+
 - (NSDictionary *)_collectLiveRoomUsers:(int)count sourceType:(NSString *)sourceType {
+    // 采集直播间用户/点赞用户：必须先进入直播间
+    if (![self _isInLiveRoom]) {
+        NSLog(@"[XNOWER] 未在直播间，拒绝采集");
+        return @{
+            @"status": @"failed",
+            @"message": @"未在直播间（请先进入直播间再采集）",
+            @"source_type": sourceType ?: @"live_users",
+            @"users": @[],
+            @"count": @(0),
+        };
+    }
     NSMutableArray *users = [NSMutableArray array];
 
     // 直播间页面假设用户已进入；等页面稳定
@@ -2164,6 +2203,12 @@ static NSArray *kNurtureComments = @[
     NSTimeInterval startTime = [[NSDate date] timeIntervalSince1970];
     dispatch_async(_execQueue, ^{
         __block int cycles = 0, likes = 0, follows = 0;
+        // 先回首页（其它页面没有视频可养），等页面稳定
+        [[XNOWER sharedInstance] addLog:@"🏠 先返回首页…"];
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            [weakSelf _tapTab:@"home"];
+        });
+        [NSThread sleepForTimeInterval:1.5];
         while (weakSelf.nurtureRunning) {
             // 时长检查（到点自动停）
             NSTimeInterval elapsed = [[NSDate date] timeIntervalSince1970] - startTime;

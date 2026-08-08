@@ -9,6 +9,7 @@
 #import "AccountSwitcher.h"
 #import "AccountPool.h"
 #import "AccountSnapshotter.h"
+#import "AccountManager.h"
 #import "CommandEngine.h"
 #import "XNWindowHelper.h"
 #import "XNTouchSimulator.h"
@@ -146,15 +147,44 @@ static AccountSwitcher *gShared = nil;
         return 0;
     }
 
-    // 2. 从原生 NSUserDefaults 提取账号资料（用户名/粉丝/关注/国家/头像）
+    // 2. 提取账号资料：优先用 AccountManager（/user/ 捕获），兜底 NSUserDefaults 启发式
     NSDictionary *profile = [self _extractProfileFromDefaults];
+    NSDictionary *detected = [[AccountManager sharedManager] currentAccount];
+    if (detected.count > 0) {
+        profile = @{
+            @"nickname": detected[@"nickname"] ?: profile[@"nickname"] ?: @"",
+            @"unique_id": detected[@"unique_id"] ?: profile[@"unique_id"] ?: @"",
+            @"followers": detected[@"followers"] ?: profile[@"followers"] ?: @(0),
+            @"following_count": detected[@"following_count"] ?: profile[@"following_count"] ?: @(0),
+            @"country": detected[@"region"] ?: profile[@"country"] ?: @"",
+            @"avatar_url": detected[@"avatar_url"] ?: profile[@"avatar_url"] ?: @"",
+        };
+    }
 
-    // 3. 获取或新建账号记录（带完整资料）
+    // 3. 获取或新建账号记录（去重：同 aweme_number 已存在则更新，不新建）
     NSInteger activeId = [login[@"accountId"] integerValue];
+    NSString *awemeNum = profile[@"unique_id"] ?: @"";
+    if (activeId <= 0 && awemeNum.length > 0) {
+        NSDictionary *existing = [[AccountPool sharedPool] accountWithAwemeNumber:awemeNum];
+        if (existing) {
+            activeId = [existing[@"id"] integerValue];
+            [[AccountPool sharedPool] upsertAccount:@{
+                @"id": @(activeId),
+                @"nickname": profile[@"nickname"] ?: @"账号",
+                @"aweme_number": awemeNum,
+                @"followers": profile[@"followers"] ?: @(0),
+                @"following_count": profile[@"following_count"] ?: @(0),
+                @"act_country": profile[@"country"] ?: @"",
+                @"avatar_url": profile[@"avatar_url"] ?: @"",
+            }];
+            [[AccountPool sharedPool] markActive:activeId];
+            SW_LOG(@"去重更新已有账号 #%ld", (long)activeId);
+        }
+    }
     if (activeId <= 0) {
         activeId = [[AccountPool sharedPool] addLocalAccount:@{
             @"nickname": profile[@"nickname"] ?: @"账号",
-            @"aweme_number": profile[@"unique_id"] ?: @"",
+            @"aweme_number": awemeNum,
             @"followers": profile[@"followers"] ?: @(0),
             @"following_count": profile[@"following_count"] ?: @(0),
             @"act_country": profile[@"country"] ?: @"",
@@ -186,7 +216,7 @@ static AccountSwitcher *gShared = nil;
                 if ([obj isKindOfClass:[NSDictionary class]]) d = obj;
             }
             if (!d || ![d[@"nickname"] isKindOfClass:[NSString class]]) continue;
-            if (!d[@"followerCount"] && !d[@"followers"] && !d[@"uid"]) continue; // 要像账号而非普通dict
+            if (!d[@"followerCount"] && !d[@"followers"] && !d[@"uid"] && !d[@"id"] && !d[@"aweme_id"]) continue; // 要像账号而非普通dict
 
             NSDictionary *stats = d[@"stats"] ?: d[@"stat"] ?: @{};
             return @{
