@@ -218,6 +218,10 @@ def _start_nurture_scheduler():
 _start_nurture_scheduler()
 _start_offline_sweep()
 
+# 统一任务引擎：运行中任务逐单元下发（随机间隔+风控上限）
+from task_engine import start_task_engine as _start_task_engine, stop_task_engine as _stop_task_engine
+_start_task_engine()
+
 # 优化2: 定时任务调度器（每分钟检查 cron 并派发）
 from timed_scheduler import start_scheduler as _start_timed_scheduler, stop_scheduler as _stop_timed_scheduler
 _start_timed_scheduler()
@@ -229,6 +233,7 @@ def _shutdown_background_threads():
     _nurture_scheduler_stop.set()
     _offline_sweep_stop.set()
     _stop_timed_scheduler()
+    _stop_task_engine()
     if _nurture_scheduler_thread is not None:
         _nurture_scheduler_thread.join(timeout=3)
     if _offline_sweep_thread is not None:

@@ -273,6 +273,33 @@ def _migrate_public_users():
         print(f"[migration] public_users 表迁移失败（可忽略）: {e}")
 
 
+def _migrate_task_engine_columns():
+    """SQLite 迁移：tasks 表补齐统一任务引擎字段。幂等。"""
+    try:
+        with engine.connect() as conn:
+            tables = [r[0] for r in conn.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )).fetchall()]
+            if "tasks" in tables:
+                cols = [r[1] for r in conn.execute(text("PRAGMA table_info(tasks)")).fetchall()]
+                add_cols = {
+                    "config": "TEXT DEFAULT '{}'",
+                    "total": "INTEGER DEFAULT 0",
+                    "done": "INTEGER DEFAULT 0",
+                    "fail_count": "INTEGER DEFAULT 0",
+                    "last_log": "TEXT DEFAULT ''",
+                    "error": "TEXT DEFAULT ''",
+                    "started_at": "DATETIME",
+                    "next_dispatch_at": "DATETIME",
+                }
+                for name, ddl in add_cols.items():
+                    if name not in cols:
+                        conn.execute(text(f"ALTER TABLE tasks ADD COLUMN {name} {ddl}"))
+                conn.commit()
+    except Exception as e:
+        print(f"[migration] tasks 引擎字段迁移失败（可忽略）: {e}")
+
+
 def _migrate_quick_commands():
     """SQLite 迁移：确保 quick_commands 表存在。
 
@@ -307,6 +334,7 @@ _migrate_dm_tasks()
 _migrate_nurture_plans()
 _migrate_quick_commands()
 _migrate_public_users()
+_migrate_task_engine_columns()
 
 def get_db():
     db = SessionLocal()
