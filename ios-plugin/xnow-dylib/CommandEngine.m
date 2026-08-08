@@ -2212,12 +2212,9 @@ static NSArray *kNurtureComments = @[
     NSTimeInterval startTime = [[NSDate date] timeIntervalSince1970];
     dispatch_async(_execQueue, ^{
         __block int cycles = 0, likes = 0, follows = 0;
-        // 先回首页（其它页面没有视频可养），等页面稳定
-        [[XNOWER sharedInstance] addLog:@"🏠 先返回首页…"];
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            [weakSelf _tapTab:@"home"];
-        });
-        [NSThread sleepForTimeInterval:1.5];
+        [weakSelf _logStep:@"nurture_start"];
+        // 提示：请在首页（feed）使用养号；非 feed 页操作会自动跳过
+        [[XNOWER sharedInstance] addLog:@"💡 养号请在首页浏览视频（非首页自动跳过）"];
         while (weakSelf.nurtureRunning) {
             // 时长检查（到点自动停）
             NSTimeInterval elapsed = [[NSDate date] timeIntervalSince1970] - startTime;
