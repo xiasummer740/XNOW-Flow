@@ -12,9 +12,16 @@
   - 前端 PublicLibrary.tsx（后台「内容」→公共用户库）
   - VPS `.env` 已配置 DASHSCOPE_API_KEY
   - 验证报告：计划文档第十节
+- ✅ **第一批第2项：统一任务引擎基础模型**（已上线 VPS，commit c62d34a）
+  - Task 模型加引擎字段（config/total/done/fail_count/last_log/error/started_at/next_dispatch_at）
+  - task_engine.py 后台线程：running 任务按随机间隔逐单元下发，风控钳制（点赞≤300/关注≤200）
+  - 下发 payload `{type:command, action, params}`，写 TaskExecution 审计
+  - tasks 路由：创建(带config) + start(数据组target_group解析) + stop/pause/resume + `GET /tasks/status/running/`
+  - 验证：风控钳制/完成闭环/停止/数据组解析/进度+last_log 全过
 
 ### 进行中 / 待做（按四批顺序）
-- ⏳ 第一批第2项：统一任务引擎基础模型（+任务状态查询接口）
+- ⏳ 第一批第3项：切换国家后端（device.country + GeoIP + 前端引导）
+- ⏳ 第一批第4项：后端 /api/translate
 - ⏳ 第一批第3项：切换国家后端（device.country + GeoIP + 前端引导）
 - ⏳ 第一批第4项：后端 /api/translate
 - ⏳ 第二批：设备端命令（发视频选片/like_comment/open_live/回关/dm_fans）+ 浮窗补丁A
