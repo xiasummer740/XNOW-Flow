@@ -2241,7 +2241,9 @@ static NSArray *kNurtureComments = @[
 
             // 互动模式：20% 概率随机点赞或关注（避免太频繁）；纯浏览模式不互动
             if (!browseOnly && arc4random_uniform(100) < 20) {
+                [weakSelf _logStep:@"interact"];
                 [[XNOWER sharedInstance] addLog:@"🤖 互动中…"];
+                [NSThread sleepForTimeInterval:1.5];  // 上滑后等页面稳定再互动，避免崩溃
                 if (arc4random_uniform(100) < 50) {
                     dispatch_sync(dispatch_get_main_queue(), ^{
                         [weakSelf _performLike];
