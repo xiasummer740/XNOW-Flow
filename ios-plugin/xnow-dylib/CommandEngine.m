@@ -665,10 +665,49 @@ static NSArray *kNurtureComments = @[
 
 #pragma mark - 点赞
 
+/// 递归按类名包含查找视图（深度保护）— 定位 TikTok 私有容器（如点赞区 PlayInteractionLikeView）
+- (UIView *)_findViewByClassContaining:(NSString *)className inView:(UIView *)view depth:(int)depth {
+    if (depth > 28 || !view) return nil;
+    @try {
+        if ([NSStringFromClass(view.class) containsString:className]) return view;
+        for (UIView *sub in view.subviews) {
+            UIView *r = [self _findViewByClassContaining:className inView:sub depth:depth + 1];
+            if (r) return r;
+        }
+    } @catch (NSException *e) {}
+    return nil;
+}
+
+/// 在容器内找第一个可交互控件（点赞按钮是 UIControl）
+- (UIView *)_findFirstControlInView:(UIView *)view depth:(int)depth {
+    if (depth > 28 || !view) return nil;
+    @try {
+        if ([view isKindOfClass:[UIControl class]]) return view;
+        for (UIView *sub in view.subviews) {
+            UIView *r = [self _findFirstControlInView:sub depth:depth + 1];
+            if (r) return r;
+        }
+    } @catch (NSException *e) {}
+    return nil;
+}
+
 - (void)_performLike {
     [self _logStep:@"like"];
     dispatch_sync(dispatch_get_main_queue(), ^{
         CGSize screen = [UIScreen mainScreen].bounds.size;
+
+        // 0. 优先按容器类名定位真正的点赞按钮（PlayInteractionLikeView 内可交互控件）
+        //    feedLikeButton 标识偶尔会误匹配到关注提示条，容器类名更可靠
+        UIView *likeContainer = [self _findViewByClassContaining:@"PlayInteractionLikeView"
+                                                         inView:XN_ActiveWindow() depth:0];
+        if (likeContainer) {
+            UIView *target = [self _findFirstControlInView:likeContainer depth:0] ?: likeContainer;
+            CGPoint center = [target.superview convertPoint:target.center toView:nil];
+            if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
+                [self _safeTapAtPoint:center];
+                return;
+            }
+        }
 
         // 1. 通过 accessibility identifier 找点赞按钮（只取屏幕内可见的，避免点到屏幕外视频的按钮）
         UIView *likeView = [self _findViewWithAccessibilityIdentifier:kAccLike
