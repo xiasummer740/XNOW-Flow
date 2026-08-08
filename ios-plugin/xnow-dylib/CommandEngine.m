@@ -2106,16 +2106,13 @@ static NSArray *kNurtureComments = @[
             likes++;
         }
 
-        // 模式2互动：在模式1基础上，再随机选择一条评论发布
+        // 模式2互动：在模式1基础上，随机发评论（v1.4.45: 评论本身单独执行OK，循环里崩因是评论后下滑关面板，已去掉下滑）
         if (mode == 2 && arc4random_uniform(100) < 40) {
             dispatch_sync(dispatch_get_main_queue(), ^{
                 [self _performComment:[self _randomComment]];
             });
-            [NSThread sleepForTimeInterval:1.2];  // 等评论发出
             comments++;
-            dispatch_sync(dispatch_get_main_queue(), ^{
-                [self _performSwipeDown];  // 下滑关掉评论面板回视频
-            });
+            // 不再下滑关评论面板（评论面板为复杂弹层，合成滑动易崩；由下次上滑自然离开）
         }
     }
 
@@ -2188,17 +2185,14 @@ static NSArray *kNurtureComments = @[
                 [[XNOWER sharedInstance] addLog:@"❤️ 随机点赞"];
             }
 
-            // 模式2互动：在模式1基础上，再随机选择一条评论发布
+            // 模式2互动：在模式1基础上，随机发评论（v1.4.45: 评论单独执行OK，循环里崩因是评论后下滑关面板，已去掉下滑）
             if (mode == 2 && arc4random_uniform(100) < 40) {
                 dispatch_sync(dispatch_get_main_queue(), ^{
                     [weakSelf _performComment:[weakSelf _randomComment]];
                 });
-                [NSThread sleepForTimeInterval:1.2];  // 等评论发出
                 comments++;
                 [[XNOWER sharedInstance] addLog:@"💬 随机评论"];
-                dispatch_sync(dispatch_get_main_queue(), ^{
-                    [weakSelf _performSwipeDown];  // 下滑关评论面板回视频
-                });
+                // 不再下滑关评论面板（评论面板为复杂弹层，合成滑动易崩；由下次上滑自然离开）
             }
         }
         [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏹ 养号已停止：共%d轮，%d赞，%d评",
