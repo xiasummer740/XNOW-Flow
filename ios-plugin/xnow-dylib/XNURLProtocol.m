@@ -261,10 +261,9 @@ static volatile CFAbsoluteTime sLastPing = 0;
 
     NSString *url = request.URL.absoluteString;
 
-    // 轻量拦截 — 拦截 feed/recommend（piggyback + 视频URL捕获）和 /user/（当前用户资料捕获，供账号检测）
-    // TikTok API 实际走 tiktokv.com 域名（含 tiktok.com），都匹配
-    if ([url containsString:@"tiktokv.com"] || [url containsString:@"tiktok.com"] ||
-        [url containsString:@"byteoversea.com"]) {
+    // 轻量拦截 — 拦截 feed/recommend（piggyback）和 /user/（当前用户资料捕获，供账号检测）
+    // 注意：只匹配 tiktok.com / byteoversea.com（v1.4.39 曾加 tiktokv.com 抓视频URL，但导致 app 不稳定闪退，已撤）
+    if ([url containsString:@"tiktok.com"] || [url containsString:@"byteoversea.com"]) {
         if ([url containsString:@"/feed"] || [url containsString:@"/recommend"] ||
             [url containsString:@"/user/"]) {
             return YES;
