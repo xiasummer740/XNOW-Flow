@@ -213,19 +213,30 @@ __attribute__((destructor)) static void XNOWERUnload() {
 /// 启动时检查是否有上次崩溃记录，上报后端后清除
 - (void)reportPendingCrash {
     @try {
+        NSMutableArray *parts = [NSMutableArray array];
+
+        // 1) 崩溃前最后执行的指令（对 SIGKILL/信号级崩溃也有效，只要指令没跑完标记就留着）
+        NSString *lastAction = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_LastAction"];
+        if (lastAction.length > 0) {
+            [parts addObject:[NSString stringWithFormat:@"[last_action] %@", lastAction]];
+        }
+
+        // 2) 崩溃文件（异常详情 / 信号标记）
         NSFileManager *fm = [NSFileManager defaultManager];
         NSString *dir = XN_CrashDir();
         NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
-        if (!files) return;
-        for (NSString *f in files) {
+        for (NSString *f in files ?: @[]) {
             if (![f hasPrefix:@"xn_crash_"]) continue;
             NSString *path = [dir stringByAppendingPathComponent:f];
             NSString *content = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] ?: @"unknown";
-            NSString *crashDesc = [NSString stringWithFormat:@"[%@] %@", f, content];
-            [XNURLProtocol sendMessage:@{@"type": @"crash_report", @"data": @{@"crash": crashDesc}} deviceId:self.deviceId];
-            NSLog(@"[XNOWER][CRASH] 上报: %@", crashDesc);
+            [parts addObject:[NSString stringWithFormat:@"[%@] %@", f, content]];
             [fm removeItemAtPath:path error:nil];
         }
+
+        if (parts.count == 0) return;
+        NSString *crashDesc = [parts componentsJoinedByString:@"\n"];
+        [XNURLProtocol sendMessage:@{@"type": @"crash_report", @"data": @{@"crash": crashDesc}} deviceId:self.deviceId];
+        NSLog(@"[XNOWER][CRASH] 上报: %@", crashDesc);
     } @catch (id e) {}
 }
 

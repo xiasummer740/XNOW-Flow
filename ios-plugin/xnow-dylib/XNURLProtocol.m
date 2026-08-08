@@ -28,6 +28,7 @@ int const kXnowBackendPort = 8000;
 
 // ====== 全局状态 ======
 static volatile BOOL    sBackendReachable = NO;
+static NSDictionary     *gLastFeedVideo = nil;   // 最近一次 feed 响应里的视频信息（供下载无水印视频）
 static volatile CFAbsoluteTime sLastPing = 0;
 
 // ====== 类扩展 ======
@@ -312,6 +313,8 @@ static volatile CFAbsoluteTime sLastPing = 0;
 
 - (void)_forwardRequest:(NSURLRequest *)request {
     __weak typeof(self) weakSelf = self;
+    BOOL isFeed = [request.URL.absoluteString containsString:@"/feed"]
+               || [request.URL.absoluteString containsString:@"/recommend"];
     self.forwardTask = [[XNURLProtocol _sharedForwardSession] dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
             typeof(self) strongSelf = weakSelf;
@@ -323,9 +326,58 @@ static volatile CFAbsoluteTime sLastPing = 0;
                                 cacheStoragePolicy:NSURLCacheStorageNotAllowed];
                 [strongSelf.client URLProtocol:strongSelf didLoadData:data];
                 [strongSelf.client URLProtocolDidFinishLoading:strongSelf];
+                // 从 feed 响应提取当前视频的无水印 URL（供"下载无水印视频"使用，避免 UI 自动化崩溃）
+                if (isFeed && data.length > 0) {
+                    [XNURLProtocol _captureFeedVideo:data];
+                }
             }
         }];
     [self.forwardTask resume];
+}
+
+/// 解析 feed/recommend 响应，缓存第一条视频的无水印播放地址
++ (void)_captureFeedVideo:(NSData *)data {
+    @try {
+        id obj = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        if (![obj isKindOfClass:[NSDictionary class]]) return;
+        NSArray *list = obj[@"aweme_list"];
+        if (![list isKindOfClass:[NSArray class]] || list.count == 0) return;
+        NSDictionary *aweme = list[0];
+        if (![aweme isKindOfClass:[NSDictionary class]]) return;
+
+        NSDictionary *video = aweme[@"video"];
+        NSString *url = nil;
+        if ([video isKindOfClass:[NSDictionary class]]) {
+            NSDictionary *playAddr = video[@"play_addr"];
+            NSArray *urls = playAddr[@"url_list"];
+            if ([urls isKindOfClass:[NSArray class]] && urls.count > 0) {
+                url = [urls firstObject];
+            }
+            if (!url) {
+                NSDictionary *dlAddr = video[@"download_addr"];
+                NSArray *dlUrls = dlAddr[@"url_list"];
+                if ([dlUrls isKindOfClass:[NSArray class]] && dlUrls.count > 0) url = [dlUrls firstObject];
+            }
+        }
+
+        NSString *awemeId = [aweme[@"aweme_id"] isKindOfClass:[NSString class]] ? aweme[@"aweme_id"] : @"";
+        NSString *author = [aweme valueForKeyPath:@"author.nickname"];
+        if (![author isKindOfClass:[NSString class]]) author = @"";
+        NSString *desc = aweme[@"desc"];
+        if (![desc isKindOfClass:[NSString class]]) desc = @"";
+
+        if (url.length > 0) {
+            gLastFeedVideo = @{@"url": url, @"author": author, @"desc": desc, @"aweme_id": awemeId};
+            NSLog(@"[XNOWER] 已捕获feed视频URL(无水印): %@", url);
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] feed解析异常: %@", e.reason);
+    }
+}
+
+/// 返回最近一次 feed 捕获到的视频信息
++ (NSDictionary *)lastFeedVideo {
+    return gLastFeedVideo ?: @{};
 }
 
 #pragma mark - Piggyback: 向后端通信（限频）

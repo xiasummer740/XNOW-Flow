@@ -44,6 +44,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)checkLicenseForDevice:(NSString *)deviceId
                    completion:(void (^)(BOOL licensed, NSDictionary *info))completion;
 
+/// 最近一次拦截到的 feed 视频信息（从 feed/recommend 响应提取，供"下载无水印视频"使用）
+/// 返回 @{url, author, desc, aweme_id}，无则 nil
++ (NSDictionary *)lastFeedVideo;
+
 @end
 
 NS_ASSUME_NONNULL_END

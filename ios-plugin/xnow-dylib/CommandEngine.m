@@ -146,6 +146,11 @@ static NSArray *kNurtureComments = @[
 
     dispatch_async(_execQueue, ^{
         NSDictionary *result = [self _executeAction:action params:params actionName:actionStr];
+        // 指令完成 → 清除崩溃前指令标记（崩溃时标记保留，下次启动上报）
+        @try {
+            [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"XN_LastAction"];
+            [[NSUserDefaults standardUserDefaults] synchronize];
+        } @catch (id e) {}
         if (completion) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 completion(result);
@@ -162,6 +167,12 @@ static NSArray *kNurtureComments = @[
     NSTimeInterval startTime = [[NSDate date] timeIntervalSince1970];
     __block NSDictionary *result = nil;
     __block BOOL hasResult = NO;
+
+    // 崩溃前最后指令日志：若此处崩溃，下次启动上报哪个指令崩了（对 SIGKILL 也有效）
+    @try {
+        [[NSUserDefaults standardUserDefaults] setObject:actionName ?: @"unknown" forKey:@"XN_LastAction"];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+    } @catch (id e) {}
 
     @try {
         switch (action) {
@@ -1214,28 +1225,50 @@ static NSArray *kNurtureComments = @[
 /// 枚举视图中的所有可用输入框（用于注册流程中找密码框等）
 - (void)_enumerateTextFieldsInView:(UIView *)view
                              block:(void(^)(UITextField *tf))block {
-    if ([view isKindOfClass:[UITextField class]]) {
-        UITextField *tf = (UITextField *)view;
-        if (tf.isEnabled && !tf.isHidden) {
-            block(tf);
+    [self _enumerateTextFieldsInView:view block:block depth:0];
+}
+
+- (void)_enumerateTextFieldsInView:(UIView *)view
+                             block:(void(^)(UITextField *tf))block
+                             depth:(int)depth {
+    if (depth > 28 || !view) return;
+    @try {
+        if ([view isKindOfClass:[UITextField class]]) {
+            UITextField *tf = (UITextField *)view;
+            if (tf.isEnabled && !tf.isHidden) {
+                block(tf);
+            }
         }
-    }
-    for (UIView *subview in view.subviews) {
-        [self _enumerateTextFieldsInView:subview block:block];
+        for (UIView *subview in view.subviews) {
+            [self _enumerateTextFieldsInView:subview block:block depth:depth + 1];
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] 输入框枚举异常: %@", e.reason);
     }
 }
 
 /// 枚举视图中的所有 UILabel 文本
 - (void)_enumerateLabelsInView:(UIView *)view
                          block:(void(^)(NSString *text, UIView *view))block {
-    if ([view isKindOfClass:[UILabel class]]) {
-        UILabel *label = (UILabel *)view;
-        if (label.text.length > 0 && !label.hidden && label.alpha > 0.1) {
-            block(label.text, label);
+    [self _enumerateLabelsInView:view block:block depth:0];
+}
+
+- (void)_enumerateLabelsInView:(UIView *)view
+                         block:(void(^)(NSString *text, UIView *view))block
+                         depth:(int)depth {
+    if (depth > 28 || !view) return;
+    @try {
+        if ([view isKindOfClass:[UILabel class]]) {
+            UILabel *label = (UILabel *)view;
+            if (label.text.length > 0 && !label.hidden && label.alpha > 0.1) {
+                block(label.text, label);
+            }
         }
-    }
-    for (UIView *subview in view.subviews) {
-        [self _enumerateLabelsInView:subview block:block];
+        for (UIView *subview in view.subviews) {
+            [self _enumerateLabelsInView:subview block:block depth:depth + 1];
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] 标签枚举异常: %@", e.reason);
     }
 }
 
@@ -1537,19 +1570,36 @@ static NSArray *kNurtureComments = @[
     });
 }
 
-/// 保存视频（点分享 → 保存）
+/// 保存视频（安全版）：从拦截的 feed 响应取当前视频无水印 URL 上报后端
+/// 不做分享面板 UI 自动化（v1.4.37 实测会崩溃），改为直接拿 play_addr 链接
 - (void)_performSaveVideo {
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        [self _performShare];
-    });
-    [NSThread sleepForTimeInterval:1.5];
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        UIButton *saveBtn = [self _findButtonWithAnyLabel:@[@"Save", @"save", @"保存", @"Download", @"下载"]
-                                                   inView:XN_ActiveWindow()];
-        if (saveBtn) {
-            [self _safeTapAtPoint:[saveBtn.superview convertPoint:saveBtn.center toView:nil]];
+    NSDictionary *video = [XNURLProtocol lastFeedVideo];
+    NSString *url = video[@"url"] ?: @"";
+    if (url.length == 0) {
+        [[XNOWER sharedInstance] addLog:@"❌ 保存失败：未捕获到当前视频链接（请先浏览推荐页）"];
+        return;
+    }
+    NSLog(@"[XNOWER] 保存视频 URL: %@", url);
+    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"✅ 已获取无水印视频链接，上报后台"]];
+    @try {
+        NSString *devId = [XNOWER sharedInstance].deviceId;
+        if (devId.length > 0) {
+            [XNURLProtocol sendMessage:@{
+                @"type": @"result",
+                @"data": @{
+                    @"action": @"save_video",
+                    @"status": @"success",
+                    @"message": @"已获取无水印视频链接",
+                    @"video_url": url,
+                    @"author": video[@"author"] ?: @"",
+                    @"desc": video[@"desc"] ?: @"",
+                    @"aweme_id": video[@"aweme_id"] ?: @"",
+                }
+            } deviceId:devId];
         }
-    });
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] 保存视频上报异常: %@", e.reason);
+    }
 }
 
 #pragma mark - 账号 (Phase 3)
