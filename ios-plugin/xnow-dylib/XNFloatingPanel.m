@@ -770,7 +770,7 @@ static NSArray *kCountries;
                 durStr = [NSString stringWithFormat:@"%d分钟", minutes];
             }
             [self addLog:[NSString stringWithFormat:@"⏱ 养号时长已设置：%@", durStr]];
-            [self _menuTable reloadData];
+            [_menuTable reloadData];
         }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [self _presentAlert:alert];
