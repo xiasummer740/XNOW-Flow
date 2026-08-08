@@ -217,7 +217,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     });
 }
 
-/// 启动时检查是否有上次崩溃记录，上报后端后清除
+/// 启动诊断 + 崩溃上报（每次启动必发，验证通道 + 带出崩溃信息）
 - (void)reportPendingCrash {
     @try {
         NSMutableArray *parts = [NSMutableArray array];
@@ -240,25 +240,30 @@ __attribute__((destructor)) static void XNOWERUnload() {
             }
         }
 
-        if (parts.count == 0) return;
-        NSString *crashDesc = [parts componentsJoinedByString:@"\n"];
-        NSLog(@"[XNOWER][CRASH] 上报: %@", crashDesc);
-        // 用完成回调确认上报成功后才清除崩溃文件（避免上报失败丢失证据）
-        [XNURLProtocol sendMessage:@{@"type": @"crash_report", @"data": @{@"crash": crashDesc}}
-                          deviceId:self.deviceId
-                        completion:^(BOOL ok, NSError *error) {
-            if (!ok) return;
-            @try {
-                for (NSString *dir in @[XN_CrashDir(), NSTemporaryDirectory()]) {
-                    NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
-                    for (NSString *f in files ?: @[]) {
-                        if ([f hasPrefix:@"xn_crash_"]) {
-                            [fm removeItemAtPath:[dir stringByAppendingPathComponent:f] error:nil];
-                        }
+        // 3) 设备状态（是否已激活、设备ID）— 用于确认诊断链路
+        BOOL activated = [[NSUserDefaults standardUserDefaults] boolForKey:@"XN_Activated"];
+        NSString *info = parts.count ? [parts componentsJoinedByString:@"\n"] : @"ok";
+        NSLog(@"[XNOWER] 启动诊断: activated=%d last_action=%@ crash=%@", activated, lastAction ?: @"-", info);
+        [XNURLProtocol sendMessage:@{
+            @"type": @"crash_report",
+            @"data": @{
+                @"crash": info,
+                @"last_action": lastAction ?: @"",
+                @"activated": @(activated),
+            }
+        } deviceId:self.deviceId];
+
+        // 上报后清除崩溃文件（last_action 留到下次指令完成才清，崩溃信息已随本次上报带出）
+        @try {
+            for (NSString *dir in @[XN_CrashDir(), NSTemporaryDirectory()]) {
+                NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
+                for (NSString *f in files ?: @[]) {
+                    if ([f hasPrefix:@"xn_crash_"]) {
+                        [fm removeItemAtPath:[dir stringByAppendingPathComponent:f] error:nil];
                     }
                 }
-            } @catch (id e) {}
-        }];
+            }
+        } @catch (id e) {}
     } @catch (id e) {}
 }
 

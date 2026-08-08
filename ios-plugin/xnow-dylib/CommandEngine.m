@@ -635,13 +635,25 @@ static NSArray *kNurtureComments = @[
     }
 }
 
+/// 操作级遥测：上报后端当前正在执行的操作（崩溃时后端能看到最后一步，精准定位）
+- (void)_logStep:(NSString *)step {
+    @try {
+        NSString *devId = [XNOWER sharedInstance].deviceId;
+        if (devId.length > 0) {
+            [XNURLProtocol sendMessage:@{@"type": @"step", @"data": @{@"step": step}} deviceId:devId];
+        }
+    } @catch (id e) {}
+}
+
 /// 上滑（下一个视频）— 优先 feed 翻页，失败再注入真实手势
 - (void)_performSwipeUp {
+    [self _logStep:@"swipe_up"];
     [self _safeScrollBy:-[UIScreen mainScreen].bounds.size.height];
 }
 
 /// 下滑（上一个视频）— 优先 feed 翻页，失败再注入真实手势
 - (void)_performSwipeDown {
+    [self _logStep:@"swipe_down"];
     [self _safeScrollBy:[UIScreen mainScreen].bounds.size.height];
 }
 
@@ -654,6 +666,7 @@ static NSArray *kNurtureComments = @[
 #pragma mark - 点赞
 
 - (void)_performLike {
+    [self _logStep:@"like"];
     dispatch_sync(dispatch_get_main_queue(), ^{
         CGSize screen = [UIScreen mainScreen].bounds.size;
 
@@ -695,6 +708,7 @@ static NSArray *kNurtureComments = @[
 #pragma mark - 关注
 
 - (void)_performFollow {
+    [self _logStep:@"follow"];
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIButton *btn = [self _findButtonWithAnyLabel:@[@"follow", @"Follow", @"+"]
                                                inView:XN_ActiveWindow()];
@@ -719,6 +733,7 @@ static NSArray *kNurtureComments = @[
 #pragma mark - 评论
 
 - (void)_performComment:(NSString *)text {
+    [self _logStep:@"comment"];
     // Step 1: 打开评论面板
     dispatch_sync(dispatch_get_main_queue(), ^{
         // 找评论按钮
@@ -2104,6 +2119,7 @@ static NSArray *kNurtureComments = @[
         __block int cycles = 0, likes = 0, comments = 0;
         while (weakSelf.nurtureRunning) {
             cycles++;
+            [weakSelf _logStep:[NSString stringWithFormat:@"nurture_cycle:%d mode:%d", cycles, mode]];
             // 随机间隔 10-20 秒（模拟真实观看停留，日志显示本次分配时长）
             int delay = 10 + (int)arc4random_uniform(11);
             if (delay < 5) delay = 5;

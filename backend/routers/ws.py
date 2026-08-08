@@ -290,7 +290,12 @@ def _handle_device_message(device_id: str, msg: dict):
 
     elif msg_type == "crash_report":
         crash = msg.get("data", {}).get("crash", "")
-        logger.error(f"🚨 Device {device_id} CRASH: {crash[:2000]}")
+        last_action = msg.get("data", {}).get("last_action", "")
+        logger.error(f"🚨 Device {device_id} CRASH: {crash[:2000]} (last_action={last_action})")
+
+    elif msg_type == "step":
+        step = msg.get("data", {}).get("step", "")
+        logger.info(f"▶️ Device {device_id} STEP: {step}")
 
     elif msg_type == "ping":
         pass  # HTTP 轮询的 ping 不需要回复
