@@ -2587,17 +2587,23 @@ static NSArray *kNurtureComments = @[
     return kNurtureComments[idx];
 }
 
-/// 真实验证当前是否在推荐 feed（首页）— 找到大滚动视图且类名非 Profile（排除个人页作品列表）
+/// 真实验证当前是否在推荐 feed（首页）
+/// 严格检测：feed 特有元素(feedLikeButton 右侧操作栏) 或 类名含 Feed/Recommend
+/// （修复：旧实现把收件箱的 TTKWidgetCollectionView 误判成 feed，导致"回到首页成功"但实际没回）
 - (BOOL)_isOnFeed {
     __block BOOL onFeed = NO;
     dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        if (!window) return;
+        // 方法1: feed 特有的右侧操作栏点赞按钮(feedLikeButton)，只在首页推荐流存在
+        UIView *likeBtn = [self _findViewWithAccessibilityIdentifier:kAccLike inView:window];
+        if (likeBtn) { onFeed = YES; return; }
+        // 方法2: 大滚动视图类名含 Feed/Recommend（排除收件箱 Widget/Inbox、个人页 Profile）
         __block UIScrollView *sv = nil;
-        [self _findLargeFeedScrollViewInView:XN_ActiveWindow() result:&sv];
+        [self _findLargeFeedScrollViewInView:window result:&sv];
         if (sv) {
             NSString *cls = NSStringFromClass(sv.class);
-            // 个人页作品列表不是 feed
-            if ([cls containsString:@"Profile"] || [cls containsString:@"UserProfile"]) return;
-            onFeed = YES;  // 有非个人页的大滚动视图 = 在 feed
+            if ([cls containsString:@"Feed"] || [cls containsString:@"Recommend"]) onFeed = YES;
         }
     });
     return onFeed;
