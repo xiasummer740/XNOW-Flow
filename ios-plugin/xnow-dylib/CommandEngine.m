@@ -790,20 +790,22 @@ static NSArray *kNurtureComments = @[
     dispatch_sync(dispatch_get_main_queue(), ^{
         CGSize screen = [UIScreen mainScreen].bounds.size;
 
-        // 0. 优先按容器类名定位真正的点赞按钮（PlayInteractionLikeView 内可交互控件）
+        // 0. 优先 feedLikeButton 标识 + sendActions（互动养号验证过成功，sendActions 不依赖可见性）
+        @try {
+            UIView *likeView = [self _findViewWithAccessibilityIdentifier:kAccLike
+                                                                   inView:XN_ActiveWindow()];
+            if (likeView && [likeView isKindOfClass:[UIControl class]]) {
+                [(UIControl *)likeView sendActionsForControlEvents:UIControlEventTouchUpInside];
+                return;
+            }
+        } @catch (NSException *e) {}
+
+        // 1. 按容器类名定位真正的点赞按钮（PlayInteractionLikeView 内可交互控件）
         UIView *likeContainer = [self _findViewByClassContaining:@"PlayInteractionLikeView"
                                                          inView:XN_ActiveWindow() depth:0];
         if (likeContainer) {
             UIView *target = [self _findFirstControlInView:likeContainer depth:0] ?: likeContainer;
             [self _safeTapView:target];  // 手势注入优先，兜底合成触摸
-            return;
-        }
-
-        // 1. feedLikeButton 标识（只取屏幕内可见的）
-        UIView *likeView = [self _findViewWithAccessibilityIdentifier:kAccLike
-                                                               inView:XN_ActiveWindow()];
-        if (likeView) {
-            [self _safeTapView:likeView];
             return;
         }
 
