@@ -1829,15 +1829,16 @@ static NSArray *kNurtureComments = @[
 }
 
 /// 点击底部 Tab（home/discover/inbox/profile）
-/// 统一点击控件：优先手势注入(_setState:Recognized)，兜底合成触摸+sendActions
-/// 解决：TikTok 按钮多用手势(非UIControl)，合成触摸对 iOS17 手势无效；坐标兜底还可能点错控件崩
+/// 统一点击控件：合成触摸（tapAtPoint 内含 UIControl sendActions + 手势 target-action + 合成触摸）
+/// ⚠️ 不用 _setState:Recognized 手势注入——点赞按钮(AWEFeedVideoButton)是 UIControl，
+///    sendActions 本来就有效；对它做 _setState 注入会触发 TikTok 内部崩溃(信号崩,@try拦不住)。
+///    _setState 注入仅限切 tab(TTKTabBarButton 纯手势)使用。
 - (void)_safeTapView:(UIView *)view {
     if (!view) return;
-    if ([self _triggerTapGestureOnView:view]) return;  // 手势注入成功
     CGPoint center = [view.superview convertPoint:view.center toView:nil];
     CGSize screen = [UIScreen mainScreen].bounds.size;
     if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
-        [self _safeTapAtPoint:center];  // 兜底：合成触摸（含 UIControl sendActions）
+        [self _safeTapAtPoint:center];
     }
 }
 
