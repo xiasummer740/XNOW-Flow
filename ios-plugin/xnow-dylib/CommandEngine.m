@@ -138,6 +138,8 @@ static NSArray *kNurtureComments = @[
             // 环境伪装 / 切换国家
             @"set_country":       @(CommandActionSetCountry),
             @"get_country":       @(CommandActionGetCountry),
+            // 评论点赞
+            @"like_comment":      @(CommandActionLikeComments),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -240,6 +242,13 @@ static NSArray *kNurtureComments = @[
                     @"env": env ?: @{},
                 };
                 hasResult = YES;
+                break;
+            }
+
+            case CommandActionLikeComments: {
+                int count = [params[@"count"] intValue];
+                if (count <= 0) count = 10;
+                [self _performLikeComments:count];
                 break;
             }
 
@@ -875,6 +884,155 @@ static NSArray *kNurtureComments = @[
             if (btn) {
                 [self _safeTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
             }
+        }
+    });
+}
+
+#pragma mark - 评论点赞（like_comment，PPT 模块4 曝光玩法核心）
+
+/// 打开评论面板（复用评论入口逻辑）
+- (void)_openCommentPanel {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIView *commentView = [self _findViewWithAccessibilityIdentifier:kAccComment
+                                                                  inView:XN_ActiveWindow()];
+        if (commentView) {
+            [self _safeTapAtPoint:[commentView.superview convertPoint:commentView.center toView:nil]];
+        } else {
+            __block UIScrollView *feedScroll = nil;
+            [self _findLargeFeedScrollViewInView:XN_ActiveWindow() result:&feedScroll];
+            if (feedScroll) {
+                CGSize screen = [UIScreen mainScreen].bounds.size;
+                [self _safeTapAtPoint:CGPointMake(screen.width * 0.91, screen.height * 0.55)];
+            }
+        }
+    });
+}
+
+/// 收集视图内所有 UIButton
+- (void)_collectButtonsInView:(UIView *)view result:(NSMutableArray<UIButton *> *)result {
+    if ([view isKindOfClass:[UIButton class]]) {
+        [result addObject:(UIButton *)view];
+        return;
+    }
+    for (UIView *sub in view.subviews) {
+        [self _collectButtonsInView:sub result:result];
+    }
+}
+
+/// 找第一个可见评论 cell（评论面板里的 UITableViewCell，取屏幕中部可见的）
+- (void)_findVisibleCommentCellInView:(UIView *)view result:(__strong UITableViewCell **)result {
+    if (*result) return;
+    if ([view isKindOfClass:[UITableViewCell class]]) {
+        UITableViewCell *cell = (UITableViewCell *)view;
+        CGRect f = [cell.superview convertRect:cell.frame toView:XN_ActiveWindow()];
+        CGSize s = [UIScreen mainScreen].bounds.size;
+        // 评论 cell 一般在中下部区域（面板内），且与当前屏幕可见
+        if (f.origin.y > s.height * 0.2 && f.origin.y < s.height * 0.9 && cell.alpha > 0.1) {
+            *result = cell;
+        }
+        return;
+    }
+    for (UIView *sub in view.subviews) {
+        [self _findVisibleCommentCellInView:sub result:result];
+        if (*result) return;
+    }
+}
+
+/// 点赞当前可见的一条评论；返回是否成功命中
+- (BOOL)_likeOneVisibleComment {
+    UIWindow *window = XN_ActiveWindow();
+    if (!window) return NO;
+    // 方法1（安全）：找第一个可见评论 cell，点其最右侧小按钮（评论红心在右侧，作用域限定 cell，不误点 feed）
+    __strong UITableViewCell *cell = nil;
+    [self _findVisibleCommentCellInView:window result:&cell];
+    if (cell) {
+        NSMutableArray<UIButton *> *btns = [NSMutableArray array];
+        [self _collectButtonsInView:cell result:btns];
+        UIButton *rightmost = nil;
+        CGFloat screenW = [UIScreen mainScreen].bounds.size.width;
+        for (UIButton *b in btns) {
+            CGRect f = [b.superview convertRect:b.frame toView:window];
+            if (f.origin.x > screenW * 0.7 && f.size.width < 70) {
+                if (!rightmost || f.origin.x > [rightmost.superview convertRect:rightmost.frame toView:window].origin.x) {
+                    rightmost = b;
+                }
+            }
+        }
+        if (rightmost) {
+            [self _safeTapAtPoint:[rightmost.superview convertPoint:rightmost.center toView:nil]];
+            return YES;
+        }
+    }
+    // 方法2（兜底）：面板内找 like/heart/赞 标签的小按钮
+    UIButton *likeBtn = [self _findButtonWithAnyLabel:@[@"like", @"Like", @"heart", @"Heart", @"赞"]
+                                               inView:window];
+    if (likeBtn && likeBtn.bounds.size.width < 70) {
+        [self _safeTapAtPoint:[likeBtn.superview convertPoint:likeBtn.center toView:nil]];
+        return YES;
+    }
+    return NO;
+}
+
+/// 下滑评论区（找最顶层 UITableView 下滚 320pt）
+- (void)_scrollCommentListDown {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        if (!window) return;
+        __block UITableView *commentTable = nil;
+        // 逆序遍历（顶层最后），找第一个 UITableView（评论列表覆盖在 feed 之上）
+        [self _findTopTableViewInView:window result:&commentTable depth:0];
+        if (commentTable) {
+            CGPoint off = commentTable.contentOffset;
+            commentTable.contentOffset = CGPointMake(off.x, off.y + 320);
+        }
+    });
+}
+
+/// 逆序 DFS 找最顶层 UITableView（评论面板的列表）
+- (void)_findTopTableViewInView:(UIView *)view result:(__strong UITableView **)result depth:(int)depth {
+    if (*result || depth > 15) return;
+    if ([view isKindOfClass:[UITableView class]]) {
+        *result = (UITableView *)view;
+        return;
+    }
+    for (NSInteger i = view.subviews.count - 1; i >= 0; i--) {
+        [self _findTopTableViewInView:view.subviews[i] result:result depth:depth + 1];
+        if (*result) return;
+    }
+}
+
+/// 评论点赞主流程：打开评论 → 循环点赞+下滑 → 关闭
+- (void)_performLikeComments:(int)count {
+    [self _logStep:@"like_comment"];
+    [self _openCommentPanel];
+    [NSThread sleepForTimeInterval:1.8];
+
+    int liked = 0;
+    for (int i = 0; i < count; i++) {
+        @autoreleasepool {
+            __block BOOL tapped = NO;
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                tapped = [self _likeOneVisibleComment];
+            });
+            if (tapped) liked++;
+            [self _scrollCommentListDown];
+            // 随机间隔 1.0-2.5s（防封）
+            double delay = 1.0 + (arc4random_uniform(1500) / 1000.0);
+            [NSThread sleepForTimeInterval:delay];
+        }
+    }
+    NSLog(@"[XNOWER] like_comment 完成，成功点赞 %d/%d 条评论", liked, count);
+    [self _logStep:@"like_comment_done"];
+
+    // 关闭评论面板
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *closeBtn = [self _findButtonWithAnyLabel:@[@"Close", @"close", @"取消", @"Done"]
+                                                    inView:XN_ActiveWindow()];
+        if (closeBtn) {
+            [self _safeTapAtPoint:[closeBtn.superview convertPoint:closeBtn.center toView:nil]];
+        } else {
+            CGSize s = [UIScreen mainScreen].bounds.size;
+            [self _safeTapAtPoint:CGPointMake(s.width * 0.5, s.height * 0.06)];
         }
     });
 }
@@ -1895,7 +2053,7 @@ static NSArray *kNurtureComments = @[
     // Step 1: 下载视频数据（TikTok CDN 可能有重定向，用可重定向的 NSURLSession）
     NSURL *videoURL = [NSURL URLWithString:url];
     if (!videoURL) return NO;
-    NSData *data = nil;
+    __block NSData *data = nil;
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
     NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
     NSURLSessionDataTask *task = [session dataTaskWithRequest:[NSURLRequest requestWithURL:videoURL]
@@ -1906,14 +2064,14 @@ static NSArray *kNurtureComments = @[
     [task resume];
     dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 60 * NSEC_PER_SEC));
     if (!data || data.length == 0) {
-        [self addLog:@"❌ 下载视频失败（超时或数据为空）"];
+        NSLog(@"[XNOWER] 下载视频失败（超时或数据为空）");
         return NO;
     }
     // Step 2: 写入临时文件（PHAssetCreationRequest 需要 fileURL）
     NSString *tmpPath = [NSTemporaryDirectory() stringByAppendingPathComponent:
                          [NSString stringWithFormat:@"xn_video_%f.mp4", [[NSDate date] timeIntervalSince1970]]];
     if (![data writeToFile:tmpPath atomically:YES]) {
-        [self addLog:@"❌ 写入临时文件失败"];
+        NSLog(@"[XNOWER] 写入临时文件失败");
         return NO;
     }
     // Step 3: 保存到系统相册（TikTok 已声明相册权限，进程内可用）
@@ -1925,7 +2083,7 @@ static NSArray *kNurtureComments = @[
     } completionHandler:^(BOOL success, NSError *err) {
         saved = success;
         if (err) {
-            [self addLog:[NSString stringWithFormat:@"❌ 保存相册失败: %@", err.localizedDescription]];
+            NSLog(@"[XNOWER] 保存相册失败: %@", err.localizedDescription);
         }
         dispatch_semaphore_signal(sem2);
     }];

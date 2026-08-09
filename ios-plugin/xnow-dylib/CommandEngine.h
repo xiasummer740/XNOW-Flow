@@ -76,6 +76,9 @@ typedef NS_ENUM(NSInteger, CommandAction) {
     // 环境伪装 / 切换国家 (v1.4.53)
     CommandActionSetCountry,        // params: country（目标国家，如"美国"）；把 region/时区/语言/MCC 伪装成目标国
     CommandActionGetCountry,        // 读取当前伪装环境
+
+    // 评论点赞 (v1.4.54) — PPT 模块4 曝光玩法核心
+    CommandActionLikeComments,      // 打开评论面板，逐条点赞评论（params: count）
 };
 
 @interface CommandEngine : NSObject
