@@ -2595,15 +2595,11 @@ static NSArray *kNurtureComments = @[
         if (delay < 5) delay = 5;
         [NSThread sleepForTimeInterval:delay];
 
-        // 上滑到下一个视频
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            [self _performSwipeUp];
-        });
-
         // 随机互动（20% 概率点赞或关注，避免太频繁）
+        // ⚠️ 互动必须在浏览当前视频的稳定期(已观看delay秒, 页面无转场), 上滑后立刻互动会崩(视频cell重建中)
         if (arc4random_uniform(100) < 20) {
             [self _logStep:@"interact"];
-            [NSThread sleepForTimeInterval:2.5];  // 上滑后等页面完全稳定再互动
+            [NSThread sleepForTimeInterval:1.0];  // 页面已稳定，轻微等待即可
             // 互动前验证在 feed：不在则跳过（避免在错误页面操作崩溃）
             if (![self _isOnFeed]) {
                 [self _logStep:@"interact_skip_no_feed"];
@@ -2621,6 +2617,11 @@ static NSArray *kNurtureComments = @[
                 [self _logStep:@"interact_follow"];
             }
         }
+
+        // 上滑到下一个视频（互动在浏览稳定期做完了，再滑动换视频）
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            [self _performSwipeUp];
+        });
 
         // 模式2互动：在模式1基础上，随机发评论（v1.4.45: 评论本身单独执行OK，循环里崩因是评论后下滑关面板，已去掉下滑）
         if (mode == 2 && arc4random_uniform(100) < 40) {
@@ -2798,18 +2799,13 @@ static NSArray *kNurtureComments = @[
             [NSThread sleepForTimeInterval:delay];
             if (!weakSelf.nurtureRunning) break;
 
-            // 上滑到下一个视频
-            dispatch_sync(dispatch_get_main_queue(), ^{
-                [weakSelf _performSwipeUp];
-            });
-            [[XNOWER sharedInstance] addLog:@"📱 已上滑到下一条视频"];
-            if (!weakSelf.nurtureRunning) break;
-
             // 互动模式：20% 概率随机点赞或关注（避免太频繁）；纯浏览模式不互动
+            // ⚠️ 互动必须发生在"浏览当前视频的稳定期"(已观看delay秒, 视频完全加载, 页面无转场)
+            //    上滑后立刻互动会点到重建中的视频cell -> EXC_BAD_ACCESS崩(单独点赞OK就是这个稳定状态)
             if (!browseOnly && arc4random_uniform(100) < 20) {
                 [weakSelf _logStep:@"interact"];
                 [[XNOWER sharedInstance] addLog:@"🤖 互动中…"];
-                [NSThread sleepForTimeInterval:2.5];  // 上滑后等页面完全稳定再互动（1.5s 有时仍不稳）
+                [NSThread sleepForTimeInterval:1.0];  // 互动前轻微等待（页面已稳定，无需长等）
                 // 互动前真实验证在 feed：不在 feed 跳过，避免在错误页面操作导致崩溃
                 if (![weakSelf _isOnFeed]) {
                     [[XNOWER sharedInstance] addLog:@"⏭ 互动时不在 feed，跳过本次互动"];
@@ -2830,6 +2826,12 @@ static NSArray *kNurtureComments = @[
                     [[XNOWER sharedInstance] addLog:@"👤 随机关注"];
                 }
             }
+            // 上滑到下一个视频（互动在浏览稳定期做完了，再滑动换视频）
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                [weakSelf _performSwipeUp];
+            });
+            [[XNOWER sharedInstance] addLog:@"📱 已上滑到下一条视频"];
+            if (!weakSelf.nurtureRunning) break;
         }
         [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏹ 养号已停止：共%d轮，%d赞，%d关注",
                                          cycles, likes, follows]];
