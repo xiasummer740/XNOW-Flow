@@ -1848,16 +1848,52 @@ static NSArray *kNurtureComments = @[
     return ok;
 }
 
-/// 互动养号专用安全关注：label 定位 + sendActions（不深度遍历、不合成触摸）
+/// 按 accessibilityLabel 包含关键词查找任意视图（带深度限制，避免深层预加载 cell 信号崩）
+- (UIView *)_findViewWithAccessibilityLabelContaining:(NSString *)keyword inView:(UIView *)view depth:(int)depth {
+    if (!view || depth > 8) return nil;
+    @try {
+        NSString *label = view.accessibilityLabel;
+        if (label.length > 0 &&
+            [label rangeOfString:keyword options:NSCaseInsensitiveSearch].location != NSNotFound) {
+            return view;
+        }
+        for (UIView *sub in view.subviews) {
+            UIView *r = [self _findViewWithAccessibilityLabelContaining:keyword inView:sub depth:depth + 1];
+            if (r) return r;
+        }
+    } @catch (NSException *e) {}
+    return nil;
+}
+
+/// 互动养号专用安全关注：label 含 Follow 的视图定位（feed 右侧关注按钮 AWEPlayInteractionFollowPromptView 非 UIButton）
+/// 深度限制 8 + 排除顶部 Following 标签 + 非 UIControl 用安全点击
 - (BOOL)_performFollowSafe {
     __block BOOL ok = NO;
     dispatch_sync(dispatch_get_main_queue(), ^{
         @try {
-            UIButton *btn = [self _findButtonWithAnyLabel:@[@"follow", @"Follow", @"+"]
-                                                   inView:XN_ActiveWindow()];
-            if (btn && [btn isKindOfClass:[UIControl class]]) {
-                [btn sendActionsForControlEvents:UIControlEventTouchUpInside];
-                ok = YES;
+            UIWindow *window = XN_ActiveWindow();
+            CGSize screen = [UIScreen mainScreen].bounds.size;
+            UIView *followView = [self _findViewWithAccessibilityLabelContaining:@"Follow"
+                                                                         inView:window depth:0];
+            if (!followView) {
+                followView = [self _findViewWithAccessibilityLabelContaining:@"关注" inView:window depth:0];
+            }
+            if (followView) {
+                CGRect f = [followView.superview convertRect:followView.frame toView:nil];
+                // 排除顶部 Following 标签(y≈42, 屏高4-5%)，只认 feed 右侧的关注按钮
+                if (f.origin.y > screen.height * 0.15) {
+                    if ([followView isKindOfClass:[UIControl class]]) {
+                        [(UIControl *)followView sendActionsForControlEvents:UIControlEventTouchUpInside];
+                        ok = YES;
+                    } else {
+                        // 非 UIControl：安全点击（已定位精确控件，无深度遍历）
+                        CGPoint center = [followView.superview convertPoint:followView.center toView:nil];
+                        if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
+                            [self _safeTapAtPoint:center];
+                            ok = YES;
+                        }
+                    }
+                }
             }
         } @catch (NSException *e) {
             NSLog(@"[XNOWER] followSafe error: %@", e.reason);
