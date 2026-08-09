@@ -2097,9 +2097,9 @@ static NSArray *kNurtureComments = @[
     NSString *videoUrl = params[@"video_url"] ?: @"";
     BOOL didSaveTarget = NO;
     if (videoUrl.length > 0) {
-        [self addLog:@"⬇️ 下载目标视频到相册（发视频选片）..."];
+        NSLog(@"[XNOWER] ⬇️ 下载目标视频到相册（发视频选片）...");
         didSaveTarget = [self _downloadAndSaveVideoToAlbum:videoUrl];
-        [self addLog:didSaveTarget ? @"✅ 目标视频已入相册（最新一张，将自动选中）" : @"⚠️ 下载失败，回退选相册第一张"];
+        NSLog(@"[XNOWER] %@", didSaveTarget ? @"✅ 目标视频已入相册（最新一张，将自动选中）" : @"⚠️ 下载失败，回退选相册第一张");
     }
 
     // Step 1: 点底部 "+" 发视频按钮
