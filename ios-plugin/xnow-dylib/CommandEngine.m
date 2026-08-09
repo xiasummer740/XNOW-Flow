@@ -542,10 +542,16 @@ static NSArray *kNurtureComments = @[
         [self _reportScrollDiag:@{@"found": @NO}];
         return NO;
     }
-    NSLog(@"[XNOWER] feed scroll view = %@", NSStringFromClass(feedScroll.class));
+    NSString *feedClass = NSStringFromClass(feedScroll.class);
+    // 排除个人页作品列表（TTKUserProfileWorkCollectionView 不是推荐 feed，翻它无意义）
+    if ([feedClass containsString:@"Profile"] || [feedClass containsString:@"UserProfile"]) {
+        NSLog(@"[XNOWER] 当前在个人页(%@)，不是推荐 feed，跳过翻页", feedClass);
+        [self _reportScrollDiag:@{@"found": @NO, @"class": feedClass, @"reason": @"profile"}];
+        return NO;
+    }
+    NSLog(@"[XNOWER] feed scroll view = %@", feedClass);
 
     BOOL scrolled = NO;
-    NSString *feedClass = NSStringFromClass(feedScroll.class);
     if ([feedScroll isKindOfClass:[UITableView class]]) {
         UITableView *tv = (UITableView *)feedScroll;
         NSIndexPath *current = [tv indexPathsForVisibleRows].firstObject;
@@ -1824,15 +1830,48 @@ static NSArray *kNurtureComments = @[
 }
 
 /// 点击底部 Tab（home/discover/inbox/profile）
+/// 递归查找 UITabBar（定位真实底部导航栏位置，避免固定 Y 坐标点偏）
+- (void)_findTabBarInView:(UIView *)view result:(UITabBar **)result {
+    if (*result) return;
+    if ([view isKindOfClass:[UITabBar class]]) {
+        *result = (UITabBar *)view;
+        return;
+    }
+    for (UIView *sub in view.subviews) {
+        [self _findTabBarInView:sub result:result];
+        if (*result) return;
+    }
+}
+
 - (void)_tapTab:(NSString *)tab {
     dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
         CGSize screen = [UIScreen mainScreen].bounds.size;
-        CGFloat tabY = screen.height - 40;
+        // 修正 tab 点击：优先按 label 找底部 tab（Home/首页/For You），否则 UITabBar 定位，最后坐标兜底
         CGFloat ratioX;
         if ([tab isEqualToString:@"discover"]) ratioX = 0.35;
         else if ([tab isEqualToString:@"inbox"]) ratioX = 0.62;
         else if ([tab isEqualToString:@"profile"]) ratioX = 0.88;
         else ratioX = 0.12;  // home 默认
+
+        // 1. label 查找（home 优先找 tab bar 上的 Home/首页/For You）
+        if ([tab isEqualToString:@"home"]) {
+            UIButton *homeBtn = [self _findButtonWithAnyLabel:@[@"Home", @"首页", @"For You", @"推荐", @"Recommend"]
+                                                       inView:window];
+            if (homeBtn) {
+                CGRect f = [homeBtn.superview convertRect:homeBtn.frame toView:nil];
+                if (f.origin.y > screen.height * 0.7) {  // 只在底部区域（tab bar）
+                    [self _safeTapAtPoint:[homeBtn.superview convertPoint:homeBtn.center toView:nil]];
+                    self->_currentPage = tab;
+                    return;
+                }
+            }
+        }
+        // 2. UITabBar 定位真实 tab bar 中心 Y
+        __block UITabBar *tabBar = nil;
+        [self _findTabBarInView:window result:&tabBar];
+        CGFloat tabY = tabBar ? CGRectGetMidY([tabBar.superview convertRect:tabBar.frame toView:nil])
+                              : (screen.height - 60);  // 原 -40 偏低（接近 home indicator），修正到 tab bar 中心
         [self _safeTapAtPoint:CGPointMake(screen.width * ratioX, tabY)];
         self->_currentPage = tab;
     });
@@ -2549,6 +2588,33 @@ static NSArray *kNurtureComments = @[
     return kNurtureComments[idx];
 }
 
+/// 真实验证当前是否在推荐 feed（首页）— 找到大滚动视图且类名非 Profile（排除个人页作品列表）
+- (BOOL)_isOnFeed {
+    __block BOOL onFeed = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        __block UIScrollView *sv = nil;
+        [self _findLargeFeedScrollViewInView:XN_ActiveWindow() result:&sv];
+        if (sv) {
+            NSString *cls = NSStringFromClass(sv.class);
+            // 个人页作品列表不是 feed
+            if ([cls containsString:@"Profile"] || [cls containsString:@"UserProfile"]) return;
+            onFeed = YES;  // 有非个人页的大滚动视图 = 在 feed
+        }
+    });
+    return onFeed;
+}
+
+/// 切回首页并真实验证在 feed；最多尝试 4 次，成功返回 YES
+- (BOOL)_gotoHomeFeed {
+    for (int i = 0; i < 4; i++) {
+        [self _tapTab:@"home"];
+        [NSThread sleepForTimeInterval:2.0];
+        if ([self _isOnFeed]) return YES;
+        [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏳ 切回首页中(%d/4)...", i + 1]];
+    }
+    return NO;
+}
+
 /// 启动养号：随机浏览10-20秒；browseOnly=YES 只上滑浏览；NO 则随机点赞或关注
 /// totalSeconds>0 自定义时长，0=默认24小时
 - (void)startNurtureWithDuration:(int)totalSeconds browseOnly:(BOOL)browseOnly {
@@ -2564,12 +2630,17 @@ static NSArray *kNurtureComments = @[
     dispatch_async(_execQueue, ^{
         __block int cycles = 0, likes = 0, follows = 0;
         [weakSelf _logStep:@"nurture_start"];
-        // 养号前置：收起浮窗（避免浮窗遮挡坐标点击导致崩溃）+ 切回首页（确保在 feed 刷视频）
+        // 养号前置：收起浮窗（避免浮窗遮挡坐标点击导致崩溃）+ 真实验证切回首页（必须在 feed 才能开始）
         [[XNOWER sharedInstance] collapseFloatingPanel];  // 内部 dispatch_async 到主队列，不会死锁
         [NSThread sleepForTimeInterval:0.6];
-        [weakSelf _tapTab:@"home"];  // _tapTab 内部 dispatch_sync 到主队列，无需再包一层
-        [NSThread sleepForTimeInterval:2.0];
-        [[XNOWER sharedInstance] addLog:@"🏠 已切回首页，开始养号"];
+        BOOL onFeed = [weakSelf _gotoHomeFeed];
+        if (!onFeed) {
+            [[XNOWER sharedInstance] addLog:@"❌ 无法切回首页（请手动回到首页再启动养号）"];
+            weakSelf.nurtureRunning = NO;
+            [weakSelf _logStep:@"nurture_stop_no_feed"];
+            return;  // 未真实验证在 home，不开始养号
+        }
+        [[XNOWER sharedInstance] addLog:@"🏠 已真实验证在首页，开始养号"];
         while (weakSelf.nurtureRunning) {
             // 时长检查（到点自动停）
             NSTimeInterval elapsed = [[NSDate date] timeIntervalSince1970] - startTime;
