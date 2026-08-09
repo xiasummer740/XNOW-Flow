@@ -5,6 +5,7 @@
 #import "CommandEngine.h"
 #import "AccountManager.h"
 #import "AccountSwitcher.h"
+#import <Photos/Photos.h>
 #import "XNWindowHelper.h"
 #import "XNTouchSimulator.h"
 #import "XNOWER.h"
@@ -1887,9 +1888,61 @@ static NSArray *kNurtureComments = @[
 /// params: {title, video_url}
 /// 说明：UI 自动化无法按 URL 精确定位相册素材，video_url 为 best-effort，
 ///       实际选取相册中第一张媒体（后续有精确素材注入方案时再升级）。
+/// 下载视频并保存到系统相册（发视频选片关键）
+/// 返回 YES=已保存成功（相册最新一张即目标视频）；NO=失败（回退原逻辑选第一张）
+- (BOOL)_downloadAndSaveVideoToAlbum:(NSString *)url {
+    if (!url.length) return NO;
+    // Step 1: 下载视频数据（TikTok CDN 可能有重定向，用可重定向的 NSURLSession）
+    NSURL *videoURL = [NSURL URLWithString:url];
+    if (!videoURL) return NO;
+    NSData *data = nil;
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
+    NSURLSessionDataTask *task = [session dataTaskWithRequest:[NSURLRequest requestWithURL:videoURL]
+                                            completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+        data = d;
+        dispatch_semaphore_signal(sem);
+    }];
+    [task resume];
+    dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 60 * NSEC_PER_SEC));
+    if (!data || data.length == 0) {
+        [self addLog:@"❌ 下载视频失败（超时或数据为空）"];
+        return NO;
+    }
+    // Step 2: 写入临时文件（PHAssetCreationRequest 需要 fileURL）
+    NSString *tmpPath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                         [NSString stringWithFormat:@"xn_video_%f.mp4", [[NSDate date] timeIntervalSince1970]]];
+    if (![data writeToFile:tmpPath atomically:YES]) {
+        [self addLog:@"❌ 写入临时文件失败"];
+        return NO;
+    }
+    // Step 3: 保存到系统相册（TikTok 已声明相册权限，进程内可用）
+    __block BOOL saved = NO;
+    dispatch_semaphore_t sem2 = dispatch_semaphore_create(0);
+    [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
+        PHAssetCreationRequest *req = [PHAssetCreationRequest creationRequestForAsset];
+        [req addResourceWithType:PHAssetResourceTypeVideo fileURL:[NSURL fileURLWithPath:tmpPath] options:nil];
+    } completionHandler:^(BOOL success, NSError *err) {
+        saved = success;
+        if (err) {
+            [self addLog:[NSString stringWithFormat:@"❌ 保存相册失败: %@", err.localizedDescription]];
+        }
+        dispatch_semaphore_signal(sem2);
+    }];
+    dispatch_semaphore_wait(sem2, dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC));
+    [[NSFileManager defaultManager] removeItemAtPath:tmpPath error:nil];
+    return saved;
+}
+
 - (NSDictionary *)_performPostVideo:(NSDictionary *)params {
     NSString *title = params[@"title"] ?: @"";
     NSString *videoUrl = params[@"video_url"] ?: @"";
+    BOOL didSaveTarget = NO;
+    if (videoUrl.length > 0) {
+        [self addLog:@"⬇️ 下载目标视频到相册（发视频选片）..."];
+        didSaveTarget = [self _downloadAndSaveVideoToAlbum:videoUrl];
+        [self addLog:didSaveTarget ? @"✅ 目标视频已入相册（最新一张，将自动选中）" : @"⚠️ 下载失败，回退选相册第一张"];
+    }
 
     // Step 1: 点底部 "+" 发视频按钮
     dispatch_sync(dispatch_get_main_queue(), ^{
@@ -1973,10 +2026,11 @@ static NSArray *kNurtureComments = @[
 
     return @{
         @"status": @"success",
-        @"message": @"已触发发视频流程（best-effort UI 自动化）",
+        @"message": didSaveTarget ? @"已触发发视频流程（目标视频已存相册并选中）"
+                                  : @"已触发发视频流程（best-effort，未下载目标则选相册第一张）",
         @"title": title.length ? title : @"",
         @"video_url": videoUrl,
-        @"note": @"UI自动化无法精确定位指定 URL 素材，实际选择了相册第一张媒体",
+        @"target_saved": @(didSaveTarget),
     };
 }
 
