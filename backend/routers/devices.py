@@ -326,3 +326,68 @@ def device_stats_summary(
         "offline": offline,
         "executing": executing,
     }
+
+
+# ========== 切换国家 ==========
+
+@router.post("/device-bindings/{device_id}/country/")
+def set_device_country(
+    device_id: str,
+    req: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """设置设备目标国家（用于注册/环境切换门禁）"""
+    country = (req.get("country") or "").strip()
+    device = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="设备不存在")
+    ensure_owned(device, current_user)
+    device.country = country
+    db.commit()
+    return {"device_id": device_id, "country": country}
+
+
+@router.get("/device-bindings/{device_id}/country-check/")
+def device_country_check(
+    device_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """注册门禁校验：目标国家 vs 设备当前出口国家（GeoIP）
+
+    返回 target(目标)/current(当前出口)/match(是否匹配)/node(该国的启用节点)。
+    前端据此引导：不匹配时提示"请确保设备流量走 {node} 节点"。
+    """
+    device = db.query(DeviceBinding).filter(DeviceBinding.name == device_id).first()
+    if not device:
+        raise HTTPException(status_code=404, detail="设备不存在")
+    ensure_owned(device, current_user)
+
+    target = device.country or ""
+    current = ""
+    ip = device.last_ip or ""
+    if ip:
+        from geoip import country_for_ip
+        current = country_for_ip(ip)
+
+    # 该国的启用节点（引导提示用）
+    from models.proxy_node import ProxyNode
+    nodes = (
+        db.query(ProxyNode)
+        .filter(ProxyNode.country == target, ProxyNode.enabled == True)
+        .order_by(ProxyNode.name)
+        .all()
+    )
+    node_list = [{"id": n.id, "name": n.name, "address": n.address, "port": n.port} for n in nodes]
+
+    match = bool(target and current and current == target)
+    return {
+        "device_id": device_id,
+        "target": target,
+        "current": current,
+        "ip": ip,
+        "match": match,
+        "nodes": node_list,
+        "message": "匹配" if match else ("未设置目标国家" if not target else f"当前出口{current or '未知'}，与目标{target}不一致"),
+    }

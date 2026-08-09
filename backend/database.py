@@ -300,6 +300,40 @@ def _migrate_task_engine_columns():
         print(f"[migration] tasks 引擎字段迁移失败（可忽略）: {e}")
 
 
+def _migrate_proxy_nodes():
+    """SQLite 迁移：确保 proxy_nodes 表存在 + device_bindings 补 country/last_ip 列。幂等。"""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS proxy_nodes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(200) DEFAULT '',
+                    country VARCHAR(50) DEFAULT '',
+                    protocol VARCHAR(30) DEFAULT '',
+                    address VARCHAR(255) DEFAULT '',
+                    port INTEGER DEFAULT 0,
+                    config TEXT DEFAULT '',
+                    remark TEXT DEFAULT '',
+                    enabled INTEGER DEFAULT 1,
+                    api_id VARCHAR(20) DEFAULT '',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_proxy_nodes_country ON proxy_nodes(country)"))
+            tables = [r[0] for r in conn.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )).fetchall()]
+            if "device_bindings" in tables:
+                cols = [r[1] for r in conn.execute(text("PRAGMA table_info(device_bindings)")).fetchall()]
+                if "country" not in cols:
+                    conn.execute(text("ALTER TABLE device_bindings ADD COLUMN country VARCHAR(50) DEFAULT ''"))
+                if "last_ip" not in cols:
+                    conn.execute(text("ALTER TABLE device_bindings ADD COLUMN last_ip VARCHAR(50) DEFAULT ''"))
+            conn.commit()
+    except Exception as e:
+        print(f"[migration] proxy_nodes/device.country 迁移失败（可忽略）: {e}")
+
+
 def _migrate_quick_commands():
     """SQLite 迁移：确保 quick_commands 表存在。
 
@@ -335,6 +369,7 @@ _migrate_nurture_plans()
 _migrate_quick_commands()
 _migrate_public_users()
 _migrate_task_engine_columns()
+_migrate_proxy_nodes()
 
 def get_db():
     db = SessionLocal()

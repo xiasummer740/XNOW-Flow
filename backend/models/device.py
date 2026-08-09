@@ -34,6 +34,9 @@ class DeviceBinding(Base):
     # 设备鉴权
     device_secret = Column(String(64), default="")        # 每设备共享密钥（设备请求鉴权）
     device_code = Column(String(50), default="")          # 设备编号（用户绑定1-20，不改name防丢指令）
+    # 切换国家
+    country = Column(String(50), default="")              # 目标国家（注册/环境切换用）
+    last_ip = Column(String(50), default="")              # 最近出口 IP（GeoIP 识别当前国家）
 
     # Meta
     api_id = Column(String(20), default="")               # API ID（关联用户）

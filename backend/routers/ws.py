@@ -356,7 +356,7 @@ def _verify_device_auth(device_id: str, secret: str) -> bool:
         return False
 
 
-def _mark_device_online(device_id: str, api_id: str = "", device_code: str = ""):
+def _mark_device_online(device_id: str, api_id: str = "", device_code: str = "", client_ip: str = ""):
     """标记设备在线（用于 HTTP 轮询设备）
 
     首次绑定 api_id 时执行商用配额校验（严格模式：设备须有 active 卡）。
@@ -371,6 +371,8 @@ def _mark_device_online(device_id: str, api_id: str = "", device_code: str = "")
             device.online = True
             device.is_online = True  # 前端用 is_online 判断在线
             device.status = "online"
+            if client_ip and client_ip != device.last_ip:
+                device.last_ip = client_ip  # 记录最近出口 IP（GeoIP 识别当前国家）
             # 只绑定首个租户：设备已绑定 api_id 时忽略上报值
             if api_id and not device.api_id:
                 # 商用配额：首次绑定须有该设备的 active 卡（一卡一机）
@@ -537,9 +539,9 @@ async def device_http_post(device_id: str, request: Request, secret: str = ""):
     # 处理消息（与 WebSocket 共用处理函数）
     _handle_device_message(device_id, body)
 
-    # 标记设备最近活跃（更新 last_online）
+    # 标记设备最近活跃（更新 last_online + 出口 IP）
     api_id = body.get("data", {}).get("api_id", "") if isinstance(body.get("data"), dict) else ""
-    _mark_device_online(device_id, api_id)
+    _mark_device_online(device_id, api_id, client_ip=request.client.host if request.client else "")
 
     # 返回 pending 指令（如果有）
     pending = manager.dequeue_commands(device_id)
@@ -566,7 +568,7 @@ async def device_http_post(device_id: str, request: Request, secret: str = ""):
 
 
 @router.get("/ws/{device_id}/poll")
-async def device_http_poll(device_id: str, secret: str = ""):
+async def device_http_poll(device_id: str, request: Request, secret: str = ""):
     """设备轮询获取积压指令
 
     设备定时（每 5 秒）GET 此端点，获取服务端下发的指令。
@@ -579,7 +581,7 @@ async def device_http_poll(device_id: str, secret: str = ""):
         return JSONResponse(status_code=401, content={"detail": "unauthorized"})
 
     # 轮询也更新在线状态（前端用 is_online/last_online 判断设备在线）
-    _mark_device_online(device_id)
+    _mark_device_online(device_id, client_ip=request.client.host if request.client else "")
 
     pending = manager.dequeue_commands(device_id)
     if not pending:
