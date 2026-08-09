@@ -1839,6 +1839,61 @@ static NSArray *kNurtureComments = @[
 }
 
 /// 点击底部 Tab（home/discover/inbox/profile）
+/// 直接触发 view 上的 UITapGestureRecognizer（tab 按钮无 UIControl action，合成触摸对 iOS17 手势无效）
+/// 方式1: NSInvocation 调私有 _setState:Recognized → 手势状态机触发 target-action（最可靠）
+/// 方式2: 健壮 KVC 取 _targets/_target/_action 直接 performSelector
+- (BOOL)_triggerTapGestureOnView:(UIView *)view {
+    for (UIGestureRecognizer *gr in view.gestureRecognizers) {
+        if (![gr isKindOfClass:[UITapGestureRecognizer class]]) continue;
+        // 方式1: _setState:Recognized 注入
+        @try {
+            SEL setStateSel = NSSelectorFromString(@"_setState:");
+            if ([gr respondsToSelector:setStateSel]) {
+                NSMethodSignature *sig = [gr methodSignatureForSelector:setStateSel];
+                if (sig) {
+                    NSInteger state = UIGestureRecognizerStateRecognized;
+                    NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+                    inv.target = gr; inv.selector = setStateSel;
+                    [inv setArgument:&state atIndex:2];
+                    [inv invoke];
+                    // 复位状态（避免手势卡在 Recognized 影响后续）
+                    state = UIGestureRecognizerStatePossible;
+                    NSInvocation *inv2 = [NSInvocation invocationWithMethodSignature:sig];
+                    inv2.target = gr; inv2.selector = setStateSel;
+                    [inv2 setArgument:&state atIndex:2];
+                    [inv2 invoke];
+                    NSLog(@"[XNOWER] _setState:Recognized 注入成功 → %@", NSStringFromClass(view.class));
+                    return YES;
+                }
+            }
+        } @catch (NSException *e) {
+            NSLog(@"[XNOWER] _setState inject error: %@", e.reason);
+        }
+        // 方式2: 直接调 target-action（健壮提取 SEL）
+        @try {
+            id targetsObj = [gr valueForKey:@"_targets"];
+            if ([targetsObj isKindOfClass:[NSArray class]]) {
+                for (id t in (NSArray *)targetsObj) {
+                    id target = [t valueForKey:@"_target"];
+                    id actionVal = [t valueForKey:@"_action"];
+                    SEL sel = NULL;
+                    if ([actionVal isKindOfClass:[NSString class]]) sel = NSSelectorFromString(actionVal);
+                    else if ([actionVal isKindOfClass:[NSValue class]]) sel = (SEL)[actionVal pointerValue];
+                    else sel = (SEL)(uintptr_t)(NSUInteger)actionVal;
+                    if (sel && target && [target respondsToSelector:sel]) {
+                        [target performSelector:sel withObject:gr];
+                        NSLog(@"[XNOWER] 手势 target-action 直接调用成功 → %@", NSStringFromClass(view.class));
+                        return YES;
+                    }
+                }
+            }
+        } @catch (NSException *e) {
+            NSLog(@"[XNOWER] gesture target error: %@", e.reason);
+        }
+    }
+    return NO;
+}
+
 - (void)_tapTab:(NSString *)tab {
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIWindow *window = XN_ActiveWindow();
@@ -1853,6 +1908,13 @@ static NSArray *kNurtureComments = @[
         if (accId) {
             UIView *tabView = [self _findViewWithAccessibilityIdentifier:accId inView:window];
             if (tabView) {
+                // 核心：直接操纵 tab 按钮的 UITapGestureRecognizer（_setState:Recognized 触发处理函数，
+                // 绕过触摸系统——tab 无 UIControl action，合成触摸对 iOS17 手势无效）
+                if ([self _triggerTapGestureOnView:tabView]) {
+                    self->_currentPage = tab;
+                    return;
+                }
+                // 兜底：合成触摸
                 [self _safeTapAtPoint:[tabView.superview convertPoint:tabView.center toView:nil]];
                 self->_currentPage = tab;
                 return;
