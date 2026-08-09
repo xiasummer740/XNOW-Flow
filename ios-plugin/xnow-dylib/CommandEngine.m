@@ -789,32 +789,38 @@ static NSArray *kNurtureComments = @[
     [self _logStep:@"like"];
     dispatch_sync(dispatch_get_main_queue(), ^{
         CGSize screen = [UIScreen mainScreen].bounds.size;
+        UIWindow *window = XN_ActiveWindow();
 
-        // 0. 优先 feedLikeButton 标识 + sendActions（互动养号验证过成功，sendActions 不依赖可见性）
-        @try {
-            UIView *likeView = [self _findViewWithAccessibilityIdentifier:kAccLike
-                                                                   inView:XN_ActiveWindow()];
-            if (likeView && [likeView isKindOfClass:[UIControl class]]) {
-                [(UIControl *)likeView sendActionsForControlEvents:UIControlEventTouchUpInside];
-                return;
-            }
-        } @catch (NSException *e) {}
-
-        // 1. 按容器类名定位真正的点赞按钮（PlayInteractionLikeView 内可交互控件）
-        UIView *likeContainer = [self _findViewByClassContaining:@"PlayInteractionLikeView"
-                                                         inView:XN_ActiveWindow() depth:0];
-        if (likeContainer) {
-            UIView *target = [self _findFirstControlInView:likeContainer depth:0] ?: likeContainer;
-            [self _safeTapView:target];  // 手势注入优先，兜底合成触摸
+        // 0. 屏幕内可见的 feedLikeButton → tapAtPoint（以前成功方法：PlayInteractionLikeView定位 + 合成触摸，真红心）
+        //    feed 有多个 feedLikeButton(屏内+屏外预加载cell)，必须命中屏幕内的
+        __strong UIView *likeView = nil;
+        [self _findVisibleViewWithAccId:kAccLike inView:window screen:screen depth:0 result:&likeView];
+        if (likeView) {
+            [self _safeTapAtPoint:[likeView.superview convertPoint:likeView.center toView:nil]];
             return;
         }
 
-        // 2. accessibility label
+        // 1. PlayInteractionLikeView 容器定位（以前成功方法），容器内屏幕内控件 → tapAtPoint
+        UIView *likeContainer = [self _findViewByClassContaining:@"PlayInteractionLikeView"
+                                                         inView:window depth:0];
+        if (likeContainer) {
+            UIView *target = [self _findFirstControlInView:likeContainer depth:0] ?: likeContainer;
+            CGPoint center = [target.superview convertPoint:target.center toView:nil];
+            if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
+                [self _safeTapAtPoint:center];
+                return;
+            }
+        }
+
+        // 2. accessibility label（屏幕内）
         UIButton *likeBtn = [self _findButtonWithAnyLabel:@[@"like", @"Like", @"heart", @"Heart"]
-                                                   inView:XN_ActiveWindow()];
+                                                   inView:window];
         if (likeBtn) {
-            [self _safeTapView:likeBtn];
-            return;
+            CGPoint center = [likeBtn.superview convertPoint:likeBtn.center toView:nil];
+            if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
+                [self _safeTapAtPoint:center];
+                return;
+            }
         }
 
         // 3. 坐标回退（仅当在 feed 页才用，避免非 feed 页点错控件导致 TikTok 崩溃）
