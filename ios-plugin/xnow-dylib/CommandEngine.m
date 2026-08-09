@@ -2602,11 +2602,19 @@ static NSArray *kNurtureComments = @[
     return onFeed;
 }
 
-/// 切回首页并真实验证在 feed；最多尝试 4 次，成功返回 YES
+/// 切回首页并真实验证在 feed；最多尝试 4 轮，成功返回 YES
+/// 每轮：a11y_vo_home 点击 tab → 验证；不行则 deep link (snssdk1233://) 强制回主界面
 - (BOOL)_gotoHomeFeed {
     for (int i = 0; i < 4; i++) {
         [self _tapTab:@"home"];
         [NSThread sleepForTimeInterval:2.0];
+        if ([self _isOnFeed]) return YES;
+        // 兜底：deep link 强制回主界面（TikTok 原生处理 scheme，绕过 UI 手势——tab 按钮无 UIControl action 只靠手势，合成触摸不可靠）
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSURL *url = [NSURL URLWithString:@"snssdk1233://"];
+            [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+        });
+        [NSThread sleepForTimeInterval:2.5];
         if ([self _isOnFeed]) return YES;
         [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏳ 切回首页中(%d/4)...", i + 1]];
     }
