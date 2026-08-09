@@ -148,6 +148,8 @@ static NSArray *kNurtureComments = @[
             @"comment_video":     @(CommandActionCommentVideo),
             // 环境诊断
             @"env_diag":          @(CommandActionEnvDiag),
+            // VC 诊断
+            @"vc_scan":           @(CommandActionVCScan),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -284,6 +286,12 @@ static NSArray *kNurtureComments = @[
                     @"env": env ?: @{},
                     @"last_rewrite": rewrite ?: @{},
                 };
+                hasResult = YES;
+                break;
+            }
+
+            case CommandActionVCScan: {
+                result = [self _performVCScan];
                 hasResult = YES;
                 break;
             }
@@ -2609,21 +2617,68 @@ static NSArray *kNurtureComments = @[
     return onFeed;
 }
 
+/// VC 诊断：枚举 rootViewController 链 + 检测 tab 容器控制器（定位 TikTok 首页切换入口）
+- (NSDictionary *)_performVCScan {
+    __block NSMutableArray *chain = [NSMutableArray array];
+    __block NSDictionary *tabInfo = @{};
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        if (!window) return;
+        // 递归收集 VC 链（presented + child，深度保护）
+        __block void (^collectVC)(UIViewController *, int) = nil;
+        collectVC = ^(UIViewController *vc, int depth) {
+            if (!vc || depth > 10 || chain.count > 30) return;
+            NSString *cls = NSStringFromClass(vc.class) ?: @"?";
+            [chain addObject:@{@"class": cls,
+                               @"sel": @(vc.tabBarController.selectedIndex)}];
+            // 检测 tab 容器
+            if ([vc isKindOfClass:[UITabBarController class]] || [NSStringFromClass(vc.class) containsString:@"TabBarController"]) {
+                UITabBarController *tc = (UITabBarController *)vc;
+                tabInfo = @{@"class": cls, @"selectedIndex": @(tc.selectedIndex),
+                            @"count": @(tc.viewControllers.count)};
+            }
+            if (vc.presentedViewController) {
+                collectVC(vc.presentedViewController, depth + 1);
+            }
+            for (UIViewController *child in vc.childViewControllers) {
+                collectVC(child, depth + 1);
+            }
+        };
+        collectVC(window.rootViewController, 0);
+        if (chain.count == 0) {
+            [chain addObject:@{@"class": NSStringFromClass(window.rootViewController.class) ?: @"nil"}];
+        }
+    });
+    return @{
+        @"status": @"success",
+        @"vc_chain": chain,
+        @"tab_controller": tabInfo,
+    };
+}
+
 /// 切回首页并真实验证在 feed；最多尝试 4 轮，成功返回 YES
-/// 每轮：a11y_vo_home 点击 tab → 验证；不行则 deep link (snssdk1233://) 强制回主界面
+/// 每轮：a11y_vo_home 点击 tab → 验证；不行则换一个 deep link scheme 强制回主界面
 - (BOOL)_gotoHomeFeed {
+    // deep link 候选（TikTok 深链需特定 path 才有路由；裸 scheme 无路由被忽略，逐个试）
+    NSArray<NSString *> *schemes = @[
+        @"snssdk1233://",
+        @"snssdk1233://feed",
+        @"snssdk1233://main",
+        @"snssdk1233://home",
+    ];
     for (int i = 0; i < 4; i++) {
         [self _tapTab:@"home"];
         [NSThread sleepForTimeInterval:2.0];
         if ([self _isOnFeed]) return YES;
-        // 兜底：deep link 强制回主界面（TikTok 原生处理 scheme，绕过 UI 手势——tab 按钮无 UIControl action 只靠手势，合成触摸不可靠）
+        // deep link 兜底（本轮试第 i 个 scheme）
+        NSString *scheme = (i < schemes.count) ? schemes[i] : @"snssdk1233://";
         dispatch_async(dispatch_get_main_queue(), ^{
-            NSURL *url = [NSURL URLWithString:@"snssdk1233://"];
+            NSURL *url = [NSURL URLWithString:scheme];
             [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
         });
         [NSThread sleepForTimeInterval:2.5];
         if ([self _isOnFeed]) return YES;
-        [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏳ 切回首页中(%d/4)...", i + 1]];
+        [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏳ 切回首页中(%d/4) scheme=%@...", i + 1, scheme]];
     }
     return NO;
 }

@@ -91,6 +91,9 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 
     // 环境诊断 (v1.4.56) — 上报当前伪装环境 + 实际改写过的请求参数（验证 set_country 生效）
     CommandActionEnvDiag,
+
+    // VC 诊断 (v1.4.61) — 上报 ViewController 链 + tab 控制器类名（定位 TikTok 首页切换入口）
+    CommandActionVCScan,
 };
 
 @interface CommandEngine : NSObject
