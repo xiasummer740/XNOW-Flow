@@ -791,38 +791,28 @@ static NSArray *kNurtureComments = @[
         CGSize screen = [UIScreen mainScreen].bounds.size;
 
         // 0. 优先按容器类名定位真正的点赞按钮（PlayInteractionLikeView 内可交互控件）
-        //    feedLikeButton 标识偶尔会误匹配到关注提示条，容器类名更可靠
         UIView *likeContainer = [self _findViewByClassContaining:@"PlayInteractionLikeView"
                                                          inView:XN_ActiveWindow() depth:0];
         if (likeContainer) {
             UIView *target = [self _findFirstControlInView:likeContainer depth:0] ?: likeContainer;
-            CGPoint center = [target.superview convertPoint:target.center toView:nil];
-            if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
-                [self _safeTapAtPoint:center];
-                return;
-            }
+            [self _safeTapView:target];  // 手势注入优先，兜底合成触摸
+            return;
         }
 
-        // 1. 通过 accessibility identifier 找点赞按钮（只取屏幕内可见的，避免点到屏幕外视频的按钮）
+        // 1. feedLikeButton 标识（只取屏幕内可见的）
         UIView *likeView = [self _findViewWithAccessibilityIdentifier:kAccLike
                                                                inView:XN_ActiveWindow()];
         if (likeView) {
-            CGPoint center = [likeView.superview convertPoint:likeView.center toView:nil];
-            if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
-                [self _safeTapAtPoint:center];
-                return;
-            }
+            [self _safeTapView:likeView];
+            return;
         }
 
-        // 2. 通过 accessibility label（同样校验可见）
+        // 2. accessibility label
         UIButton *likeBtn = [self _findButtonWithAnyLabel:@[@"like", @"Like", @"heart", @"Heart"]
                                                    inView:XN_ActiveWindow()];
         if (likeBtn) {
-            CGPoint center = [likeBtn.superview convertPoint:likeBtn.center toView:nil];
-            if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
-                [self _safeTapAtPoint:center];
-                return;
-            }
+            [self _safeTapView:likeBtn];
+            return;
         }
 
         // 3. 坐标回退（仅当在 feed 页才用，避免非 feed 页点错控件导致 TikTok 崩溃）
@@ -846,7 +836,7 @@ static NSArray *kNurtureComments = @[
         UIButton *btn = [self _findButtonWithAnyLabel:@[@"follow", @"Follow", @"+"]
                                                inView:XN_ActiveWindow()];
         if (btn) {
-            [self _safeTapAtPoint:[btn.superview convertPoint:btn.center toView:nil]];
+            [self _safeTapView:btn];  // 手势注入优先，兜底合成触摸
             return;
         }
         // 仅当在 feed 页才用固定坐标兜底（避免非 feed 页点错控件崩溃）
@@ -1839,6 +1829,18 @@ static NSArray *kNurtureComments = @[
 }
 
 /// 点击底部 Tab（home/discover/inbox/profile）
+/// 统一点击控件：优先手势注入(_setState:Recognized)，兜底合成触摸+sendActions
+/// 解决：TikTok 按钮多用手势(非UIControl)，合成触摸对 iOS17 手势无效；坐标兜底还可能点错控件崩
+- (void)_safeTapView:(UIView *)view {
+    if (!view) return;
+    if ([self _triggerTapGestureOnView:view]) return;  // 手势注入成功
+    CGPoint center = [view.superview convertPoint:view.center toView:nil];
+    CGSize screen = [UIScreen mainScreen].bounds.size;
+    if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
+        [self _safeTapAtPoint:center];  // 兜底：合成触摸（含 UIControl sendActions）
+    }
+}
+
 /// 直接触发 view 上的 UITapGestureRecognizer（tab 按钮无 UIControl action，合成触摸对 iOS17 手势无效）
 /// 方式1: NSInvocation 调私有 _setState:Recognized → 手势状态机触发 target-action（最可靠）
 /// 方式2: 健壮 KVC 取 _targets/_target/_action 直接 performSelector
@@ -2599,16 +2601,23 @@ static NSArray *kNurtureComments = @[
 
         // 随机互动（20% 概率点赞或关注，避免太频繁）
         if (arc4random_uniform(100) < 20) {
-            if (arc4random_uniform(100) < 50) {
+            [self _logStep:@"interact"];
+            [NSThread sleepForTimeInterval:2.5];  // 上滑后等页面完全稳定再互动
+            // 互动前验证在 feed：不在则跳过（避免在错误页面操作崩溃）
+            if (![self _isOnFeed]) {
+                [self _logStep:@"interact_skip_no_feed"];
+            } else if (arc4random_uniform(100) < 50) {
                 dispatch_sync(dispatch_get_main_queue(), ^{
                     [self _performLike];
                 });
                 likes++;
+                [self _logStep:@"interact_like"];
             } else {
                 dispatch_sync(dispatch_get_main_queue(), ^{
                     [self _performFollow];
                 });
                 follows++;
+                [self _logStep:@"interact_follow"];
             }
         }
 
@@ -2799,18 +2808,24 @@ static NSArray *kNurtureComments = @[
             if (!browseOnly && arc4random_uniform(100) < 20) {
                 [weakSelf _logStep:@"interact"];
                 [[XNOWER sharedInstance] addLog:@"🤖 互动中…"];
-                [NSThread sleepForTimeInterval:1.5];  // 上滑后等页面稳定再互动，避免崩溃
-                if (arc4random_uniform(100) < 50) {
+                [NSThread sleepForTimeInterval:2.5];  // 上滑后等页面完全稳定再互动（1.5s 有时仍不稳）
+                // 互动前真实验证在 feed：不在 feed 跳过，避免在错误页面操作导致崩溃
+                if (![weakSelf _isOnFeed]) {
+                    [[XNOWER sharedInstance] addLog:@"⏭ 互动时不在 feed，跳过本次互动"];
+                    [weakSelf _logStep:@"interact_skip_no_feed"];
+                } else if (arc4random_uniform(100) < 50) {
                     dispatch_sync(dispatch_get_main_queue(), ^{
                         [weakSelf _performLike];
                     });
                     likes++;
+                    [weakSelf _logStep:@"interact_like"];
                     [[XNOWER sharedInstance] addLog:@"❤️ 随机点赞"];
                 } else {
                     dispatch_sync(dispatch_get_main_queue(), ^{
                         [weakSelf _performFollow];
                     });
                     follows++;
+                    [weakSelf _logStep:@"interact_follow"];
                     [[XNOWER sharedInstance] addLog:@"👤 随机关注"];
                 }
             }
