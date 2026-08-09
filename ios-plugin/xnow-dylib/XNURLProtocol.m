@@ -12,6 +12,7 @@
 //   - 向后端通信使用 ephemeral session（无 cookie/cache 副作用）
 
 #import "XNURLProtocol.h"
+#import "CountryEnv.h"
 
 // ====== 防递归标记（同时兼容 TikTokHooks.m 中的 XNOWURLProtocol） ======
 static NSString *const kXNHandledKey    = @"XN_piggyback_handled";
@@ -285,6 +286,9 @@ static volatile CFAbsoluteTime sLastPing = 0;
     NSMutableURLRequest *forwardReq = [self.request mutableCopy];
     [NSURLProtocol setProperty:@YES forKey:kXNHandledKey inRequest:forwardReq];
     [NSURLProtocol setProperty:@YES forKey:kXNProcKey    inRequest:forwardReq];
+
+    // [环境伪装] 若已设置目标国，改写 region/时区/语言/MCC 等 query 参数（与出口IP一致）
+    [CountryEnv applyEnvToMutableRequest:forwardReq];
 
     // [Piggyback] 利用 TikTok 网络栈向后端发心跳（限频）
     [self _maybePingBackend];

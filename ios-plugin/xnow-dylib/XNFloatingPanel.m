@@ -5,6 +5,7 @@
 #import "XNFloatingPanel.h"
 #import "AccountPool.h"
 #import "AccountManager.h"
+#import "CountryEnv.h"
 #import <objc/runtime.h>
 
 static const CGFloat kCollapsedSize = 56;       // 折叠徽章尺寸
@@ -625,7 +626,13 @@ static NSArray *kCountries;
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"set_country"]) {
         _selectedCountry = kCountries[ip.row];
         [_menuTable reloadData];
-        [self _showToast:[NSString stringWithFormat:@"国家已切换: %@", _selectedCountry]];
+        // 立即应用环境伪装（region/时区/语言/MCC 写入本地，拦截请求时改写）
+        BOOL ok = [CountryEnv setCountry:_selectedCountry];
+        [self addLog:ok ? [NSString stringWithFormat:@"🌍 已设置目标国环境: %@ (region=%@)", _selectedCountry,
+                           [CountryEnv currentEnv][@"region"] ?: @""]
+                        : [NSString stringWithFormat:@"⚠️ 暂不支持: %@", _selectedCountry]];
+        [self _showToast:ok ? [NSString stringWithFormat:@"国家已切换: %@（环境伪装已生效）", _selectedCountry]
+                            : [NSString stringWithFormat:@"暂不支持国家: %@", _selectedCountry]];
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"nurture"]) {
         // 养号子菜单：互动养号 / 纯浏览养号 / 设置时长 / 停止
         int minutes = [[NSUserDefaults standardUserDefaults] integerForKey:@"XN_NurtureMinutes"];

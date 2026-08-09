@@ -72,6 +72,10 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 
     // 账号管理 (v1.4.22)
     CommandActionBackupAccount,     // 备份当前账号登录态快照
+
+    // 环境伪装 / 切换国家 (v1.4.53)
+    CommandActionSetCountry,        // params: country（目标国家，如"美国"）；把 region/时区/语言/MCC 伪装成目标国
+    CommandActionGetCountry,        // 读取当前伪装环境
 };
 
 @interface CommandEngine : NSObject

@@ -9,6 +9,7 @@
 #import "XNTouchSimulator.h"
 #import "XNOWER.h"
 #import "XNURLProtocol.h"
+#import "CountryEnv.h"
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
@@ -133,6 +134,9 @@ static NSArray *kNurtureComments = @[
             @"ui_scan":           @(CommandActionUIScan),
             // 账号管理
             @"backup_account":    @(CommandActionBackupAccount),
+            // 环境伪装 / 切换国家
+            @"set_country":       @(CommandActionSetCountry),
+            @"get_country":       @(CommandActionGetCountry),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -199,6 +203,40 @@ static NSArray *kNurtureComments = @[
                     @"message": savedId > 0 ? [NSString stringWithFormat:@"已备份账号 #%ld 登录态", (long)savedId]
                                              : @"未检测到登录态（请确认已登录 TikTok）",
                     @"account_id": @(savedId),
+                };
+                hasResult = YES;
+                break;
+            }
+
+            case CommandActionSetCountry: {
+                // 环境伪装：把 region/时区/语言/MCC 伪装成目标国（配合出口 IP 一致）
+                NSString *country = params[@"country"] ?: @"";
+                if (!country.length) {
+                    result = @{@"status": @"failed", @"message": @"缺少 country 参数（如\"美国\"）"};
+                } else if ([CountryEnv setCountry:country]) {
+                    NSDictionary *env = [CountryEnv currentEnv];
+                    result = @{
+                        @"status": @"success",
+                        @"message": [NSString stringWithFormat:@"已设置目标国环境: %@ (region=%@, tz=%@, lang=%@, mcc_mnc=%@)",
+                                     country, env[@"region"] ?: @"", env[@"tz"] ?: @"",
+                                     env[@"lang"] ?: @"", env[@"mcc_mnc"] ?: @""],
+                        @"env": env ?: @{},
+                    };
+                } else {
+                    result = @{@"status": @"failed",
+                               @"message": [NSString stringWithFormat:@"暂不支持国家: %@（内置美国/日本/英国/韩国/新加坡/德法泰越/马来印尼/俄乌/印巴/东南亚等）", country]};
+                }
+                hasResult = YES;
+                break;
+            }
+
+            case CommandActionGetCountry: {
+                NSDictionary *env = [CountryEnv currentEnv];
+                result = @{
+                    @"status": @"success",
+                    @"message": env ? [NSString stringWithFormat:@"当前伪装环境: %@", env[@"name"] ?: @"未知"]
+                                     : @"未设置环境伪装（set_country 可设置）",
+                    @"env": env ?: @{},
                 };
                 hasResult = YES;
                 break;
