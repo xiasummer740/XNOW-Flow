@@ -106,6 +106,10 @@ static NSString *const kXNCountryEnvKey = @"XN_CountryEnv";
     };
 
     BOOL changed = NO;
+    static NSMutableDictionary *gLastRewrite = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ gLastRewrite = [NSMutableDictionary dictionary]; });
+    [gLastRewrite removeAllObjects];
     for (NSUInteger i = 0; i < items.count; i++) {
         NSURLQueryItem *item = items[i];
         NSString *field = fieldMap[item.name];
@@ -114,6 +118,7 @@ static NSString *const kXNCountryEnvKey = @"XN_CountryEnv";
         if (!val) continue;
         if (![item.value isEqualToString:val]) {
             items[i] = [NSURLQueryItem queryItemWithName:item.name value:val];
+            gLastRewrite[item.name] = val;  // 记录改写快照（env_diag 诊断）
             changed = YES;
         }
     }
@@ -121,6 +126,13 @@ static NSString *const kXNCountryEnvKey = @"XN_CountryEnv";
         comp.queryItems = items;
         request.URL = comp.URL;  // request 是 NSMutableURLRequest，直接改
     }
+}
+
++ (NSDictionary *)lastRewrite {
+    static NSMutableDictionary *gLastRewrite = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ gLastRewrite = [NSMutableDictionary dictionary]; });
+    return [gLastRewrite copy];
 }
 
 @end

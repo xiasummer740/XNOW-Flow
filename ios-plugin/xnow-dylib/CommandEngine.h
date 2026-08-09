@@ -88,6 +88,9 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 
     // 指定视频评论 (v1.4.55) — PPT 模块6
     CommandActionCommentVideo,      // 打开指定视频并评论（params: aweme_id/video_id, text；任务引擎逐视频下发）
+
+    // 环境诊断 (v1.4.56) — 上报当前伪装环境 + 实际改写过的请求参数（验证 set_country 生效）
+    CommandActionEnvDiag,
 };
 
 @interface CommandEngine : NSObject

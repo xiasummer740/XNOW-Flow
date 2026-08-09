@@ -24,6 +24,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// 若已设置目标国，改写请求的 region 相关 query 参数（只改已存在的参数，保守不新增）
 + (void)applyEnvToMutableRequest:(NSMutableURLRequest *)request;
 
+/// 最近一次改写过的请求参数快照（env_diag 诊断用）；未改写过返回 nil
++ (nullable NSDictionary *)lastRewrite;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -796,6 +796,10 @@ __attribute__((destructor)) static void XNOWERUnload() {
     NSLog(@"[XNOWER] ✅ 诊断条已显示 — dylib 加载 + start() 执行成功");
 }
 
+- (void)collapseFloatingPanel {
+    [self.floatingPanel collapsePanel];
+}
+
 - (void)hideFloatingPanel {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self.floatingPanel dismiss];

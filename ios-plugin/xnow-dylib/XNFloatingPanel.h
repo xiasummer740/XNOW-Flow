@@ -62,6 +62,8 @@
 - (void)showInWindow:(UIWindow *)window;
 - (void)show;
 - (void)dismiss;
+/// 收起为折叠徽章（不销毁；自动任务/养号启动前调用，避免浮窗遮挡坐标操作导致崩溃）
+- (void)collapsePanel;
 - (void)addLog:(NSString *)message;
 - (BOOL)isVisible;
 

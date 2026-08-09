@@ -1045,6 +1045,14 @@ static NSArray *kCountries;
     } completion:nil];
 }
 
+- (void)collapsePanel {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->_isExpanded) {
+            [self _collapsePanel];
+        }
+    });
+}
+
 - (void)dismiss {
     if (!self.superview) return;
     [self endEditing:YES];

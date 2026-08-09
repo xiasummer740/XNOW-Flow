@@ -146,6 +146,8 @@ static NSArray *kNurtureComments = @[
             @"follow_user":       @(CommandActionFollowUser),
             // 指定视频评论
             @"comment_video":     @(CommandActionCommentVideo),
+            // 环境诊断
+            @"env_diag":          @(CommandActionEnvDiag),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -272,6 +274,19 @@ static NSArray *kNurtureComments = @[
                 result = [self _performCommentVideo:params];
                 hasResult = YES;
                 break;
+
+            case CommandActionEnvDiag: {
+                NSDictionary *env = [CountryEnv currentEnv];
+                NSDictionary *rewrite = [CountryEnv lastRewrite];
+                result = @{
+                    @"status": @"success",
+                    @"message": env ? [NSString stringWithFormat:@"环境: %@", env[@"name"] ?: @""] : @"未设置环境伪装",
+                    @"env": env ?: @{},
+                    @"last_rewrite": rewrite ?: @{},
+                };
+                hasResult = YES;
+                break;
+            }
 
             case CommandActionFollow:
                 [self _performFollow];
@@ -2549,8 +2564,12 @@ static NSArray *kNurtureComments = @[
     dispatch_async(_execQueue, ^{
         __block int cycles = 0, likes = 0, follows = 0;
         [weakSelf _logStep:@"nurture_start"];
-        // 提示：请在首页（feed）使用养号；非 feed 页操作会自动跳过
-        [[XNOWER sharedInstance] addLog:@"💡 养号请在首页浏览视频（非首页自动跳过）"];
+        // 养号前置：收起浮窗（避免浮窗遮挡坐标点击导致崩溃）+ 切回首页（确保在 feed 刷视频）
+        [[XNOWER sharedInstance] collapseFloatingPanel];  // 内部 dispatch_async 到主队列，不会死锁
+        [NSThread sleepForTimeInterval:0.6];
+        [weakSelf _tapTab:@"home"];  // _tapTab 内部 dispatch_sync 到主队列，无需再包一层
+        [NSThread sleepForTimeInterval:2.0];
+        [[XNOWER sharedInstance] addLog:@"🏠 已切回首页，开始养号"];
         while (weakSelf.nurtureRunning) {
             // 时长检查（到点自动停）
             NSTimeInterval elapsed = [[NSDate date] timeIntervalSince1970] - startTime;
