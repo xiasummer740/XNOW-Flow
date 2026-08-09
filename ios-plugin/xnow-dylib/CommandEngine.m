@@ -1829,6 +1829,43 @@ static NSArray *kNurtureComments = @[
 }
 
 /// 点击底部 Tab（home/discover/inbox/profile）
+/// 互动养号专用安全点赞：accId 直接定位 + sendActions（不深度遍历类名容器、不合成触摸）
+/// 背景：互动时 feed 有预加载 cell，_findViewByClassContaining 深度28遍历会碰到坏视图 → 信号崩
+- (BOOL)_performLikeSafe {
+    __block BOOL ok = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        @try {
+            UIView *likeView = [self _findViewWithAccessibilityIdentifier:kAccLike inView:XN_ActiveWindow()];
+            if (likeView && [likeView isKindOfClass:[UIControl class]]) {
+                UIControl *c = (UIControl *)likeView;
+                [c sendActionsForControlEvents:UIControlEventTouchUpInside];
+                ok = YES;
+            }
+        } @catch (NSException *e) {
+            NSLog(@"[XNOWER] likeSafe error: %@", e.reason);
+        }
+    });
+    return ok;
+}
+
+/// 互动养号专用安全关注：label 定位 + sendActions（不深度遍历、不合成触摸）
+- (BOOL)_performFollowSafe {
+    __block BOOL ok = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        @try {
+            UIButton *btn = [self _findButtonWithAnyLabel:@[@"follow", @"Follow", @"+"]
+                                                   inView:XN_ActiveWindow()];
+            if (btn && [btn isKindOfClass:[UIControl class]]) {
+                [btn sendActionsForControlEvents:UIControlEventTouchUpInside];
+                ok = YES;
+            }
+        } @catch (NSException *e) {
+            NSLog(@"[XNOWER] followSafe error: %@", e.reason);
+        }
+    });
+    return ok;
+}
+
 /// 统一点击控件：合成触摸（tapAtPoint 内含 UIControl sendActions + 手势 target-action + 合成触摸）
 /// ⚠️ 不用 _setState:Recognized 手势注入——点赞按钮(AWEFeedVideoButton)是 UIControl，
 ///    sendActions 本来就有效；对它做 _setState 注入会触发 TikTok 内部崩溃(信号崩,@try拦不住)。
@@ -2604,17 +2641,14 @@ static NSArray *kNurtureComments = @[
             if (![self _isOnFeed]) {
                 [self _logStep:@"interact_skip_no_feed"];
             } else if (arc4random_uniform(100) < 50) {
-                dispatch_sync(dispatch_get_main_queue(), ^{
-                    [self _performLike];
-                });
-                likes++;
-                [self _logStep:@"interact_like"];
+                // 安全点赞：accId定位+sendActions（防预加载cell信号崩）
+                BOOL liked = [self _performLikeSafe];
+                if (liked) { likes++; [self _logStep:@"interact_like"]; }
+                else { [self _logStep:@"interact_like_fail"]; }
             } else {
-                dispatch_sync(dispatch_get_main_queue(), ^{
-                    [self _performFollow];
-                });
-                follows++;
-                [self _logStep:@"interact_follow"];
+                BOOL followed = [self _performFollowSafe];
+                if (followed) { follows++; [self _logStep:@"interact_follow"]; }
+                else { [self _logStep:@"interact_follow_fail"]; }
             }
         }
 
@@ -2811,19 +2845,16 @@ static NSArray *kNurtureComments = @[
                     [[XNOWER sharedInstance] addLog:@"⏭ 互动时不在 feed，跳过本次互动"];
                     [weakSelf _logStep:@"interact_skip_no_feed"];
                 } else if (arc4random_uniform(100) < 50) {
-                    dispatch_sync(dispatch_get_main_queue(), ^{
-                        [weakSelf _performLike];
-                    });
-                    likes++;
-                    [weakSelf _logStep:@"interact_like"];
-                    [[XNOWER sharedInstance] addLog:@"❤️ 随机点赞"];
+                    // 安全点赞：accId定位+sendActions，不深度遍历不合成触摸（防预加载cell信号崩）
+                    BOOL liked = [weakSelf _performLikeSafe];
+                    if (liked) { likes++; [weakSelf _logStep:@"interact_like"]; }
+                    else { [weakSelf _logStep:@"interact_like_fail"]; }
+                    [[XNOWER sharedInstance] addLog:liked ? @"❤️ 随机点赞" : @"⚠️ 点赞按钮未找到"];
                 } else {
-                    dispatch_sync(dispatch_get_main_queue(), ^{
-                        [weakSelf _performFollow];
-                    });
-                    follows++;
-                    [weakSelf _logStep:@"interact_follow"];
-                    [[XNOWER sharedInstance] addLog:@"👤 随机关注"];
+                    BOOL followed = [weakSelf _performFollowSafe];
+                    if (followed) { follows++; [weakSelf _logStep:@"interact_follow"]; }
+                    else { [weakSelf _logStep:@"interact_follow_fail"]; }
+                    [[XNOWER sharedInstance] addLog:followed ? @"👤 随机关注" : @"⚠️ 关注按钮未找到"];
                 }
             }
             // 上滑到下一个视频（互动在浏览稳定期做完了，再滑动换视频）
