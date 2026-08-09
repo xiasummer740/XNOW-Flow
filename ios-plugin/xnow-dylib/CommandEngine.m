@@ -396,7 +396,8 @@ static NSArray *kNurtureComments = @[
                 [self _performGoBack];
                 break;
             case CommandActionGoHome:
-                [self _tapTab:@"home"];
+                // 走 _gotoHomeFeed（a11y点击 + deep link 兜底 + 真实验证在 feed）
+                [self _gotoHomeFeed];
                 break;
             case CommandActionOpenTab: {
                 NSString *tab = params[@"tab"] ?: @"home";
