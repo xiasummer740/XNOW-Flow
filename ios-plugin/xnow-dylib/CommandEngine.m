@@ -144,6 +144,8 @@ static NSArray *kNurtureComments = @[
             @"open_live":         @(CommandActionOpenLive),
             // 回关/指定关注
             @"follow_user":       @(CommandActionFollowUser),
+            // 指定视频评论
+            @"comment_video":     @(CommandActionCommentVideo),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -263,6 +265,11 @@ static NSArray *kNurtureComments = @[
 
             case CommandActionFollowUser:
                 result = [self _performFollowUser:params];
+                hasResult = YES;
+                break;
+
+            case CommandActionCommentVideo:
+                result = [self _performCommentVideo:params];
                 hasResult = YES;
                 break;
 
@@ -1914,6 +1921,21 @@ static NSArray *kNurtureComments = @[
     [self _performFollow];
     [NSThread sleepForTimeInterval:1.0];
     return @{@"status": @"success", @"message": [NSString stringWithFormat:@"已触发关注 %@", uid]};
+}
+
+/// 指定视频评论：打开指定视频 → 打开评论面板 → 填文本 → 发送
+/// params: {aweme_id 或 video_id 或 target, text}（指定视频评论任务由引擎逐视频下发）
+- (NSDictionary *)_performCommentVideo:(NSDictionary *)params {
+    NSString *awemeId = params[@"aweme_id"] ?: params[@"video_id"] ?: params[@"target"] ?: @"";
+    NSString *text = params[@"text"] ?: @"Nice!";
+    if (awemeId.length == 0) {
+        return @{@"status": @"failed", @"message": @"缺少 aweme_id/video_id 参数"};
+    }
+    [self _logStep:@"comment_video"];
+    [self _performOpenVideo:awemeId];
+    [NSThread sleepForTimeInterval:3.0];
+    [self _performComment:text];
+    return @{@"status": @"success", @"message": [NSString stringWithFormat:@"已触发对视频 %@ 评论", awemeId]};
 }
 
 /// 通过 URL scheme 打开视频详情

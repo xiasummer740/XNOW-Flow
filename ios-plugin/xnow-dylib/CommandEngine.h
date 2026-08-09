@@ -85,6 +85,9 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 
     // 回关/指定关注 (v1.4.55) — PPT 模块8 全自动回关基础
     CommandActionFollowUser,        // 打开指定用户主页并关注（params: uid/target；回关任务由引擎逐粉丝下发）
+
+    // 指定视频评论 (v1.4.55) — PPT 模块6
+    CommandActionCommentVideo,      // 打开指定视频并评论（params: aweme_id/video_id, text；任务引擎逐视频下发）
 };
 
 @interface CommandEngine : NSObject

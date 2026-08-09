@@ -22,6 +22,7 @@ const taskTypes = [
   { value: 'follow', label: '批量关注', icon: '➕', action: 'follow', risk: 200, hint: '关注指定用户/关键词结果' },
   { value: 'like', label: '批量点赞', icon: '❤️', action: 'like', risk: 300, hint: '点赞 feed 视频' },
   { value: 'comment', label: '批量评论', icon: '💬', action: 'comment', risk: 0, hint: '每条评论=一个目标，自动轮换' },
+  { value: 'video_comment', label: '指定视频评论', icon: '🎯', action: 'comment_video', risk: 0, hint: '每个视频ID=一条，填评论内容' },
   { value: 'dm', label: '批量私信', icon: '✉️', action: 'send_dm', risk: 0, hint: '私信指定用户（粉丝池）' },
   { value: 'post_video', label: '自动发视频', icon: '🎬', action: 'post_video', risk: 0, hint: '每个 video_url 发一条，标题轮换' },
   { value: 'collect', label: '数据采集', icon: '📡', action: 'collect_fans', risk: 0, hint: '采集粉丝/视频数据' },
