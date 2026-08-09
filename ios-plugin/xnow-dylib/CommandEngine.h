@@ -79,6 +79,12 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 
     // 评论点赞 (v1.4.54) — PPT 模块4 曝光玩法核心
     CommandActionLikeComments,      // 打开评论面板，逐条点赞评论（params: count）
+
+    // 进直播间 (v1.4.54) — PPT 模块3 直播间采集前置
+    CommandActionOpenLive,          // 打开主播主页并进其直播间（params: uid/anchor_id）
+
+    // 回关/指定关注 (v1.4.55) — PPT 模块8 全自动回关基础
+    CommandActionFollowUser,        // 打开指定用户主页并关注（params: uid/target；回关任务由引擎逐粉丝下发）
 };
 
 @interface CommandEngine : NSObject

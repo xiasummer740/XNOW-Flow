@@ -140,6 +140,10 @@ static NSArray *kNurtureComments = @[
             @"get_country":       @(CommandActionGetCountry),
             // 评论点赞
             @"like_comment":      @(CommandActionLikeComments),
+            // 进直播间
+            @"open_live":         @(CommandActionOpenLive),
+            // 回关/指定关注
+            @"follow_user":       @(CommandActionFollowUser),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -251,6 +255,16 @@ static NSArray *kNurtureComments = @[
                 [self _performLikeComments:count];
                 break;
             }
+
+            case CommandActionOpenLive:
+                result = [self _performOpenLive:params];
+                hasResult = YES;
+                break;
+
+            case CommandActionFollowUser:
+                result = [self _performFollowUser:params];
+                hasResult = YES;
+                break;
 
             case CommandActionFollow:
                 [self _performFollow];
@@ -1850,6 +1864,56 @@ static NSArray *kNurtureComments = @[
         NSURL *url = [NSURL URLWithString:scheme];
         [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
     });
+}
+
+/// 进直播间：打开主播主页 → 找 LIVE 入口点进 → 验证是否在直播间
+/// params: {uid 或 anchor_id 或 target}（主播抖音号/用户ID）
+- (NSDictionary *)_performOpenLive:(NSDictionary *)params {
+    NSString *uid = params[@"uid"] ?: params[@"anchor_id"] ?: params[@"target"] ?: @"";
+    if (uid.length == 0) {
+        return @{@"status": @"failed", @"message": @"缺少主播 uid/anchor_id 参数"};
+    }
+    [self _logStep:@"open_live"];
+    // Step 1: 打开主播主页（deep link）
+    [self _performOpenUser:uid];
+    [NSThread sleepForTimeInterval:3.0];
+    // Step 2: 找 LIVE 入口并点进（主播开播时主页有 LIVE 按钮/角标）
+    __block BOOL tapped = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *liveBtn = [self _findButtonWithAnyLabel:@[@"Live", @"LIVE", @"live", @"观看直播",
+                                                            @"进入直播", @"直播中", @"正在直播"]
+                                                   inView:XN_ActiveWindow()];
+        if (liveBtn) {
+            [self _safeTapAtPoint:[liveBtn.superview convertPoint:liveBtn.center toView:nil]];
+            tapped = YES;
+        }
+    });
+    [NSThread sleepForTimeInterval:2.5];
+    // Step 3: 验证是否已进直播间
+    BOOL inLive = [self _isInLiveRoom];
+    return @{
+        @"status": (tapped || inLive) ? @"success" : @"failed",
+        @"message": inLive ? @"已进入直播间"
+                           : (tapped ? @"已点击 LIVE，但未确认在直播间" : @"未找到主播的 LIVE 入口（主播可能未开播）"),
+        @"in_live_room": @(inLive),
+        @"uid": uid,
+    };
+}
+
+/// 打开指定用户主页并关注（回关任务的基础：引擎逐粉丝下发 follow_user）
+/// params: {uid 或 target 或 username}
+- (NSDictionary *)_performFollowUser:(NSDictionary *)params {
+    NSString *uid = params[@"uid"] ?: params[@"target"] ?: params[@"username"] ?: @"";
+    if (uid.length == 0) {
+        return @{@"status": @"failed", @"message": @"缺少 uid/target 参数"};
+    }
+    [self _logStep:@"follow_user"];
+    [self _performOpenUser:uid];
+    [NSThread sleepForTimeInterval:2.5];
+    // 复用关注逻辑（label 查找，profile 页不会触发 feed 坐标兜底）
+    [self _performFollow];
+    [NSThread sleepForTimeInterval:1.0];
+    return @{@"status": @"success", @"message": [NSString stringWithFormat:@"已触发关注 %@", uid]};
 }
 
 /// 通过 URL scheme 打开视频详情

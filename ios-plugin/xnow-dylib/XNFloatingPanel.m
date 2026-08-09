@@ -294,6 +294,17 @@ static NSArray *kCountries;
     [sv addSubview:uuidCard];
     y += 66 + 14;
 
+    // 复制机器码按钮（人工激活路径：发客服代绑）
+    UIButton *copyBtn = [UIButton buttonWithType:UIButtonTypeSystem];
+    copyBtn.frame = CGRectMake(m, y, w, 40);
+    [copyBtn setTitle:@"📋 复制机器码（发客服人工激活）" forState:UIControlStateNormal];
+    copyBtn.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    copyBtn.backgroundColor = [UIColor secondarySystemGroupedBackgroundColor];
+    copyBtn.layer.cornerRadius = 10;
+    [copyBtn addTarget:self action:@selector(_copyDeviceCodeTapped) forControlEvents:UIControlEventTouchUpInside];
+    [sv addSubview:copyBtn];
+    y += 40 + 14;
+
     // 重要提示（警告卡片）
     UIView *noticeCard = [self _makeCardViewWithFrame:CGRectMake(m, y, w, 92)];
     noticeCard.backgroundColor = [[UIColor systemYellowColor] colorWithAlphaComponent:0.10];
@@ -448,6 +459,19 @@ static NSArray *kCountries;
 }
 
 #pragma mark - Actions
+
+/// 复制机器码（人工激活路径：发客服代绑）
+- (void)_copyDeviceCodeTapped {
+    NSString *code = _panelDeviceId ?: @"";
+    if (code.length == 0) {
+        code = [[[UIDevice currentDevice] identifierForVendor] UUIDString] ?: @"";
+    }
+    if (code.length > 0) {
+        [UIPasteboard generalPasteboard].string = code;
+        [self _showToast:@"已复制机器码，请发给客服"];
+        [self addLog:[NSString stringWithFormat:@"已复制机器码: %@", code]];
+    }
+}
 
 - (void)_activateTapped {
     NSString *code = _inputField.text ?: @"";
