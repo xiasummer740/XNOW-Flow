@@ -1830,31 +1830,27 @@ static NSArray *kNurtureComments = @[
 }
 
 /// 点击底部 Tab（home/discover/inbox/profile）
-/// 递归查找 UITabBar（定位真实底部导航栏位置，避免固定 Y 坐标点偏）
-- (void)_findTabBarInView:(UIView *)view result:(UITabBar **)result {
-    if (*result) return;
-    if ([view isKindOfClass:[UITabBar class]]) {
-        *result = (UITabBar *)view;
-        return;
-    }
-    for (UIView *sub in view.subviews) {
-        [self _findTabBarInView:sub result:result];
-        if (*result) return;
-    }
-}
-
 - (void)_tapTab:(NSString *)tab {
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIWindow *window = XN_ActiveWindow();
+        if (!window) return;
         CGSize screen = [UIScreen mainScreen].bounds.size;
-        // 修正 tab 点击：优先按 label 找底部 tab（Home/首页/For You），否则 UITabBar 定位，最后坐标兜底
-        CGFloat ratioX;
-        if ([tab isEqualToString:@"discover"]) ratioX = 0.35;
-        else if ([tab isEqualToString:@"inbox"]) ratioX = 0.62;
-        else if ([tab isEqualToString:@"profile"]) ratioX = 0.88;
-        else ratioX = 0.12;  // home 默认
 
-        // 1. label 查找（home 优先找 tab bar 上的 Home/首页/For You）
+        // 1. 官方 accessibility identifier 精确定位 tab（ui_scan 实测: a11y_vo_home / a11y_vo_inbox / a11y_vo_profile）
+        NSString *accId = nil;
+        if ([tab isEqualToString:@"home"]) accId = @"a11y_vo_home";
+        else if ([tab isEqualToString:@"inbox"]) accId = @"a11y_vo_inbox";
+        else if ([tab isEqualToString:@"profile"]) accId = @"a11y_vo_profile";
+        if (accId) {
+            UIView *tabView = [self _findViewWithAccessibilityIdentifier:accId inView:window];
+            if (tabView) {
+                [self _safeTapAtPoint:[tabView.superview convertPoint:tabView.center toView:nil]];
+                self->_currentPage = tab;
+                return;
+            }
+        }
+
+        // 2. label 查找（home 找底部 tab bar 上的 Home/首页/For You）
         if ([tab isEqualToString:@"home"]) {
             UIButton *homeBtn = [self _findButtonWithAnyLabel:@[@"Home", @"首页", @"For You", @"推荐", @"Recommend"]
                                                        inView:window];
@@ -1867,11 +1863,13 @@ static NSArray *kNurtureComments = @[
                 }
             }
         }
-        // 2. UITabBar 定位真实 tab bar 中心 Y
-        __block UITabBar *tabBar = nil;
-        [self _findTabBarInView:window result:&tabBar];
-        CGFloat tabY = tabBar ? CGRectGetMidY([tabBar.superview convertRect:tabBar.frame toView:nil])
-                              : (screen.height - 60);  // 原 -40 偏低（接近 home indicator），修正到 tab bar 中心
+        // 3. 坐标兜底（Y 用 tab bar 实测位置: 屏幕高 ~844 时 tab 中心在 ~712，不是 h-40/h-60）
+        CGFloat ratioX;
+        if ([tab isEqualToString:@"discover"]) ratioX = 0.35;
+        else if ([tab isEqualToString:@"inbox"]) ratioX = 0.62;
+        else if ([tab isEqualToString:@"profile"]) ratioX = 0.88;
+        else ratioX = 0.12;  // home 默认
+        CGFloat tabY = screen.height - 132;  // 实测 tab 中心 y≈712 (h=844): h-132=712; 适配不同屏幕比例
         [self _safeTapAtPoint:CGPointMake(screen.width * ratioX, tabY)];
         self->_currentPage = tab;
     });
