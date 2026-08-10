@@ -581,6 +581,13 @@ __attribute__((destructor)) static void XNOWERUnload() {
             }
             s->_isConnected = YES;
             [s.floatingPanel setConnected:YES];
+            // 修复：授权有效 → 自动激活（重装后本地标志被清，授权检查通过也应恢复激活）
+            [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"XN_Activated"];
+            if (info[@"key"]) {
+                [[NSUserDefaults standardUserDefaults] setObject:info[@"key"] forKey:@"XN_ActivationCode"];
+            }
+            [[NSUserDefaults standardUserDefaults] synchronize];
+            [s.floatingPanel setActivated:YES expires:info[@"expires_at"] ?: @""];
             [s addLog:@"✅ 授权有效，开始轮询指令"];
             [s _startPollingTimer];
         });
