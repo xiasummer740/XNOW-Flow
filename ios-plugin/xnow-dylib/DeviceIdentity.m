@@ -1,8 +1,10 @@
 // DeviceIdentity.m
-// XNOW 设备唯一标识实现 — Keychain 持久化 UUID
+// XNOW 设备唯一标识实现 — 硬件 UDID(IOPlatformUUID, 永不变) > Keychain > NSUUID
+// 祥哥要求: 卡密绑定不变标识, 重装/清缓存不失效
 
 #import "DeviceIdentity.h"
 #import <Security/Security.h>
+#import <IOKit/IOKitLib.h>
 
 #define DI_LOG(fmt, ...) NSLog(@"[XNOWER][DeviceID] " fmt, ##__VA_ARGS__)
 
@@ -22,28 +24,65 @@ static NSString *gCachedUID = nil;
         return gCachedUID;
     }
 
-    // 1. 优先读 Keychain（卸载重装后仍保留）
-    NSString *uid = [self _readKeychainUID];
+    NSString *uid = nil;
+
+    // 1. 优先硬件 UDID（IOPlatformUUID，永不变，重装/清缓存/清Keychain都不变）← 祥哥要求
+    uid = [self _hardwareUDID];
+    if (uid.length > 0) {
+        DI_LOG(@"✅ 使用硬件 UDID: %@", uid);
+        gCachedUID = uid;
+        return uid;
+    }
+
+    // 2. 硬件拿不到 → 读 Keychain（卸载重装后通常保留）
+    uid = [self _readKeychainUID];
     if (uid.length == 0) {
-        // 2. Keychain 没有 → 读 NSUserDefaults fallback
+        // 3. Keychain 没有 → 读 NSUserDefaults fallback
         uid = [[NSUserDefaults standardUserDefaults] stringForKey:kUIDDefaultsKey];
     }
 
     if (uid.length == 0) {
-        // 3. 都没有 → 生成新 UUID 并双写（Keychain + UserDefaults）
+        // 4. 都没有 → 生成新 UUID 并双写（Keychain + UserDefaults）
         uid = [[NSUUID UUID] UUIDString];
         [self _writeKeychainUID:uid];
         [[NSUserDefaults standardUserDefaults] setObject:uid forKey:kUIDDefaultsKey];
         [[NSUserDefaults standardUserDefaults] synchronize];
         DI_LOG(@"✅ 已生成新设备 UID: %@", uid);
     } else if (![[NSUserDefaults standardUserDefaults] stringForKey:kUIDDefaultsKey]) {
-        // 4. 只有 Keychain 有值 → 同步到 UserDefaults 兜底
+        // 5. 只有 Keychain 有值 → 同步到 UserDefaults 兜底
         [[NSUserDefaults standardUserDefaults] setObject:uid forKey:kUIDDefaultsKey];
         [[NSUserDefaults standardUserDefaults] synchronize];
     }
 
     gCachedUID = uid;
     return uid;
+}
+
+/// 硬件 UDID：IOPlatformUUID（IOKit，设备硬件级唯一标识，永不变）
+/// iOS 沙盒 App 可能拿不到（需非沙盒/注入环境），拿不到返回 nil 回退 Keychain
++ (NSString *)_hardwareUDID {
+    static NSString *hw = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        @try {
+            io_service_t svc = IOServiceGetMatchingService(kIOMasterPortDefault,
+                                                          IOServiceMatching("IOPlatformExpertDevice"));
+            if (svc) {
+                CFTypeRef prop = IORegistryEntryCreateCFProperty(svc, CFSTR("IOPlatformUUID"),
+                                                                 kCFAllocatorDefault, 0);
+                IOObjectRelease(svc);
+                if (prop && CFGetTypeID(prop) == CFStringGetTypeID()) {
+                    hw = (__bridge_transfer NSString *)prop;
+                } else if (prop) {
+                    CFRelease(prop);
+                }
+            }
+        } @catch (NSException *e) {
+            DI_LOG(@"硬件UDID获取失败: %@", e.reason);
+        }
+        DI_LOG(@"IOPlatformUUID: %@", hw ?: @"(不可用, 沙盒限制)");
+    });
+    return hw;
 }
 
 #pragma mark - Keychain 读写
