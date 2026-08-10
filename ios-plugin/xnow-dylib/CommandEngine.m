@@ -796,9 +796,13 @@ static NSArray *kNurtureComments = @[
         __strong UIView *likeView = nil;
         [self _findVisibleViewWithAccId:kAccLike inView:window screen:screen depth:0 result:&likeView];
         if (likeView) {
-            [self _safeTapAtPoint:[likeView.superview convertPoint:likeView.center toView:nil]];
+            CGPoint center = [likeView.superview convertPoint:likeView.center toView:nil];
+            NSLog(@"[XNOWER] like命中: %@ center=(%.0f,%.0f) frame=%@", NSStringFromClass(likeView.class),
+                  center.x, center.y, NSStringFromCGRect([likeView.superview convertRect:likeView.frame toView:nil]));
+            [self _safeTapAtPoint:center];
             return;
         }
+        NSLog(@"[XNOWER] 未找到屏幕内 feedLikeButton，尝试容器定位");
 
         // 1. PlayInteractionLikeView 容器定位（以前成功方法），容器内屏幕内控件 → tapAtPoint
         UIView *likeContainer = [self _findViewByClassContaining:@"PlayInteractionLikeView"
@@ -841,17 +845,25 @@ static NSArray *kNurtureComments = @[
 - (void)_performFollow {
     [self _logStep:@"follow"];
     dispatch_sync(dispatch_get_main_queue(), ^{
-        UIButton *btn = [self _findButtonWithAnyLabel:@[@"follow", @"Follow", @"+"]
-                                               inView:XN_ActiveWindow()];
-        if (btn) {
-            [self _safeTapView:btn];  // 手势注入优先，兜底合成触摸
+        UIWindow *window = XN_ActiveWindow();
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        // 屏幕内 label 含 Follow 的视图（FollowPromptView，非 UIButton；排除顶部 Following 标签 y≈42）
+        __strong UIView *followView = nil;
+        [self _findVisibleViewWithLabel:@"Follow" inView:window screen:screen depth:0 result:&followView];
+        if (!followView) {
+            [self _findVisibleViewWithLabel:@"关注" inView:window screen:screen depth:0 result:&followView];
+        }
+        if (followView) {
+            CGPoint center = [followView.superview convertPoint:followView.center toView:nil];
+            NSLog(@"[XNOWER] follow命中: %@ center=(%.0f,%.0f) label=%@", NSStringFromClass(followView.class),
+                  center.x, center.y, followView.accessibilityLabel ?: @"");
+            [self _safeTapAtPoint:center];
             return;
         }
-        // 仅当在 feed 页才用固定坐标兜底（避免非 feed 页点错控件崩溃）
+        // 坐标兜底（仅当在 feed 页才用，避免非 feed 页点错控件崩溃）
         __block UIScrollView *feedScroll = nil;
-        [self _findLargeFeedScrollViewInView:XN_ActiveWindow() result:&feedScroll];
+        [self _findLargeFeedScrollViewInView:window result:&feedScroll];
         if (feedScroll) {
-            CGSize screen = [UIScreen mainScreen].bounds.size;
             [self _safeTapAtPoint:CGPointMake(
                 screen.width * kFollowBtnRatioX,
                 screen.height * kFollowBtnRatioY)];
