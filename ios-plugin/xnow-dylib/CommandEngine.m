@@ -855,9 +855,26 @@ static NSArray *kNurtureComments = @[
         }
         if (followView) {
             CGPoint center = [followView.superview convertPoint:followView.center toView:nil];
-            NSLog(@"[XNOWER] follow命中: %@ center=(%.0f,%.0f) label=%@", NSStringFromClass(followView.class),
-                  center.x, center.y, followView.accessibilityLabel ?: @"");
+            NSString *beforeLabel = followView.accessibilityLabel ?: @"";
+            NSLog(@"[XNOWER] follow命中: %@ center=(%.0f,%.0f) before=%@", NSStringFromClass(followView.class),
+                  center.x, center.y, beforeLabel);
             [self _safeTapAtPoint:center];
+            // 关注成功验证：点击后异步读 label，从 "Follow X" 变 "Following X" 或按钮消失 = 成功
+            __weak UIView *weakFV = followView;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1.0 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                UIView *fv = weakFV;
+                if (!fv) {  // 按钮消失 = 可能已关注成功（UI 重建）
+                    NSLog(@"[XNOWER] follow验证: 按钮已消失, 视为成功");
+                    [self _reportFollowVerify:YES before:beforeLabel after:@""];
+                    return;
+                }
+                NSString *afterLabel = fv.accessibilityLabel ?: @"";
+                BOOL followed = ([afterLabel rangeOfString:@"Following" options:NSCaseInsensitiveSearch].location != NSNotFound)
+                                || ([beforeLabel rangeOfString:@"Follow" options:NSCaseInsensitiveSearch].location != NSNotFound
+                                    && ![afterLabel isEqualToString:beforeLabel]);
+                NSLog(@"[XNOWER] follow验证: before=%@ after=%@ followed=%d", beforeLabel, afterLabel, followed);
+                [self _reportFollowVerify:followed before:beforeLabel after:afterLabel];
+            });
             return;
         }
         // 坐标兜底（仅当在 feed 页才用，避免非 feed 页点错控件崩溃）
@@ -1961,6 +1978,19 @@ static NSArray *kNurtureComments = @[
         }
     });
     return ok;
+}
+
+/// 上报关注成功验证（state_diag，同点赞的 Video liked 验证机制）
+- (void)_reportFollowVerify:(BOOL)success before:(NSString *)before after:(NSString *)after {
+    @try {
+        NSString *devId = [XNOWER sharedInstance].deviceId;
+        if (devId.length == 0) return;
+        [XNURLProtocol sendMessage:@{
+            @"type": @"state_diag",
+            @"data": @{@"action": @"follow", @"success": @(success),
+                       @"before": before ?: @"", @"after": after ?: @""}
+        } deviceId:devId];
+    } @catch (NSException *e) {}
 }
 
 /// 统一点击控件：合成触摸（tapAtPoint 内含 UIControl sendActions + 手势 target-action + 合成触摸）
