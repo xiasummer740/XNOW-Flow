@@ -65,7 +65,8 @@ static NSString *gCachedUID = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         @try {
-            io_service_t svc = IOServiceGetMatchingService(kIOMasterPortDefault,
+            // kIOMasterPortDefault 在 iOS 17 SDK 标记 unavailable，用 MACH_PORT_NULL(0) 等价绕过编译
+            io_service_t svc = IOServiceGetMatchingService(MACH_PORT_NULL,
                                                           IOServiceMatching("IOPlatformExpertDevice"));
             if (svc) {
                 CFTypeRef prop = IORegistryEntryCreateCFProperty(svc, CFSTR("IOPlatformUUID"),
