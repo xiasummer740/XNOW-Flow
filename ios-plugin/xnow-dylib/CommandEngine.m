@@ -665,7 +665,7 @@ static NSArray *kNurtureComments = @[
 }
 
 - (void)_scanInteractiveViewsInView:(UIView *)view depth:(int)depth result:(NSMutableArray *)result {
-    if (depth > 28 || !view || result.count > 400) return;
+    if (depth > 30 || !view || result.count > 400) return;
     BOOL interactive = [view isKindOfClass:[UIControl class]] ||
                        (view.accessibilityIdentifier.length > 0) ||
                        (view.accessibilityLabel.length > 0) ||
@@ -761,7 +761,7 @@ static NSArray *kNurtureComments = @[
 
 /// 递归按类名包含查找视图（深度保护）— 定位 TikTok 私有容器（如点赞区 PlayInteractionLikeView）
 - (UIView *)_findViewByClassContaining:(NSString *)className inView:(UIView *)view depth:(int)depth {
-    if (depth > 28 || !view) return nil;
+    if (depth > 30 || !view) return nil;
     @try {
         if ([NSStringFromClass(view.class) containsString:className]) return view;
         for (UIView *sub in view.subviews) {
@@ -774,7 +774,7 @@ static NSArray *kNurtureComments = @[
 
 /// 在容器内找第一个可交互控件（点赞按钮是 UIControl）
 - (UIView *)_findFirstControlInView:(UIView *)view depth:(int)depth {
-    if (depth > 28 || !view) return nil;
+    if (depth > 30 || !view) return nil;
     @try {
         if ([view isKindOfClass:[UIControl class]]) return view;
         for (UIView *sub in view.subviews) {
@@ -1068,7 +1068,7 @@ static NSArray *kNurtureComments = @[
 
 /// 逆序 DFS 找最顶层 UITableView（评论面板的列表）
 - (void)_findTopTableViewInView:(UIView *)view result:(__strong UITableView **)result depth:(int)depth {
-    if (*result || depth > 15) return;
+    if (*result || depth > 30) return;
     if ([view isKindOfClass:[UITableView class]]) {
         *result = (UITableView *)view;
         return;
@@ -1547,7 +1547,7 @@ static NSArray *kNurtureComments = @[
 }
 
 - (UIView *)_findViewWithAccessibilityIdentifier:(NSString *)identifier inView:(UIView *)view depth:(int)depth {
-    if (depth > 28 || !view) return nil;
+    if (depth > 30 || !view) return nil;
     @try {
         if ([view.accessibilityIdentifier.lowercaseString isEqualToString:identifier.lowercaseString]) {
             return view;
@@ -1568,7 +1568,7 @@ static NSArray *kNurtureComments = @[
 }
 
 - (UIButton *)_findButtonWithAnyLabel:(NSArray<NSString *> *)labels inView:(UIView *)view depth:(int)depth {
-    if (depth > 28 || !view) return nil;
+    if (depth > 30 || !view) return nil;
     @try {
         if ([view isKindOfClass:[UIButton class]]) {
             UIButton *btn = (UIButton *)view;
@@ -1629,7 +1629,7 @@ static NSArray *kNurtureComments = @[
 - (void)_enumerateTextFieldsInView:(UIView *)view
                              block:(void(^)(UITextField *tf))block
                              depth:(int)depth {
-    if (depth > 28 || !view) return;
+    if (depth > 30 || !view) return;
     @try {
         if ([view isKindOfClass:[UITextField class]]) {
             UITextField *tf = (UITextField *)view;
@@ -1654,7 +1654,7 @@ static NSArray *kNurtureComments = @[
 - (void)_enumerateLabelsInView:(UIView *)view
                          block:(void(^)(NSString *text, UIView *view))block
                          depth:(int)depth {
-    if (depth > 28 || !view) return;
+    if (depth > 30 || !view) return;
     @try {
         if ([view isKindOfClass:[UILabel class]]) {
             UILabel *label = (UILabel *)view;
@@ -1869,7 +1869,7 @@ static NSArray *kNurtureComments = @[
 /// 递归找 accId 匹配且屏幕内可见的视图（feed 有多个同名按钮，必须命中当前屏幕内的）
 /// 深度限制 10 防预加载 cell 信号崩
 - (void)_findVisibleViewWithAccId:(NSString *)accId inView:(UIView *)view screen:(CGSize)screen depth:(int)depth result:(__strong UIView **)result {
-    if (*result || !view || depth > 25) return;
+    if (*result || !view || depth > 30) return;
     @try {
         if (view.accessibilityIdentifier.length > 0 &&
             [view.accessibilityIdentifier isEqualToString:accId]) {
@@ -1920,7 +1920,7 @@ static NSArray *kNurtureComments = @[
 
 /// 递归找 label 包含关键词且屏幕内可见的视图（feed 有多个 Follow 按钮，命中当前屏幕内 + 排除顶部 Following 标签）
 - (void)_findVisibleViewWithLabel:(NSString *)keyword inView:(UIView *)view screen:(CGSize)screen depth:(int)depth result:(__strong UIView **)result {
-    if (*result || !view || depth > 25) return;
+    if (*result || !view || depth > 30) return;
     @try {
         NSString *label = view.accessibilityLabel;
         if (label.length > 0 &&
@@ -2861,7 +2861,7 @@ static NSArray *kNurtureComments = @[
         // 递归收集 VC 链（presented + child，深度保护）
         __block void (^collectVC)(UIViewController *, int) = nil;
         collectVC = ^(UIViewController *vc, int depth) {
-            if (!vc || depth > 10 || chain.count > 30) return;
+            if (!vc || depth > 30 || chain.count > 30) return;
             NSString *cls = NSStringFromClass(vc.class) ?: @"?";
             [chain addObject:@{@"class": cls,
                                @"sel": @(vc.tabBarController.selectedIndex)}];
