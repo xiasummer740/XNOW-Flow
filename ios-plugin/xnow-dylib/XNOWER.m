@@ -877,7 +877,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     [self addLog:@"🔑 正在激活卡密…"];
     __weak typeof(self) weakSelf = self;
     [XNURLProtocol activateLicense:key
-                          deviceId:self.deviceId
+                          deviceId:[DeviceIdentity deviceUID]
                               udid:[DeviceIdentity deviceUID]
                         completion:^(NSDictionary *result, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
