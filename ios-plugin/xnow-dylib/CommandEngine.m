@@ -28,10 +28,10 @@ static NSString *const kAccPost = @"post";
 static NSString *const kAccTextField = @"text_input";
 
 // 默认坐标（以 iPhone 8 Plus 414x736 为基准，按比例缩放）
-static const CGFloat kLikeBtnRatioX = 0.91;    // 屏幕右侧
-static const CGFloat kLikeBtnRatioY = 0.45;
-static const CGFloat kFollowBtnRatioX = 0.91;
-static const CGFloat kFollowBtnRatioY = 0.35;
+static const CGFloat kLikeBtnRatioX = 0.92;    // 屏幕右侧
+static const CGFloat kLikeBtnRatioY = 0.46;
+static const CGFloat kFollowBtnRatioX = 0.92;
+static const CGFloat kFollowBtnRatioY = 0.395;
 static const CGFloat kAvatarRatioX = 0.08;
 static const CGFloat kAvatarRatioY = 0.82;
 
@@ -1869,7 +1869,7 @@ static NSArray *kNurtureComments = @[
 /// 递归找 accId 匹配且屏幕内可见的视图（feed 有多个同名按钮，必须命中当前屏幕内的）
 /// 深度限制 10 防预加载 cell 信号崩
 - (void)_findVisibleViewWithAccId:(NSString *)accId inView:(UIView *)view screen:(CGSize)screen depth:(int)depth result:(__strong UIView **)result {
-    if (*result || !view || depth > 10) return;
+    if (*result || !view || depth > 25) return;
     @try {
         if (view.accessibilityIdentifier.length > 0 &&
             [view.accessibilityIdentifier isEqualToString:accId]) {
@@ -1920,7 +1920,7 @@ static NSArray *kNurtureComments = @[
 
 /// 递归找 label 包含关键词且屏幕内可见的视图（feed 有多个 Follow 按钮，命中当前屏幕内 + 排除顶部 Following 标签）
 - (void)_findVisibleViewWithLabel:(NSString *)keyword inView:(UIView *)view screen:(CGSize)screen depth:(int)depth result:(__strong UIView **)result {
-    if (*result || !view || depth > 10) return;
+    if (*result || !view || depth > 25) return;
     @try {
         NSString *label = view.accessibilityLabel;
         if (label.length > 0 &&
