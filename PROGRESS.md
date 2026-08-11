@@ -51,6 +51,7 @@
 - 祥哥"你看着办"决策已记 autonomy-log.md
 - **部署修复**：proxy 模块(proxy_node模型/routers/schemas)生产从未部署过，补齐 + proxy_nodes.py 兼容 Python3.8(Optional替代 dict|None)，翻译端点已上线真机验证通过
 - **翻译端点已生产验证**：POST /api/biz/v2/translate/ "Hello, how are you today?"→"你好，今天过得怎么样？"（千问 qwen）
+- **页面感知菜单代码完成**：detectCurrentPage(6类页面) + _buildPageMenu(5种菜单) + 翻译/口令/直播采集，待构建IPA装机验证
 
 **第一批已修复并部署（4项，全测过）**
 - SECRET_KEY 启动守卫（config.py，无密钥拒启）
