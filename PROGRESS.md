@@ -25,14 +25,34 @@
 - `tiktok原生代码信息/`：feed(103)/inbox(75)/profile(75)/search(29) 控件全量 + 元素结构树
 - 深度分析：完整视图层 11-27 层 → 查找深度统一 30
 
+### ✅ 2026-08-10 夜间真机验证（v1.4.76）
+
+- **激活通过**：浮窗点开不用再输卡密（卡 SLUTRRL2RLNQGVXV 已重绑硬件UDID 9ED6D3B0）
+- **切首页 go_home 成功**：touch_diag 命中 TTKTabBarButton(41,712)（与知识库 a11y_vo_home 一致），state_diag acc_label='Home'，result OK 9秒
+- **关注 follow 待验**：已下发2次入队，但 go_home 成功后约40秒设备停止轮询被判定离线（15:27:24 UTC 后无心跳），疑似锁屏/App后台/浮窗收起
+
+### 🟢 2026-08-11 全面审查 + 安全修复第一批（已上线 VPS）
+
+**审查结论**：3 专项 Agent + 实机验证，后端 6 高危/设备端 3 高危/构建发版 4/10。详见 ISSUES.md。
+
+**第一批已修复并部署（4项，全测过）**
+- SECRET_KEY 启动守卫（config.py，无密钥拒启）
+- 上传限 10MB + 禁 SVG（media.py）
+- 任务/定时任务跨租户下发校验（tasks.py/timed_tasks.py）
+- 设备鉴权收紧（ws.py：UUID 校验+恒定时间+关迁移期放行）
+
+**遗留（第二批，需装机攒批）**：TLS 明文、secret 走 URL、batch_login 凭证明文、设备端掉线根因（poll 无重连）
+
 ### 🔴 待办/待验证（新对话优先）
 
-1. **v1.4.76 装机验证**（最高优先）：
-   - 硬件 UDID（IOPlatformUUID）能否拿到 → 卡绑不变标识，重装不失效
-   - 浮窗输卡密激活（activate 已改 deviceUID 统一）
-2. **关注最终验证**：深度30后 follow 命中 FollowPromptView，state_diag "Following X"
-3. **其他设备命令真机验证**：发视频选片/like_comment/open_live/follow_user/comment_video
-4. **积攒批验证**：不再单点发版，攒 3-5 功能一次装机测
+1. **v1.4.76 follow 验证 + 设备掉线根因修复**（最高优先）：
+   - 设备端 poll 静默失败无重连是昨晚掉线根因 → 需改设备端 + 重新构建 IPA
+   - 装机新版后 follow 已排队会自动执行，state_diag 应显示 "Following X"
+2. **设备端另外 2 个雷**：共享 session 被 invalidate、授权网络错误误判未激活
+3. **第二批安全**：TLS + secret 改 header + batch_login 限权（需设备端改造）
+4. **v1.4.76 硬件UDID确认**：IOPlatformUUID 是否拿到
+5. **其他设备命令真机验证**：发视频选片/like_comment/open_live/follow_user/comment_video
+6. **积攒批验证**：不再单点发版，攒 3-5 功能一次装机测
 
 ### 版本基线
 - 设备 v1.4.76（最新，重装后标识 9ED6D3B0-617F-4DFB-8D71-0A730124D0F5）
