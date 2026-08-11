@@ -7,7 +7,7 @@ from schemas.timed_task import TimedTaskResponse, TimedTaskCreateRequest, TimedT
 from schemas.common import MessageResponse
 from dependencies import get_current_user
 from models.user import User
-from tenant import tenant_scope, ensure_owned
+from tenant import tenant_scope, ensure_owned, resolve_owned_device
 
 router = APIRouter(prefix="/api/biz/v2", tags=["timed_tasks"])
 
@@ -45,6 +45,11 @@ def create_timed_task(
     current_user: User = Depends(get_current_user),
 ):
     import json as _json
+    # 安全：非 admin 创建定时任务时，校验所有下发设备归属（防跨租户注入指令）
+    if current_user.role != "admin":
+        for dn in (req.device_ids or []):
+            if dn and not resolve_owned_device(db, dn, current_user):
+                raise HTTPException(status_code=403, detail=f"无权对设备 {dn} 下发定时任务")
     task = TimedTask(name=req.name, cron=req.cron, task_type=req.task_type)
     task.device_ids = _json.dumps(req.device_ids or [])
     task.action = req.action or ""

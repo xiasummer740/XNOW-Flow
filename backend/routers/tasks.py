@@ -10,7 +10,7 @@ from schemas.task import TaskResponse, TaskCreateRequest, TaskStartRequest
 from schemas.common import PaginatedResponse, MessageResponse
 from dependencies import get_current_user
 from models.user import User
-from tenant import tenant_scope, ensure_owned
+from tenant import tenant_scope, ensure_owned, resolve_owned_device
 from task_engine import TASK_TYPE_ACTIONS, RISK_CAP_DEFAULTS, UNIT_PARAM_DEFAULTS
 
 router = APIRouter(prefix="/api/biz/v2", tags=["tasks"])
@@ -87,6 +87,18 @@ def create_task(
         total = len(targets)
     elif req.count:
         total = int(req.count)
+
+    # 安全：非 admin 创建任务时，校验所有下发设备归属（防跨租户注入指令）
+    if current_user.role != "admin":
+        device_names = set()
+        if req.device:
+            device_names.add(req.device)
+        for dn in (config.get("device_ids") or []):
+            if dn:
+                device_names.add(dn)
+        for dn in device_names:
+            if not resolve_owned_device(db, dn, current_user):
+                raise HTTPException(status_code=403, detail=f"无权对设备 {dn} 下发任务")
 
     # 风控钳制（PPT 参考：点赞≤300/号，关注≤200/号）
     risk_cap = config.get("risk_cap")

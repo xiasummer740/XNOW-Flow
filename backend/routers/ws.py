@@ -304,14 +304,22 @@ def _handle_device_message(device_id: str, msg: dict):
         logger.info(f"Device {device_id} unknown message type: {msg_type}")
 
 
-def _verify_device_auth(device_id: str, secret: str) -> bool:
-    """验证设备请求的共享密钥（宽松迁移）
+import re
 
-    - 设备不存在: 必须带 secret 才能自动注册（secret 作为该设备密钥）
-    - 设备存在但未绑定 secret（老设备）: 迁移期放行；若带 secret 则绑定
-    - 设备存在且已绑定 secret: 必须匹配，否则拒绝
+_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def _verify_device_auth(device_id: str, secret: str) -> bool:
+    """验证设备请求的共享密钥
+
+    - secret 必须是 UUID 格式（设备端 XN_DeviceSecret 生成 UUID）
+    - 设备不存在: 必须带合法 secret 才能自动注册（secret 作为该设备密钥）
+    - 设备存在且已绑定 secret: 恒定时间比较，必须匹配
+    - 设备存在但未绑定 secret: 拒绝（旧宽松迁移期已结束，避免冒充）
     """
-    if not device_id:
+    if not device_id or not secret or not _UUID_RE.match(secret):
         return False
     try:
         db = SessionLocal()
@@ -319,10 +327,7 @@ def _verify_device_auth(device_id: str, secret: str) -> bool:
             DeviceBinding.name == device_id
         ).first()
         if not device:
-            # 新设备必须带 secret 注册
-            if not secret:
-                db.close()
-                return False
+            # 新设备必须带 UUID 格式 secret 注册
             device = DeviceBinding(
                 name=device_id,
                 device_name=device_id,
@@ -341,19 +346,22 @@ def _verify_device_auth(device_id: str, secret: str) -> bool:
             logger.info(f"Device {device_id} auto-registered with secret")
             return True
         if not device.device_secret:
-            # 老设备未绑定密钥：迁移期放行，带 secret 则绑定
-            if secret:
-                device.device_secret = secret
-                db.commit()
-                logger.info(f"Device {device_id} secret bound on first auth")
+            # 设备存在但未绑定 secret：拒绝（避免攻击者抢先绑定冒充）
             db.close()
-            return True
-        ok = (device.device_secret == secret)
+            logger.warning(f"Device {device_id} has no secret bound, auth rejected")
+            return False
+        ok = _constant_time_eq(device.device_secret, secret)
         db.close()
         return ok
     except Exception as e:
         logger.error(f"_verify_device_auth error: {e}")
         return False
+
+
+def _constant_time_eq(a: str, b: str) -> bool:
+    """恒定时间字符串比较，防时序侧信道"""
+    import hmac
+    return hmac.compare_digest(a.encode(), b.encode())
 
 
 def _mark_device_online(device_id: str, api_id: str = "", device_code: str = "", client_ip: str = ""):
