@@ -41,6 +41,15 @@
 - 版本号功能：Config.plist 加 XNOWER_BuildVersion，build 脚本写入，浮窗标题显示 v1.4.76（代码完成，待装机验证）
 - **PPT 分析发现关键需求**：千问识图确认「不同 TikTok 页面浮窗菜单不同」（feed/评论/个人主页/直播间/私信菜单各不同），需实现**页面感知菜单**
 
+### 🟢 2026-08-11 浮窗页面感知菜单 + 翻译/口令（代码完成，待装机验证）
+
+- **页面检测**：CommandEngine 新增 `detectCurrentPage`（live/comment/inbox/profile/home/other 6类，基于类名+控件特征）
+- **动态菜单**：XNFloatingPanel `_buildPageMenu` 按页面渲染不同菜单（feed完整4组/评论互动/关注粉丝/直播采集/私信翻译）
+- **翻译**：后端新增 `/api/biz/v2/translate/`（DASHSCOPE 千问），设备端 toggle_translate 通知+设置翻译语言子菜单
+- **口令**：复用 reply_templates 关键词自动回复（口令=匹配规则）
+- **直播间采集**：collect_live/start_live_collect 入口（复用 collect_live_users）
+- 祥哥"你看着办"决策已记 autonomy-log.md
+
 **第一批已修复并部署（4项，全测过）**
 - SECRET_KEY 启动守卫（config.py，无密钥拒启）
 - 上传限 10MB + 禁 SVG（media.py）

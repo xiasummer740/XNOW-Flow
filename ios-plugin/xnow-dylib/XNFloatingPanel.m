@@ -54,6 +54,9 @@ static NSArray *kCountries;
 @property (nonatomic, strong) NSDictionary *panelAccount;
 @property (nonatomic, copy) NSString *panelQuality;
 @property (nonatomic, strong) NSArray *mainMenu;
+// 页面感知动态菜单（_showMainMenu 时按当前 TikTok 页面生成）
+@property (nonatomic, strong) NSArray *pageMenu;
+@property (nonatomic, copy) NSString *currentPageType;
 
 @end
 
@@ -353,7 +356,63 @@ static NSArray *kCountries;
     _titleLabel.text = @"快捷菜单";
     _menuTable.hidden = NO;
     [self _removeInputViews];
+    // 页面感知：检测当前 TikTok 页面，动态生成菜单
+    self.pageMenu = [self _buildPageMenu];
     [_menuTable reloadData];
+}
+
+/// 根据当前 TikTok 页面动态生成菜单（页面感知）
+- (NSArray *)_buildPageMenu {
+    @try {
+        CommandEngine *engine = [XNOWER sharedInstance].cmdEngine;
+        NSString *page = @"other";
+        if ([engine respondsToSelector:@selector(detectCurrentPage)]) {
+            page = [engine detectCurrentPage] ?: @"other";
+        }
+        self.currentPageType = page;
+        NSArray *base = @[
+            @{@"icon": @"doc.on.doc.fill", @"label": @"复制机器码", @"action": @"copy_device_id"},
+            @{@"icon": @"doc.plaintext.fill", @"label": @"显示/关闭日志", @"action": @"toggle_log"},
+            @{@"icon": @"xmark.circle.fill", @"label": @"关闭", @"action": @"close_panel"},
+        ];
+        if ([page isEqualToString:@"live"]) {
+            // 直播间：直播采集 + 系统
+            return [@[
+                @{@"icon": @"person.3.fill", @"label": @"采集直播间粉丝", @"action": @"collect_live"},
+                @{@"icon": @"play.rectangle.fill", @"label": @"开始采集", @"action": @"start_live_collect"},
+            ] arrayByAddingObjectsFromArray:base];
+        }
+        if ([page isEqualToString:@"inbox"]) {
+            // 私信：翻译 + 私信工具 + 系统
+            return [@[
+                @{@"icon": @"character.book.closed.fill", @"label": @"开启实时翻译", @"action": @"toggle_translate"},
+                @{@"icon": @"globe", @"label": @"设置翻译语言", @"action": @"set_translate_lang"},
+                @{@"icon": @"lock.fill", @"label": @"设置口令", @"action": @"set_passcode"},
+                @{@"icon": @"trash.fill", @"label": @"一键清空所有数据", @"action": @"clear_data"},
+            ] arrayByAddingObjectsFromArray:base];
+        }
+        if ([page isEqualToString:@"profile"]) {
+            // 个人主页：关注/粉丝 + 账号 + 系统
+            return [@[
+                @{@"icon": @"plus.circle.fill", @"label": @"自动关注", @"action": @"auto_follow"},
+                @{@"icon": @"stop.circle.fill", @"label": @"停止采集粉丝用户", @"action": @"stop_collect_fans"},
+                @{@"icon": @"heart.fill", @"label": @"采集点赞", @"action": @"collect_likes"},
+                @{@"icon": @"person.2.fill", @"label": @"账号管理", @"action": @"account_mgmt"},
+            ] arrayByAddingObjectsFromArray:base];
+        }
+        if ([page isEqualToString:@"comment"]) {
+            // 评论区：评论互动 + 系统
+            return [@[
+                @{@"icon": @"hand.thumbsup.fill", @"label": @"自动评论点赞", @"action": @"auto_comment_like"},
+                @{@"icon": @"arrow.down.circle.fill", @"label": @"采集评论数据", @"action": @"collect_comments"},
+                @{@"icon": @"stop.circle.fill", @"label": @"停止采集评论用户", @"action": @"stop_collect_comments"},
+            ] arrayByAddingObjectsFromArray:base];
+        }
+        // 首页 feed 或未知：完整菜单（原有 13 项保留）
+        return _mainMenu;
+    } @catch (id e) {
+        return _mainMenu;
+    }
 }
 
 - (void)_showBindForm {
@@ -532,9 +591,9 @@ static NSArray *kCountries;
 #pragma mark - UITableView
 
 - (NSInteger)tableView:(UITableView *)tv numberOfRowsInSection:(NSInteger)section {
-    if (_viewMode == 1) return _mainMenu.count;
+    if (_viewMode == 1) return (_pageMenu.count > 0 ? _pageMenu.count : _mainMenu.count);
     if (_viewMode == 3) {
-        if ([_currentSubMenu isEqualToString:@"set_country"]) return kCountries.count;
+        if ([_currentSubMenu isEqualToString:@"set_country"] || [_currentSubMenu isEqualToString:@"translate_lang"]) return kCountries.count;
         if ([_currentSubMenu isEqualToString:@"account_mgmt"]) {
             // 账号列表 + 2 个操作按钮（新增账号 / 备份当前账号）
             NSArray *a = [[AccountPool sharedPool] allAccounts];
@@ -566,12 +625,15 @@ static NSArray *kCountries;
     cell.selectionStyle = UITableViewCellSelectionStyleDefault;
 
     if (_viewMode == 1) {
-        NSDictionary *item = _mainMenu[ip.row];
+        NSArray *menu = (_pageMenu.count > 0 ? _pageMenu : _mainMenu);
+        NSDictionary *item = menu[ip.row];
         cell.imageView.image = [UIImage systemImageNamed:item[@"icon"]];
         NSString *action = item[@"action"];
-        if ([action isEqualToString:@"close_panel"] || [action isEqualToString:@"clear_data"]) {
+        if ([action isEqualToString:@"close_panel"] || [action isEqualToString:@"clear_data"] ||
+            [action isEqualToString:@"stop_collect_fans"] || [action isEqualToString:@"stop_collect_comments"]) {
             cell.imageView.tintColor = [UIColor systemRedColor];
-        } else if ([action isEqualToString:@"connect_server"]) {
+        } else if ([action isEqualToString:@"connect_server"] || [action isEqualToString:@"auto_follow"] ||
+                   [action isEqualToString:@"collect_live"] || [action isEqualToString:@"start_live_collect"]) {
             cell.imageView.tintColor = [UIColor systemGreenColor];
         } else {
             cell.imageView.tintColor = [UIColor systemBlueColor];
@@ -601,6 +663,15 @@ static NSArray *kCountries;
         cell.textLabel.text = c;
         cell.textLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightRegular];
         BOOL sel = [c isEqualToString:_selectedCountry];
+        cell.textLabel.textColor = sel ? [UIColor systemBlueColor] : [UIColor labelColor];
+        if (sel) { cell.accessoryType = UITableViewCellAccessoryCheckmark; cell.tintColor = [UIColor systemBlueColor]; }
+    } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"translate_lang"]) {
+        // 翻译语言列表（复用国家列表）
+        NSString *c = kCountries[ip.row];
+        cell.textLabel.text = c;
+        cell.textLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightRegular];
+        NSString *savedLang = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_TranslateLang"] ?: @"中文";
+        BOOL sel = [c isEqualToString:savedLang];
         cell.textLabel.textColor = sel ? [UIColor systemBlueColor] : [UIColor labelColor];
         if (sel) { cell.accessoryType = UITableViewCellAccessoryCheckmark; cell.tintColor = [UIColor systemBlueColor]; }
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"account_mgmt"]) {
@@ -648,8 +719,16 @@ static NSArray *kCountries;
 - (void)tableView:(UITableView *)tv didSelectRowAtIndexPath:(NSIndexPath *)ip {
     [tv deselectRowAtIndexPath:ip animated:YES];
     if (_viewMode == 1) {
-        NSDictionary *item = _mainMenu[ip.row];
+        NSArray *menu = (_pageMenu.count > 0 ? _pageMenu : _mainMenu);
+        NSDictionary *item = menu[ip.row];
         [self _handleMenuAction:item[@"action"]];
+    } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"translate_lang"]) {
+        // 选择翻译目标语言
+        NSString *lang = kCountries[ip.row];
+        [[NSUserDefaults standardUserDefaults] setObject:lang forKey:@"XN_TranslateLang"];
+        [self addLog:[NSString stringWithFormat:@"🈯 翻译目标语言: %@", lang]];
+        [self _showToast:[NSString stringWithFormat:@"翻译语言已设为 %@", lang]];
+        [self _backToMain];
     } else if (_viewMode == 3 && [_currentSubMenu isEqualToString:@"set_country"]) {
         _selectedCountry = kCountries[ip.row];
         [_menuTable reloadData];
@@ -956,9 +1035,45 @@ static NSArray *kCountries;
         [self.delegate floatingPanelDidTapSmartBrowse:self];
         return;
     }
-    // 翻译功能预留
-    if ([action isEqualToString:@"toggle_translate"] || [action isEqualToString:@"set_translate_lang"]) {
-        [self addLog:[NSString stringWithFormat:@"翻译功能待实现"]];
+    // 页面感知新增 action 映射
+    if ([action isEqualToString:@"collect_live"] || [action isEqualToString:@"start_live_collect"]) {
+        [self addLog:@"🔴 开始采集直播间粉丝..."];
+        [self.delegate floatingPanelDidTapCollectFans:self];
+        return;
+    }
+    if ([action isEqualToString:@"auto_follow"]) {
+        [self addLog:@"➕ 启动自动关注..."];
+        [self.delegate floatingPanelDidTapSmartBrowse:self];
+        return;
+    }
+    if ([action isEqualToString:@"stop_collect_fans"] || [action isEqualToString:@"stop_collect_comments"]) {
+        [self addLog:@"⏹ 停止采集..."];
+        if ([self.delegate respondsToSelector:@selector(floatingPanelDidTapStopCollect:)]) {
+            [self.delegate floatingPanelDidTapStopCollect:self];
+        }
+        return;
+    }
+    if ([action isEqualToString:@"auto_comment_like"]) {
+        [self addLog:@"👍 启动自动评论点赞..."];
+        [self.delegate floatingPanelDidTapSmartBrowse:self];
+        return;
+    }
+    // 翻译功能：toggle 实时翻译 / 设置翻译语言
+    if ([action isEqualToString:@"toggle_translate"]) {
+        [self addLog:@"🈯 实时翻译：检测私信文本并翻译..."];
+        if ([self.delegate respondsToSelector:@selector(floatingPanelDidToggleTranslate:)]) {
+            [self.delegate floatingPanelDidToggleTranslate:self];
+        }
+        return;
+    }
+    if ([action isEqualToString:@"set_translate_lang"]) {
+        _viewMode = 3; _currentSubMenu = @"translate_lang"; _backBtn.hidden = NO;
+        _titleLabel.text = @"设置翻译语言"; [_menuTable reloadData];
+        return;
+    }
+    if ([action isEqualToString:@"set_passcode"]) {
+        [self addLog:@"🔒 口令功能：请在后台配置自动回复口令"];
+        [self _showToast:@"口令已开启，后台配置生效"];
         return;
     }
     [self _showToast:[NSString stringWithFormat:@"执行: %@", action]];

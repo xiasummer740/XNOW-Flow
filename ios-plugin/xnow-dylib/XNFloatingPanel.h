@@ -44,6 +44,9 @@
 // 商业激活 / 设备绑定
 - (void)floatingPanel:(XNFloatingPanel *)panel didEnterLicenseKey:(NSString *)key;
 - (void)floatingPanel:(XNFloatingPanel *)panel didSubmitBindingWithCode:(NSString *)code apiId:(NSString *)apiId;
+// 页面感知菜单新增
+- (void)floatingPanelDidTapStopCollect:(XNFloatingPanel *)panel;
+- (void)floatingPanelDidToggleTranslate:(XNFloatingPanel *)panel;
 @end
 
 @interface XNFloatingPanel : UIView

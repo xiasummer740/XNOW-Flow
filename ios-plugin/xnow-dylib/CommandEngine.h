@@ -107,6 +107,9 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 /// 当前 TikTok 页面类型（未知/推荐/关注/个人/视频详情等）
 @property (nonatomic, copy) NSString *currentPage;
 
+/// 检测当前页面类型，返回: home(推荐feed) / comment(评论区) / profile(个人主页) / live(直播间) / inbox(私信) / other
+- (NSString *)detectCurrentPage;
+
 // ===== 连续养号（默认24小时，直到停止）=====
 /// 启动养号：随机浏览10-20秒；browseOnly=YES 只上滑浏览，NO 随机点赞/关注；totalSeconds>0 自定义时长，0=24小时
 - (void)startNurtureWithDuration:(int)totalSeconds browseOnly:(BOOL)browseOnly;

@@ -1411,6 +1411,84 @@ static NSArray *kNurtureComments = @[
     return found;
 }
 
+/// 检测当前 TikTok 页面类型（页面感知浮窗菜单用）
+/// 优先级: live > comment > inbox > profile > home > other
+- (NSString *)detectCurrentPage {
+    __block NSString *page = @"other";
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        @try {
+            UIWindow *window = XN_ActiveWindow();
+            if (!window) { page = @"other"; return; }
+
+            // 1. 直播间（最高优先，标识最独特）
+            if ([self _isInLiveRoom]) { page = @"live"; return; }
+
+            // 2. 评论区（feed 上打开评论面板）
+            for (NSString *cls in @[@"AWECommentContainer", @"CommentListView", @"AWEBottomComment", @"TTKComment"]) {
+                if ([self _findViewByClassContaining:cls inView:window depth:0]) { page = @"comment"; return; }
+            }
+            // 评论面板常见容器
+            for (NSString *cls in @[@"AWECommentView", @"CommentContainerView"]) {
+                if ([self _findViewByClassContaining:cls inView:window depth:0]) { page = @"comment"; return; }
+            }
+
+            // 3. 私信收件箱（聊天列表）
+            for (NSString *cls in @[@"Inbox", @"MessageList", @"ConversationListView", @"TTKMessageList", @"AWEIMInbox"]) {
+                if ([self _findViewByClassContaining:cls inView:window depth:0]) { page = @"inbox"; return; }
+            }
+            // 私信顶栏标题: 消息/收件箱/私信
+            __block BOOL inboxTitle = NO;
+            [self _enumerateLabelsInView:window block:^(NSString *text, UIView *view) {
+                if (inboxTitle) return;
+                NSString *t = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+                if ([t isEqualToString:@"消息"] || [t isEqualToString:@"收件箱"] || [t isEqualToString:@"私信"]) {
+                    inboxTitle = YES;
+                }
+            }];
+            if (inboxTitle && ![self _isOnFeed]) { page = @"inbox"; return; }
+
+            // 4. 个人主页（关注按钮 + 粉丝/作品统计，非 feed 右侧栏）
+            if ([self _isOnProfilePage]) { page = @"profile"; return; }
+
+            // 5. 首页推荐 feed
+            if ([self _isOnFeed]) { page = @"home"; return; }
+
+            page = @"other";
+        } @catch (id e) {
+            page = @"other";
+        }
+    });
+    return page;
+}
+
+/// 检测是否在个人主页（关注/粉丝/作品 统计区 + 头像大图）
+- (BOOL)_isOnProfilePage {
+    __block BOOL onProfile = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        @try {
+            UIWindow *window = XN_ActiveWindow();
+            if (!window) return;
+            // 排除首页 feed（右侧栏有"关注"按钮，容易误判）
+            if ([self _isOnFeed]) return;
+            // 个人主页特征: 粉丝/作品/获赞 统计 + 大头像
+            for (NSString *cls in @[@"ProfileViewController", @"TTKUserProfile", @"AWEProfileView", @"UserProfilePage"]) {
+                if ([self _findViewByClassContaining:cls inView:window depth:0]) { onProfile = YES; return; }
+            }
+            // 特征 label: 作品 / 粉丝 / 获赞（统计行）
+            __block int match = 0;
+            [self _enumerateLabelsInView:window block:^(NSString *text, UIView *view) {
+                if (match >= 2) return;
+                NSString *t = text;
+                if ([t hasSuffix:@"作品"] || [t hasSuffix:@"粉丝"] || [t hasSuffix:@"获赞"] || [t hasSuffix:@"关注"]) {
+                    match++;
+                }
+            }];
+            onProfile = (match >= 2);
+        } @catch (id e) {}
+    });
+    return onProfile;
+}
+
 - (NSDictionary *)_collectLiveRoomUsers:(int)count sourceType:(NSString *)sourceType {
     // 采集直播间用户/点赞用户：必须先进入直播间
     if (![self _isInLiveRoom]) {

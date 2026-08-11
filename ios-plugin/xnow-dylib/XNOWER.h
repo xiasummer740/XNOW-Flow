@@ -4,6 +4,7 @@
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import "CommandEngine.h"
 
 /// 插件配置
 extern NSString *const kXnowDefaultServerURL;
@@ -24,6 +25,8 @@ extern NSString *const kXnowConfigKeyDebugOverlay;
 @property (nonatomic, copy) NSString *serverURL;
 /// 构建版本号（打包时写入 xnower-config.plist 的 XNOWER_BuildVersion，浮窗主菜单显示）
 @property (nonatomic, readonly) NSString *buildVersion;
+/// 命令引擎（页面感知检测、指令执行）
+@property (nonatomic, readonly) CommandEngine *cmdEngine;
 
 /// 启动插件
 - (void)start;

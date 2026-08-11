@@ -62,6 +62,7 @@ from routers import ws as ws_router
 from routers import device_commands
 from routers import public_users
 from routers import proxy_nodes
+from routers import translate
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)
@@ -87,6 +88,7 @@ app.include_router(ws_router.router)
 app.include_router(device_commands.router)
 app.include_router(public_users.router)
 app.include_router(proxy_nodes.router)
+app.include_router(translate.router)
 
 @app.get("/api/health")
 def health():

@@ -1014,6 +1014,21 @@ __attribute__((destructor)) static void XNOWERUnload() {
     [self _runCollectLocally:@"collect_fans" count:20];
 }
 
+/// 停止采集（直播间粉丝/评论用户等）
+- (void)floatingPanelDidTapStopCollect:(XNFloatingPanel *)panel {
+    [self addLog:@"⏹ 停止采集..."];
+    [self.cmdEngine executeCommand:@{@"action": @"nurture_stop"} completion:nil];
+    [self _sendCommandToBackend:@"nurture_stop" params:@{}];
+}
+
+/// 开启实时翻译（私信页文案翻译成目标语言）
+- (void)floatingPanelDidToggleTranslate:(XNFloatingPanel *)panel {
+    NSString *lang = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_TranslateLang"] ?: @"中文";
+    [self addLog:[NSString stringWithFormat:@"🈯 实时翻译已开启 → %@", lang]];
+    // 通知后端开启翻译任务（由后端下发翻译指令，或设备端周期性检测私信文案）
+    [self _sendCommandToBackend:@"toggle_translate" params:@{@"enabled": @YES, @"lang": lang}];
+}
+
 - (void)floatingPanelDidTapCollectVideos:(XNFloatingPanel *)panel {
     [self addLog:@"🎬 采集视频(10)…"];
     [self _sendCommandToBackend:@"collect_videos" params:@{@"count": @10}];
