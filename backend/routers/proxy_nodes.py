@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import urllib.parse
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -63,7 +64,7 @@ def _b64decode(s: str) -> str:
             return ""
 
 
-def _parse_line(line: str, default_country: str) -> dict | None:
+def _parse_line(line: str, default_country: str) -> Optional[dict]:
     """解析一行分享链接 -> 节点 dict（name/country/protocol/address/port/config）"""
     line = line.strip()
     if not line:

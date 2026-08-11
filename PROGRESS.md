@@ -49,6 +49,7 @@
 - **口令**：复用 reply_templates 关键词自动回复（口令=匹配规则）
 - **直播间采集**：collect_live/start_live_collect 入口（复用 collect_live_users）
 - 祥哥"你看着办"决策已记 autonomy-log.md
+- **部署修复**：proxy 模块(proxy_node模型/routers/schemas)生产从未部署过，补齐 + proxy_nodes.py 兼容 Python3.8(Optional替代 dict|None)，翻译端点已上线真机验证通过
 
 **第一批已修复并部署（4项，全测过）**
 - SECRET_KEY 启动守卫（config.py，无密钥拒启）
