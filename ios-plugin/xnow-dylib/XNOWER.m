@@ -70,6 +70,8 @@ static void XN_SignalHandler(int sig) {
 NSString *const kXnowDefaultServerURL = @"wss://yunkong.taikon.top";
 NSString *const kXnowConfigKeyServerURL = @"XNOWER_ServerURL";
 NSString *const kXnowConfigKeyEnabled = @"XNOWER_Enabled";
+NSString *const kXnowConfigKeyBuildVersion = @"XNOWER_BuildVersion";
+static NSString *const kXnowConfigPlistName = @"xnower-config.plist";
 static NSString *const kXnowDeviceIdKey = @"XNOWER_DeviceID";
 
 // ======== 静态实例 ========
@@ -115,6 +117,22 @@ __attribute__((destructor)) static void XNOWERUnload() {
 
 @implementation XNOWER
 
+/// 读取打包时嵌入的配置 plist（含构建版本号）。路径: Payload/TikTok.app/xnower-config.plist
++ (NSDictionary *)_configPlistDictionary {
+    NSArray *searchPaths = @[
+        [[NSBundle mainBundle] pathForResource:kXnowConfigPlistName ofType:nil],
+        [NSString stringWithFormat:@"%@/%@",
+            [NSBundle mainBundle].bundlePath, kXnowConfigPlistName],
+    ];
+    for (NSString *path in searchPaths) {
+        if (path && [[NSFileManager defaultManager] fileExistsAtPath:path]) {
+            NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:path];
+            if (d) return d;
+        }
+    }
+    return nil;
+}
+
 + (XNOWER *)sharedInstance {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -136,6 +154,19 @@ __attribute__((destructor)) static void XNOWERUnload() {
         NSString *savedURL = [[NSUserDefaults standardUserDefaults]
                                stringForKey:kXnowConfigKeyServerURL];
         _serverURL = savedURL ?: kXnowDefaultServerURL;
+
+        // 构建版本号：优先读打包嵌入的 xnower-config.plist，回退 NSUserDefaults，再回退 dev
+        _buildVersion = [[NSUserDefaults standardUserDefaults]
+                          stringForKey:kXnowConfigKeyBuildVersion];
+        if (_buildVersion.length == 0) {
+            NSDictionary *plist = [XNOWER _configPlistDictionary];
+            NSString *v = plist[kXnowConfigKeyBuildVersion];
+            if ([v isKindOfClass:[NSString class]] && v.length > 0) {
+                _buildVersion = v;
+                [[NSUserDefaults standardUserDefaults] setObject:v forKey:kXnowConfigKeyBuildVersion];
+            }
+        }
+        if (_buildVersion.length == 0) _buildVersion = @"dev";
 
         // 生成或恢复设备 ID —— 必须稳定（激活卡、授权检查、绑定后台用同一个 ID）。
         // 序号(device_code)不进入 deviceId，否则绑定前后 ID 变化导致激活的卡对不上。

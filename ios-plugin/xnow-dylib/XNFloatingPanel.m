@@ -3,6 +3,7 @@
 // 视觉重构：真玻璃材质 + SF Symbols + 系统语义色 + InsetGrouped 列表 + 弹簧动画
 
 #import "XNFloatingPanel.h"
+#import "XNOWER.h"
 #import "AccountPool.h"
 #import "AccountManager.h"
 #import "CountryEnv.h"
@@ -224,7 +225,9 @@ static NSArray *kCountries;
     _titleLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
     _titleLabel.textColor = [UIColor labelColor];
     _titleLabel.textAlignment = NSTextAlignmentCenter;
-    _titleLabel.text = @"XNOW";
+    // 主菜单标题带构建版本号（如 "XNOW v1.4.76"）
+    NSString *bv = [XNOWER sharedInstance].buildVersion ?: @"dev";
+    _titleLabel.text = [NSString stringWithFormat:@"XNOW v%@", bv];
     [_panelHeader addSubview:_titleLabel];
 
     // 连接状态胶囊（圆点 + 文字）

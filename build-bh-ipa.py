@@ -17,7 +17,7 @@ build-bh-ipa.py — BH版 IPA 构建脚本（含自检）
   ✅ xnower.dylib 在 Frameworks/ 中
   ✅ Config.plist 已嵌入
 """
-import zipfile, shutil, os, sys, tempfile
+import zipfile, shutil, os, sys, tempfile, plistlib
 
 BASE_IPA = 'TikTok_43.7.0_BH.ipa'
 CONFIG_PATHS = ['ios-plugin/xnow-dylib/Config.plist', 'build-artifacts/Config.plist']
@@ -77,7 +77,16 @@ def main():
         for src in CONFIG_PATHS:
             if os.path.exists(src):
                 shutil.copy2(src, cfg_dst)
-                print(f"  ✅ {src}")
+                # 写入构建版本号（浮窗主菜单显示用）
+                try:
+                    with open(cfg_dst, "rb") as cf:
+                        cfg = plistlib.load(cf)
+                    cfg["XNOWER_BuildVersion"] = version
+                    with open(cfg_dst, "wb") as cf:
+                        plistlib.dump(cfg, cf)
+                    print(f"  ✅ {src} (version={version})")
+                except Exception as e:
+                    print(f"  ⚠️ 写版本号失败({e})，仍用原配置")
                 break
         else:
             print("  ⚠️ 未找到 Config.plist")

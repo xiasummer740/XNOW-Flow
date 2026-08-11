@@ -22,11 +22,16 @@ extern NSString *const kXnowConfigKeyDebugOverlay;
 @property (nonatomic, readonly) NSString *deviceId;
 /// 后端服务器地址
 @property (nonatomic, copy) NSString *serverURL;
+/// 构建版本号（打包时写入 xnower-config.plist 的 XNOWER_BuildVersion，浮窗主菜单显示）
+@property (nonatomic, readonly) NSString *buildVersion;
 
 /// 启动插件
 - (void)start;
 /// 停止插件
 - (void)stop;
+
+/// 读取打包嵌入的配置 plist（含构建版本号）
++ (NSDictionary *)_configPlistDictionary;
 
 /// 显示控制浮窗
 - (void)showFloatingPanel;
