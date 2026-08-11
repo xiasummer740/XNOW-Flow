@@ -25,6 +25,12 @@ construct-minimal-dylib.py
 build-artifacts/
 build-artifacts-ci/
 raw-analysis/
+build/
+build-v*/
+build-*/
+__pycache__/
+gh-dl-artifacts/
+deploy.tar.gz
 
 # 系统文件
 *.exe
