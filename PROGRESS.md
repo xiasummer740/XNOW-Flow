@@ -53,6 +53,13 @@
 - **翻译端点已生产验证**：POST /api/biz/v2/translate/ "Hello, how are you today?"→"你好，今天过得怎么样？"（千问 qwen）
 - **页面感知菜单代码完成**：detectCurrentPage(6类页面) + _buildPageMenu(5种菜单) + 翻译/口令/直播采集，待构建IPA装机验证
 
+### 🟢 2026-08-12 字段级对比 + 中文化 + 全量功能对比
+
+- **字段级对比完成**：采集数据缺头像URL/年龄/关注数（已修复），公共库缺年龄/关注数（已修复），设备缺添加人/锁定列（已补）
+- **字段中文化**：前端 5 页补列（采集数据加头像/性别/国家/粉丝/关注/年龄，公共库加关注/年龄+年龄筛选，设备加锁定，账号修 follow_count bug）
+- **后端补全**：public-users 支持 min_age/max_age 服务端筛选，DeviceBinding 加 added_by
+- **全量对比页上线**：`http://192.129.210.52:8000/full-compare.html`（浮窗8✅2⚠️ / 后台8✅7⚠️9❌）
+
 **第一批已修复并部署（4项，全测过）**
 - SECRET_KEY 启动守卫（config.py，无密钥拒启）
 - 上传限 10MB + 禁 SVG（media.py）
