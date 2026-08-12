@@ -207,6 +207,8 @@ def feed_public_users(
             gender=item.gender or "",
             country=item.region or "",
             followers=item.followers or 0,
+            following_count=item.following_count or 0,
+            age=item.age or 0,
             signature=(item.content or "")[:500],
             contributed_by=current_user.api_id or "",
         ))
@@ -254,6 +256,8 @@ def copy_public_users(
             gender=u.gender or "",
             region=u.country or "",
             followers=u.followers or 0,
+            following_count=u.following_count or 0,
+            age=u.age or 0,
             aweme_id=u.aweme_id or "",
             group_name=req.group_name or "未分组",
             api_id=api_id,

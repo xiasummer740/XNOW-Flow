@@ -15,6 +15,8 @@ class CollectedData(Base):
     gender = Column(String(20), default="")          # male/female/unknown
     region = Column(String(50), default="")          # 地区
     followers = Column(Integer, default=0)           # 粉丝数
+    following_count = Column(Integer, default=0)     # 关注数（PPT 公共库字段）
+    age = Column(Integer, default=0)                 # 年龄（PPT 公共库字段）
     aweme_id = Column(String(100), default="")       # TikTok 用户 ID（去重用）
     group_name = Column(String(100), default="未分组")  # 数据分组
     api_id = Column(String(64), default="", index=True)  # 租户隔离

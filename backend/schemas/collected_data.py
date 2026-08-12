@@ -12,6 +12,8 @@ class CollectedDataResponse(BaseModel):
     gender: Optional[str] = ""
     region: Optional[str] = ""
     followers: Optional[int] = 0
+    following_count: Optional[int] = 0
+    age: Optional[int] = 0
     aweme_id: Optional[str] = ""
     group_name: Optional[str] = "未分组"
     api_id: Optional[str] = ""
@@ -29,6 +31,8 @@ class CollectedDataItem(BaseModel):
     gender: Optional[str] = ""
     region: Optional[str] = ""
     followers: Optional[int] = 0
+    following_count: Optional[int] = 0
+    age: Optional[int] = 0
     aweme_id: Optional[str] = ""
     group_name: Optional[str] = "未分组"
     remark: Optional[str] = ""

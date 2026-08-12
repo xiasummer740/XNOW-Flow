@@ -20,6 +20,8 @@ class PublicUser(Base):
     gender = Column(String(20), default="")                  # male/female/unknown
     country = Column(String(50), default="")                 # 国家
     followers = Column(Integer, default=0)                   # 粉丝数
+    following_count = Column(Integer, default=0)             # 关注数（PPT 公共库字段）
+    age = Column(Integer, default=0)                         # 年龄（PPT 公共库字段）
     videos_count = Column(Integer, default=0)                # 作品数
     signature = Column(Text, default="")                     # 签名
     keyword = Column(Text, default="")                       # AI 打标标签（逗号分隔）

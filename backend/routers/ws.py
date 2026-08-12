@@ -55,14 +55,26 @@ def _insert_collected_data(device_id: str, data: dict) -> int:
                     followers = int(u.get("followers") or 0)
                 except (TypeError, ValueError):
                     followers = 0  # 非数值兜底，避免 Integer 列写入崩溃
+                try:
+                    following_count = int(u.get("following_count") or u.get("following") or 0)
+                except (TypeError, ValueError):
+                    following_count = 0
+                try:
+                    age = int(u.get("age") or 0)
+                except (TypeError, ValueError):
+                    age = 0
                 remark = u.get("remark") or ""
+                url = u.get("url") or u.get("avatar_url") or ""  # 头像链接（公共库投喂依赖）
             else:
                 author = str(u)
                 aweme_id = ""
                 gender = ""
                 region = ""
                 followers = 0
+                following_count = 0
+                age = 0
                 remark = ""
+                url = ""
             if not author and not aweme_id:
                 continue
             dedupe_key = aweme_id or f"{source_type}:{author}"
@@ -80,10 +92,12 @@ def _insert_collected_data(device_id: str, data: dict) -> int:
                 source_type=source_type,
                 content="",
                 author=author,
-                url="",
+                url=url,
                 gender=gender,
                 region=region,
                 followers=followers,
+                following_count=following_count,
+                age=age,
                 aweme_id=aweme_id,
                 group_name="未分组",
                 api_id=api_id,

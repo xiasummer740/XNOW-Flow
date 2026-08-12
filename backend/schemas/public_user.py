@@ -11,6 +11,8 @@ class PublicUserResponse(BaseModel):
     gender: Optional[str] = ""
     country: Optional[str] = ""
     followers: Optional[int] = 0
+    following_count: Optional[int] = 0
+    age: Optional[int] = 0
     videos_count: Optional[int] = 0
     signature: Optional[str] = ""
     keyword: Optional[str] = ""

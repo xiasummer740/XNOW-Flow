@@ -121,6 +121,8 @@ def _migrate_collected_data_columns():
                     "gender": "VARCHAR(20) DEFAULT ''",
                     "region": "VARCHAR(50) DEFAULT ''",
                     "followers": "INTEGER DEFAULT 0",
+                    "following_count": "INTEGER DEFAULT 0",
+                    "age": "INTEGER DEFAULT 0",
                     "aweme_id": "VARCHAR(100) DEFAULT ''",
                     "group_name": "VARCHAR(100) DEFAULT '未分组'",
                     "api_id": "VARCHAR(64) DEFAULT ''",
@@ -258,6 +260,8 @@ def _migrate_public_users():
                     gender VARCHAR(20) DEFAULT '',
                     country VARCHAR(50) DEFAULT '',
                     followers INTEGER DEFAULT 0,
+                    following_count INTEGER DEFAULT 0,
+                    age INTEGER DEFAULT 0,
                     videos_count INTEGER DEFAULT 0,
                     signature TEXT DEFAULT '',
                     keyword TEXT DEFAULT '',
@@ -268,6 +272,16 @@ def _migrate_public_users():
             """))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_public_users_aweme_id ON public_users(aweme_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_public_users_ai_tagged ON public_users(ai_tagged)"))
+            # 已存在表补新列（幂等）
+            tables = [r[0] for r in conn.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )).fetchall()]
+            if "public_users" in tables:
+                cols = [r[1] for r in conn.execute(text("PRAGMA table_info(public_users)")).fetchall()]
+                if "following_count" not in cols:
+                    conn.execute(text("ALTER TABLE public_users ADD COLUMN following_count INTEGER DEFAULT 0"))
+                if "age" not in cols:
+                    conn.execute(text("ALTER TABLE public_users ADD COLUMN age INTEGER DEFAULT 0"))
             conn.commit()
     except Exception as e:
         print(f"[migration] public_users 表迁移失败（可忽略）: {e}")
