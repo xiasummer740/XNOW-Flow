@@ -18,6 +18,9 @@ import Placeholder from './pages/Placeholder'
 import CardManagement from './pages/CardManagement'
 import DeviceControl from './pages/DeviceControl'
 import PublicLibrary from './pages/PublicLibrary'
+import MaterialLibrary from './pages/MaterialLibrary'
+import VideoManagement from './pages/VideoManagement'
+import AdvertManagement from './pages/AdvertManagement'
 
 const getMenuData = (role?: string) => {
   const isAdmin = role === 'admin'
@@ -32,7 +35,9 @@ const getMenuData = (role?: string) => {
       { icon: '🎮', label: '设备控制' },
     ]},
     { group: '内容', items: [
-      { icon: '📦', label: '素材管理' }, { icon: '📡', label: '采集数据' },
+      { icon: '📦', label: '素材管理' }, { icon: '🗃️', label: '素材库' },
+      { icon: '🎬', label: '视频管理' }, { icon: '📣', label: '广告管理' },
+      { icon: '📡', label: '采集数据' },
       { icon: '🌐', label: '公共用户库' },
       { icon: '📢', label: '公告中心' }, { icon: '💬', label: '反馈中心' },
     ]},
@@ -201,6 +206,9 @@ export default function Dashboard({ user, token, onLogout }: { user: any; token:
                 case '定时任务': return <TimedTask token={token} />
                 case '执行统计': return <ExecutionStats token={token} />
                 case '素材管理': return <MediaManagement token={token} />
+                case '素材库': return <MaterialLibrary token={token} />
+                case '视频管理': return <VideoManagement token={token} />
+                case '广告管理': return <AdvertManagement token={token} />
                 case '采集数据': return <CollectedData token={token} />
                 case '公共用户库': return <PublicLibrary token={token} />
                 case '公告中心': return <Announcements token={token} />

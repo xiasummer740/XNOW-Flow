@@ -289,6 +289,28 @@ def _migrate_public_users():
         print(f"[migration] public_users 表迁移失败（可忽略）: {e}")
 
 
+def _migrate_adverts():
+    """SQLite 迁移：确保 adverts 表存在（广告管理模块）。幂等。"""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS adverts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title VARCHAR(200) DEFAULT '',
+                    image_url TEXT DEFAULT '',
+                    link TEXT DEFAULT '',
+                    description TEXT DEFAULT '',
+                    status VARCHAR(20) DEFAULT 'active',
+                    api_id VARCHAR(20) DEFAULT '',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_adverts_api_id ON adverts(api_id)"))
+            conn.commit()
+    except Exception as e:
+        print(f"[migration] adverts 表迁移失败（可忽略）: {e}")
+
+
 def _migrate_task_engine_columns():
     """SQLite 迁移：tasks 表补齐统一任务引擎字段。幂等。"""
     try:
@@ -386,6 +408,7 @@ _migrate_quick_commands()
 _migrate_public_users()
 _migrate_task_engine_columns()
 _migrate_proxy_nodes()
+_migrate_adverts()
 
 def get_db():
     db = SessionLocal()

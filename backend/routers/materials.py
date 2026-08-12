@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/biz/v2", tags=["materials"])
 
 # 合法的素材类别
-VALID_CATEGORIES = {"avatar", "nickname", "signature", "link", "title", "comment", "bio", "dm"}
+VALID_CATEGORIES = {"avatar", "nickname", "signature", "link", "link_ad", "link_site", "title", "comment", "bio", "dm"}
 
 
 def _ensure_category(category: str):

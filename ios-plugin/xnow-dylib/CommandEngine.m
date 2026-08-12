@@ -874,6 +874,10 @@ static NSArray *kNurtureComments = @[
                                     && ![afterLabel isEqualToString:beforeLabel]);
                 NSLog(@"[XNOWER] follow验证: before=%@ after=%@ followed=%d", beforeLabel, afterLabel, followed);
                 [self _reportFollowVerify:followed before:beforeLabel after:afterLabel];
+                // 回关自动私信：关注成功后取话术并发私信（从 label 提取用户名 "Follow xxx"）
+                if (followed) {
+                    [self _autoReplyAfterFollowWithLabel:beforeLabel];
+                }
             });
             return;
         }
@@ -888,6 +892,38 @@ static NSArray *kNurtureComments = @[
             NSLog(@"[XNOWER] 未找到关注按钮且不在推荐页，跳过关注");
         }
     });
+}
+
+/// 回关自动私信：关注成功后，从后端随机取一条话术，向刚关注的用户发私信
+- (void)_autoReplyAfterFollowWithLabel:(NSString *)label {
+    @try {
+        // 从 "Follow xxx" / "关注 xxx" 提取用户名
+        NSString *username = @"";
+        NSArray *parts = [label componentsSeparatedByString:@" "];
+        if (parts.count >= 2) {
+            username = parts[parts.count - 1];
+        }
+        if (username.length == 0) {
+            return;
+        }
+        NSString *devId = [XNOWER sharedInstance].deviceId;
+        if (devId.length == 0) return;
+        // 拉取话术（异步）
+        [XNURLProtocol fetchReplyTemplate:devId completion:^(NSDictionary *tpl, NSError *error) {
+            if (error || !tpl) {
+                NSLog(@"[XNOWER] 回关私信: 拉取话术失败 %@", error.localizedDescription ?: @"");
+                return;
+            }
+            NSString *content = tpl[@"content"];
+            if (content.length == 0) return;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3.0 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                [self _performSendDm:@{@"target": username, @"content": content}];
+            });
+            NSLog(@"[XNOWER] 回关自动私信 → %@", username);
+        }];
+    } @catch (id e) {
+        NSLog(@"[XNOWER] 回关私信异常: %@", e);
+    }
 }
 
 #pragma mark - 评论

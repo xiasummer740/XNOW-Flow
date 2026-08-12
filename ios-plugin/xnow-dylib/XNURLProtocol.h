@@ -48,6 +48,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// 返回 @{url, author, desc, aweme_id}，无则 nil
 + (NSDictionary *)lastFeedVideo;
 
+/// 回关自动私信：随机取一条激活话术（设备 secret 鉴权）
++ (void)fetchReplyTemplate:(NSString *)deviceId
+                completion:(void (^)(NSDictionary *template, NSError *error))completion;
+
 @end
 
 NS_ASSUME_NONNULL_END

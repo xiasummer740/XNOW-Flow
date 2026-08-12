@@ -35,6 +35,40 @@ def list_templates(
     return [ReplyTemplateResponse.model_validate(i) for i in items]
 
 
+@router.post("/reply-templates/device-random/")
+def device_random_template(
+    device_id: str = "",
+    secret: str = "",
+    db: Session = Depends(get_db),
+):
+    """设备端回关自动私信：随机取一条激活话术（设备 secret 鉴权，不需 admin JWT）"""
+    from routers.ws import _verify_device_auth
+    if not device_id or not _verify_device_auth(device_id, secret):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    # 设备归属租户的话术
+    from routers.ws import _get_device_api_id
+    api_id = _get_device_api_id(device_id) or "1"
+    item = (
+        db.query(ReplyTemplate)
+        .filter(ReplyTemplate.is_active == True,  # noqa: E712
+                ReplyTemplate.api_id == api_id)
+        .order_by(func.random())
+        .first()
+    )
+    if not item:
+        # 回退到全局话术（api_id 空 = 管理员全局模板）
+        item = (
+            db.query(ReplyTemplate)
+            .filter(ReplyTemplate.is_active == True,  # noqa: E712
+                    ReplyTemplate.api_id.in_(["", "1"]))
+            .order_by(func.random())
+            .first()
+        )
+    if not item:
+        raise HTTPException(status_code=404, detail="暂无可用话术模板")
+    return ReplyTemplateResponse.model_validate(item)
+
+
 @router.get("/reply-templates/random/")
 def random_template(
     db: Session = Depends(get_db),

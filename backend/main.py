@@ -34,6 +34,7 @@ from models.license import License
 from models.udid_request import UDIDRequest
 from models.public_user import PublicUser
 from models.proxy_node import ProxyNode
+from models.advert import Advert
 
 # 创建表
 Base.metadata.create_all(bind=engine)
@@ -63,6 +64,7 @@ from routers import device_commands
 from routers import public_users
 from routers import proxy_nodes
 from routers import translate
+from routers import adverts
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)
@@ -89,6 +91,7 @@ app.include_router(device_commands.router)
 app.include_router(public_users.router)
 app.include_router(proxy_nodes.router)
 app.include_router(translate.router)
+app.include_router(adverts.router)
 
 @app.get("/api/health")
 def health():

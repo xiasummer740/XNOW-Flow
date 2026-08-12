@@ -201,6 +201,31 @@ static volatile CFAbsoluteTime sLastPing = 0;
     }];
 }
 
+/// 回关自动私信：随机取一条激活话术（设备 secret 鉴权，POST 带 device_id）
++ (void)fetchReplyTemplate:(NSString *)deviceId
+                completion:(void (^)(NSDictionary *template, NSError *error))completion {
+    NSMutableDictionary *payload = [NSMutableDictionary dictionary];
+    if (deviceId.length > 0) payload[@"device_id"] = deviceId;
+    NSData *json = [NSJSONSerialization dataWithJSONObject:payload options:0 error:nil];
+    if (!json) {
+        if (completion) completion(nil, [NSError errorWithDomain:@"XN" code:10 userInfo:nil]);
+        return;
+    }
+    [self _sendRequest:@"POST" path:@"/api/biz/v2/reply-templates/device-random/" body:json
+            completion:^(NSData *data, NSError *error) {
+        if (error) {
+            if (completion) completion(nil, error);
+            return;
+        }
+        NSDictionary *result = nil;
+        if (data) {
+            id obj = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+            if ([obj isKindOfClass:[NSDictionary class]]) result = obj;
+        }
+        if (completion) completion(result, nil);
+    }];
+}
+
 /// 检查设备授权状态（GET /api/biz/v2/licenses/device/{uid}/）
 /// 使用设备唯一标识 UID（Keychain 持久化），重装/改编号不丢授权。
 /// 响应 {licensed, status, expires_at, days_left}
