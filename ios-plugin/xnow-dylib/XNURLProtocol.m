@@ -428,8 +428,12 @@ static volatile CFAbsoluteTime sLastPing = 0;
     req.HTTPMethod = @"GET";
     req.timeoutInterval = 10;
 
-    // 复用共享 session（不每次新建，降低开销）
-    NSURLSession *session = [XNURLProtocol _sharedForwardSession];
+    // ⚠️ 修复闪退：原实现复用 _sharedForwardSession 并 finishTasksAndInvalidate 销毁它，
+    // 导致 TikTok feed 转发(_forwardRequest 也用共享 session)在已销毁 session 上建任务崩溃。
+    // 改为独立 session（不复用共享、不销毁），每次用完释放。
+    NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    cfg.timeoutIntervalForRequest = 10;
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:cfg];
 
     [[session dataTaskWithRequest:req
                 completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
