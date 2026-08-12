@@ -101,7 +101,6 @@ __attribute__((destructor)) static void XNOWERUnload() {
 // ======== 实现 ========
 @interface XNOWER () <WsClientDelegate, XNFloatingPanelDelegate>
 @property (nonatomic, strong) WsClient *wsClient;
-@property (nonatomic, strong) CommandEngine *cmdEngine;
 @property (nonatomic, strong) DeviceStatus *deviceStatus;
 @property (nonatomic, strong) XNFloatingPanel *floatingPanel;
 @property (nonatomic, strong) UIWindow *overlayWindow;

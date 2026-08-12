@@ -10,8 +10,7 @@ CFLAGS = -arch $(ARCH) -isysroot $(SDK) -miphoneos-version-min=$(MIN_IOS) \
 
 FRAMEWORKS = -framework Foundation -framework UIKit \
              -framework CoreGraphics -framework CFNetwork -framework WebKit \
-             -framework Security -framework QuartzCore -framework Photos \
-             -framework IOKit
+             -framework Security -framework QuartzCore -framework Photos
 
 SRCS = XNOWER.m XNStartup.m WsClient.m CommandEngine.m DeviceStatus.m \
        TikTokHooks.m XNFloatingPanel.m AccountManager.m AccountPool.m \
