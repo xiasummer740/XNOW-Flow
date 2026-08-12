@@ -60,6 +60,15 @@
 - **后端补全**：public-users 支持 min_age/max_age 服务端筛选，DeviceBinding 加 added_by
 - **全量对比页上线**：`http://192.129.210.52:8000/full-compare.html`（浮窗8✅2⚠️ / 后台8✅7⚠️9❌）
 
+### 🟢 2026-08-12 打通后台8个缺失模块（已上线）
+
+- **统一素材库页**（MaterialLibrary）：头像/昵称/签名/广告链接/网站链接 5分类切换 + 分组 + 批量导入
+- **视频管理页**（VideoManagement）：发布记录+新建+立即发布
+- **广告管理**（AdvertManagement）：后端 adverts 模型+接口+页面
+- **回关自动私信**：设备端关注成功后取话术自动私信（fetchReplyTemplate + follow钩子）
+- 素材类别区分：link_ad(广告)/link_site(网站)
+- 全部已部署 VPS 验证（前端侧边栏3新菜单 + 素材库5分类标签 + 广告API）
+
 **第一批已修复并部署（4项，全测过）**
 - SECRET_KEY 启动守卫（config.py，无密钥拒启）
 - 上传限 10MB + 禁 SVG（media.py）
