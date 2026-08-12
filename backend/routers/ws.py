@@ -353,6 +353,7 @@ def _verify_device_auth(device_id: str, secret: str) -> bool:
                 device_secret=secret,
                 last_online=datetime.utcnow(),
                 app_version="—",
+                added_by="系统",
             )
             db.add(device)
             db.commit()
@@ -423,6 +424,7 @@ def _mark_device_online(device_id: str, api_id: str = "", device_code: str = "",
                 api_id="",
                 last_online=datetime.utcnow(),
                 app_version="—",
+                added_by="系统",
             )
             db.add(device)
             logger.info(f"Device {device_id} auto-registered via HTTP poll")

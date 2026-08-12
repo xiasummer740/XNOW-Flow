@@ -40,6 +40,7 @@ class DeviceBinding(Base):
 
     # Meta
     api_id = Column(String(20), default="")               # API ID（关联用户）
+    added_by = Column(String(100), default="")            # 添加人（PPT 设备管理列）
     last_seen = Column(DateTime(timezone=True))          # 最后在线时间
     last_online = Column(DateTime(timezone=True))        # 向后兼容
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -109,6 +109,8 @@ def list_public_users(
     search: str = Query(None),
     min_followers: int = Query(None, ge=0),
     max_followers: int = Query(None, ge=0),
+    min_age: int = Query(None, ge=0),
+    max_age: int = Query(None, ge=0),
     keyword: str = Query(None),
     ai_tagged: int = Query(None),       # 1=已打标 0=未打标
     limit: int = Query(20, ge=1, le=100),
@@ -126,6 +128,10 @@ def list_public_users(
         query = query.filter(PublicUser.followers >= min_followers)
     if max_followers is not None:
         query = query.filter(PublicUser.followers <= max_followers)
+    if min_age is not None:
+        query = query.filter(PublicUser.age >= min_age)
+    if max_age is not None:
+        query = query.filter(PublicUser.age <= max_age)
     if keyword:
         query = query.filter(PublicUser.keyword.contains(keyword))
     if ai_tagged is not None:

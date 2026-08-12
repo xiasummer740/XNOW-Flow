@@ -514,6 +514,7 @@ export default function DeviceManagement({ token }: { token: string }) {
                     <th className="pb-2 pt-3 px-4 font-medium">手机号</th>
                     <th className="pb-2 pt-3 px-4 font-medium">运行状态</th>
                     <th className="pb-2 pt-3 px-4 font-medium">在线状态</th>
+                    <th className="pb-2 pt-3 px-4 font-medium">锁定</th>
                     <th className="pb-2 pt-3 px-4 font-medium text-right">今日任务</th>
                     <th className="pb-2 pt-3 px-4 font-medium text-right">绑定账号</th>
                     <th className="pb-2 pt-3 px-4 font-medium">App版本</th>
@@ -559,6 +560,19 @@ export default function DeviceManagement({ token }: { token: string }) {
                         </td>
                         <td className="py-3 px-4">{stateBadge(dev.device_state)}</td>
                         <td className="py-3 px-4">{onlineBadge(dev.is_online)}</td>
+                        <td className="py-3 px-4">
+                          {dev.device_state === 'locked' || dev.lock_reason ? (
+                            <span
+                              className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                              style={{ background: 'rgba(239,68,68,0.10)', color: '#dc2626' }}
+                              title={dev.lock_reason || ''}
+                            >
+                              🔒 已锁定
+                            </span>
+                          ) : (
+                            <span className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>正常</span>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-right text-xs">{dev.daily_task_count ?? 0}</td>
                         <td className="py-3 px-4 text-right text-xs">
                           <span style={{ color: 'rgba(0,0,0,0.55)' }}>

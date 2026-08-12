@@ -8,6 +8,8 @@ interface PublicUser {
   gender: string
   country: string
   followers: number
+  following_count: number
+  age: number
   videos_count: number
   signature: string
   keyword: string
@@ -42,6 +44,8 @@ export default function PublicLibrary({ token }: { token: string }) {
   const [country, setCountry] = useState('')
   const [keyword, setKeyword] = useState('')
   const [taggedOnly, setTaggedOnly] = useState('')
+  const [ageMin, setAgeMin] = useState('')
+  const [ageMax, setAgeMax] = useState('')
 
   // 选中
   const [selected, setSelected] = useState<number[]>([])
@@ -134,6 +138,16 @@ export default function PublicLibrary({ token }: { token: string }) {
   const toggleAll = () =>
     setSelected(prev => prev.length === data.length ? [] : data.map(d => d.id))
 
+  // 年龄区间筛选（客户端过滤当前已加载数据；后端暂不支持 age_min/age_max 参数）
+  const minAge = ageMin === '' ? null : Number(ageMin)
+  const maxAge = ageMax === '' ? null : Number(ageMax)
+  const visibleData = data.filter(u => {
+    const a = u.age ?? 0
+    if (minAge !== null && a < minAge) return false
+    if (maxAge !== null && a > maxAge) return false
+    return true
+  })
+
   return (
     <div className="space-y-6">
       <h3 className="text-sm font-medium text-gray-700">公共用户库</h3>
@@ -188,6 +202,12 @@ export default function PublicLibrary({ token }: { token: string }) {
           <option value="1">已打标</option>
           <option value="0">未打标</option>
         </select>
+        <input type="number" value={ageMin} onChange={e => setAgeMin(e.target.value)}
+          className="w-20 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-400"
+          placeholder="年龄≥" />
+        <input type="number" value={ageMax} onChange={e => setAgeMax(e.target.value)}
+          className="w-20 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-400"
+          placeholder="年龄≤" />
       </div>
 
       {/* 操作栏 */}
@@ -215,13 +235,13 @@ export default function PublicLibrary({ token }: { token: string }) {
       <div className="xx-card rounded-xl">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <span className="text-sm font-medium text-gray-700">公共用户</span>
-          <span className="text-xs text-gray-400">共 {data.length} 条</span>
+          <span className="text-xs text-gray-400">共 {visibleData.length} 条</span>
         </div>
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : data.length === 0 ? (
+        ) : visibleData.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center mb-3 text-2xl">🌐</div>
             <p className="text-sm text-gray-400">公共库暂无数据，点「投喂公共库」从采集数据导入</p>
@@ -241,12 +261,14 @@ export default function PublicLibrary({ token }: { token: string }) {
                   <th className="pb-2 pt-3 px-3 font-medium">性别</th>
                   <th className="pb-2 pt-3 px-3 font-medium">国家</th>
                   <th className="pb-2 pt-3 px-3 font-medium">粉丝数</th>
+                  <th className="pb-2 pt-3 px-3 font-medium">关注数</th>
+                  <th className="pb-2 pt-3 px-3 font-medium">年龄</th>
                   <th className="pb-2 pt-3 px-3 font-medium">AI标签</th>
                   <th className="pb-2 pt-3 px-3 font-medium">状态</th>
                 </tr>
               </thead>
               <tbody>
-                {data.map(u => (
+                {visibleData.map(u => (
                   <tr key={u.id} className="border-b border-gray-50 text-gray-700 hover:bg-gray-50/50">
                     <td className="py-3 px-3">
                       <input type="checkbox" checked={selected.includes(u.id)}
@@ -269,6 +291,8 @@ export default function PublicLibrary({ token }: { token: string }) {
                     </td>
                     <td className="py-3 px-3 text-xs">{u.country || '—'}</td>
                     <td className="py-3 px-3">{u.followers?.toLocaleString() || '0'}</td>
+                    <td className="py-3 px-3">{u.following_count?.toLocaleString() || '0'}</td>
+                    <td className="py-3 px-3">{u.age || '—'}</td>
                     <td className="py-3 px-3 max-w-[200px]">
                       <span className="text-xs text-purple-500">{u.keyword || '—'}</span>
                     </td>

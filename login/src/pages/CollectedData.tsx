@@ -6,6 +6,14 @@ interface CollectionRecord {
   source_type: string
   content: string
   author: string
+  url: string
+  gender: string
+  region: string
+  followers: number
+  following_count: number
+  age: number
+  aweme_id: string
+  group_name: string
   collected_at: string
 }
 
@@ -18,6 +26,14 @@ const typeIcons: Record<string, string> = {
   '用户': '👤',
   '视频': '🎬',
   '评论': '💬',
+}
+
+const genderLabels: Record<string, string> = { male: '男', female: '女', unknown: '未知' }
+
+const genderColors: Record<string, string> = {
+  male: 'bg-blue-50 text-blue-500',
+  female: 'bg-pink-50 text-pink-500',
+  unknown: 'bg-gray-50 text-gray-400',
 }
 
 export default function CollectedData({ token }: { token: string }) {
@@ -124,6 +140,12 @@ export default function CollectedData({ token }: { token: string }) {
                   <th className="pb-2 pt-3 px-5 font-medium">来源</th>
                   <th className="pb-2 pt-3 px-5 font-medium">类型</th>
                   <th className="pb-2 pt-3 px-5 font-medium">内容</th>
+                  <th className="pb-2 pt-3 px-5 font-medium">头像</th>
+                  <th className="pb-2 pt-3 px-5 font-medium">性别</th>
+                  <th className="pb-2 pt-3 px-5 font-medium">国家</th>
+                  <th className="pb-2 pt-3 px-5 font-medium">粉丝数</th>
+                  <th className="pb-2 pt-3 px-5 font-medium">关注数</th>
+                  <th className="pb-2 pt-3 px-5 font-medium">年龄</th>
                   <th className="pb-2 pt-3 px-5 font-medium">采集设备</th>
                   <th className="pb-2 pt-3 px-5 font-medium">采集时间</th>
                 </tr>
@@ -143,6 +165,23 @@ export default function CollectedData({ token }: { token: string }) {
                       </span>
                     </td>
                     <td className="py-3 px-5 max-w-[200px] truncate">{r.content}</td>
+                    <td className="py-3 px-5">
+                      {r.url ? (
+                        <img src={r.url} alt="" className="w-8 h-8 rounded-full object-cover"
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-300 text-sm">👤</div>
+                      )}
+                    </td>
+                    <td className="py-3 px-5 text-xs">
+                      <span className={`text-xs px-2 py-0.5 rounded ${genderColors[r.gender] || 'bg-gray-50 text-gray-400'}`}>
+                        {genderLabels[r.gender] || r.gender || '—'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-5 text-gray-400 text-xs">{r.region || '—'}</td>
+                    <td className="py-3 px-5">{r.followers?.toLocaleString() || '0'}</td>
+                    <td className="py-3 px-5">{r.following_count?.toLocaleString() || '0'}</td>
+                    <td className="py-3 px-5">{r.age || '—'}</td>
                     <td className="py-3 px-5 text-gray-400 text-xs">{r.author}</td>
                     <td className="py-3 px-5 text-gray-400 text-xs">{r.collected_at}</td>
                   </tr>

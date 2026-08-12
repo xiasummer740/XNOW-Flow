@@ -14,7 +14,7 @@ interface Account {
   nickname?: string
   avatar_url?: string
   fans_count?: number
-  follow_count?: number
+  following_count?: number
   digg_count?: number
   video_count?: number
   diamond?: number
@@ -439,7 +439,7 @@ export default function AccountManagement({ token }: { token: string }) {
 
                         {/* Fans / Follow / Digg / Video */}
                         <td className="py-3 px-3 text-right text-xs">{formatCount(acc.fans_count)}</td>
-                        <td className="py-3 px-3 text-right text-xs">{formatCount(acc.follow_count)}</td>
+                        <td className="py-3 px-3 text-right text-xs">{formatCount(acc.following_count)}</td>
                         <td className="py-3 px-3 text-right text-xs">{formatCount(acc.digg_count)}</td>
                         <td className="py-3 px-3 text-right text-xs">{acc.video_count?.toLocaleString() ?? '0'}</td>
 
@@ -544,7 +544,7 @@ export default function AccountManagement({ token }: { token: string }) {
             <div className="grid grid-cols-4 gap-3 mb-4">
               {[
                 { label: '粉丝', val: formatCount(detailAccount.fans_count) },
-                { label: '关注', val: formatCount(detailAccount.follow_count) },
+                { label: '关注', val: formatCount(detailAccount.following_count) },
                 { label: '获赞', val: formatCount(detailAccount.digg_count) },
                 { label: '作品', val: detailAccount.video_count?.toLocaleString() ?? '0' },
               ].map(stat => (

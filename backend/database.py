@@ -86,6 +86,8 @@ def _migrate_tenant_columns():
                 cols = [r[1] for r in conn.execute(text("PRAGMA table_info(device_bindings)")).fetchall()]
                 if "device_code" not in cols:
                     conn.execute(text("ALTER TABLE device_bindings ADD COLUMN device_code VARCHAR(50) DEFAULT ''"))
+                if "added_by" not in cols:
+                    conn.execute(text("ALTER TABLE device_bindings ADD COLUMN added_by VARCHAR(100) DEFAULT '系统'"))
 
             # timed_tasks: 定时任务目标设备/指令列（优化2调度器用）
             if "timed_tasks" in tables:

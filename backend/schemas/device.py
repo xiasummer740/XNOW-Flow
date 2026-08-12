@@ -22,6 +22,7 @@ class DeviceResponse(BaseModel):
     current_task: Optional[str] = None
     current_account_id: Optional[int] = 0
     group_name: Optional[str] = "未分组"
+    added_by: Optional[str] = "系统"
     tags: Optional[List[str]] = []
     api_id: Optional[Union[str, int]] = ""
     last_seen: Optional[datetime] = None
