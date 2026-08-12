@@ -4,6 +4,7 @@
 
 #import "XNFloatingPanel.h"
 #import "XNOWER.h"
+#import "DeviceIdentity.h"
 #import "AccountPool.h"
 #import "AccountManager.h"
 #import "CountryEnv.h"
@@ -526,7 +527,7 @@ static NSArray *kCountries;
 - (void)_copyDeviceCodeTapped {
     NSString *code = _panelDeviceId ?: @"";
     if (code.length == 0) {
-        code = [[[UIDevice currentDevice] identifierForVendor] UUIDString] ?: @"";
+        code = [DeviceIdentity deviceUID] ?: @"";
     }
     if (code.length > 0) {
         [UIPasteboard generalPasteboard].string = code;

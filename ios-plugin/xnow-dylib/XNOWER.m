@@ -778,7 +778,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
         return;
     }
     self.floatingPanel.delegate = self;
-    [self.floatingPanel setDeviceId:self.deviceId];
+    // 统一 ID：浮窗显示/复制机器码用 deviceUID(Keychain持久化, 与激活/授权绑定一致)
+    // 避免显示 iphone_xxx(IDFV) 与激活 F2D1159C(Keychain) 两套 ID 混淆
+    [self.floatingPanel setDeviceId:[DeviceIdentity deviceUID]];
     [self.floatingPanel setServerURL:self.serverURL];
     [self.floatingPanel setConnected:self.isConnected];
     if ([AccountManager sharedManager].currentAccount) {
@@ -972,7 +974,8 @@ __attribute__((destructor)) static void XNOWERUnload() {
         _deviceId = [NSString stringWithFormat:@"iphone_%@", shortID];
         [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
     }
-    [self.floatingPanel setDeviceId:_deviceId];
+    // 统一 ID：浮窗显示/复制机器码用 deviceUID(Keychain, 与激活一致)
+    [self.floatingPanel setDeviceId:[DeviceIdentity deviceUID]];
 
     [self addLog:[NSString stringWithFormat:@"✅ 绑定成功 设备:%@ API:%@", code, apiId]];
 
