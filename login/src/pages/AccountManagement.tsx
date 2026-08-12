@@ -131,6 +131,7 @@ export default function AccountManagement({ token }: { token: string }) {
 
   /* ---- Batch edit profile modal state ---- */
   const [showBatchEdit, setShowBatchEdit] = useState(false)
+  const [editAvatar, setEditAvatar] = useState(true)
   const [editNickname, setEditNickname] = useState(true)
   const [editSignature, setEditSignature] = useState(true)
   const [editLink, setEditLink] = useState(true)
@@ -249,7 +250,7 @@ export default function AccountManagement({ token }: { token: string }) {
 
   const submitBatchEdit = async () => {
     if (selectedCount === 0 || submittingBatch) return
-    if (!(editNickname || editSignature || editLink)) return
+    if (!(editAvatar || editNickname || editSignature || editLink)) return
     setSubmittingBatch(true)
     try {
       const r = await fetch('/api/biz/v2/accounts/batch-edit-profile/', {
@@ -257,6 +258,7 @@ export default function AccountManagement({ token }: { token: string }) {
         headers,
         body: JSON.stringify({
           account_ids: Array.from(selectedIds),
+          edit_avatar: editAvatar,
           edit_nickname: editNickname,
           edit_signature: editSignature,
           edit_link: editLink,
@@ -811,6 +813,7 @@ export default function AccountManagement({ token }: { token: string }) {
 
             <div className="space-y-3 mb-5">
               {[
+                { label: '修改头像', val: editAvatar, set: setEditAvatar },
                 { label: '修改昵称', val: editNickname, set: setEditNickname },
                 { label: '修改签名', val: editSignature, set: setEditSignature },
                 { label: '修改链接', val: editLink, set: setEditLink },
@@ -832,7 +835,7 @@ export default function AccountManagement({ token }: { token: string }) {
               </button>
               <button
                 onClick={submitBatchEdit}
-                disabled={submittingBatch || !(editNickname || editSignature || editLink)}
+                disabled={submittingBatch || !(editAvatar || editNickname || editSignature || editLink)}
                 className="px-4 py-1.5 rounded-lg text-xs font-medium cursor-pointer disabled:opacity-40"
                 style={{ background: '#1677FF', color: '#fff' }}
               >

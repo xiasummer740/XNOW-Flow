@@ -372,12 +372,27 @@ async def batch_edit_profile(
             return mat.content or ""
         return ""
 
+    def _random_avatar_url() -> str:
+        """从头像素材库随机取一张头像图 URL（优先 image_url，回退 content）"""
+        q = db.query(Material).filter(
+            Material.status == "active", Material.category == "avatar"
+        )
+        if req.material_group_id:
+            q = q.filter(Material.group_id == req.material_group_id)
+        mat = q.order_by(sa_func.random()).first()
+        if mat:
+            mat.used_count = (mat.used_count or 0) + 1
+            return mat.image_url or mat.content or ""
+        return ""
+
     dispatched = no_device = 0
     for acc in accounts:
         if not acc.device_id:
             no_device += 1
             continue
         params = {}
+        if req.edit_avatar:
+            params["avatar"] = _random_avatar_url()
         if req.edit_nickname:
             params["nickname"] = _random_material("nickname")
         if req.edit_signature:

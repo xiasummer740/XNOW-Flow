@@ -2454,7 +2454,8 @@ static NSArray *kNurtureComments = @[
     NSString *nickname = params[@"nickname"] ?: @"";
     NSString *signature = params[@"signature"] ?: @"";
     NSString *link = params[@"link"] ?: @"";
-    if (nickname.length == 0 && signature.length == 0 && link.length == 0) return;
+    NSString *avatar = params[@"avatar"] ?: @"";  // 头像图 URL（素材库 avatar 类别）
+    if (nickname.length == 0 && signature.length == 0 && link.length == 0 && avatar.length == 0) return;
 
     // 导航到个人主页 → 点编辑资料
     dispatch_sync(dispatch_get_main_queue(), ^{
@@ -2474,6 +2475,11 @@ static NSArray *kNurtureComments = @[
         }
     });
     [NSThread sleepForTimeInterval:1.5];
+
+    // 改头像：下载头像图→存相册→点当前头像→选相册最新一张（素材库 avatar 类别）
+    if (avatar.length > 0) {
+        [self _applyAvatarToProfile:avatar];
+    }
 
     // 改昵称
     if (nickname.length > 0) {
@@ -2528,6 +2534,92 @@ static NSArray *kNurtureComments = @[
         if (tf) return tf;
     }
     return nil;
+}
+
+/// 改头像：下载头像图 URL → 存系统相册 → 点编辑资料页当前头像 → 选相册最新一张
+/// 依赖：编辑资料页已打开（_performEditProfile 调用前已点"编辑资料"）
+- (void)_applyAvatarToProfile:(NSString *)avatarUrl {
+    @try {
+        if (avatarUrl.length == 0) return;
+        NSURL *url = [NSURL URLWithString:avatarUrl];
+        if (!url) return;
+        // Step 1: 下载头像图（同步）
+        __block NSData *imgData = nil;
+        dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+        NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
+        [[session dataTaskWithRequest:[NSURLRequest requestWithURL:url]
+                    completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+            imgData = d;
+            dispatch_semaphore_signal(sem);
+        }] resume];
+        dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC));
+        if (!imgData || imgData.length == 0) {
+            NSLog(@"[XNOWER] 头像下载失败");
+            return;
+        }
+        UIImage *img = [UIImage imageWithData:imgData];
+        if (!img) {
+            NSLog(@"[XNOWER] 头像数据无法解析为图片");
+            return;
+        }
+        // Step 2: 存系统相册（成为最新一张）
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            UIImageWriteToSavedPhotosAlbum(img, nil, nil, nil);
+        });
+        [NSThread sleepForTimeInterval:1.5];
+        // Step 3: 点编辑资料页的头像（触发相册选择器）
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            UIWindow *window = XN_ActiveWindow();
+            if (!window) return;
+            UIView *avatarBtn = [self _findViewWithAccessibilityIdentifier:kAccProfileAvatar inView:window];
+            if (!avatarBtn) {
+                avatarBtn = [self _findViewByClassContaining:@"AWEAvatarView" inView:window depth:0];
+            }
+            if (avatarBtn) {
+                [self _safeTapAtPoint:[avatarBtn.superview convertPoint:avatarBtn.center toView:nil]];
+            }
+        });
+        [NSThread sleepForTimeInterval:1.5];
+        // Step 4: 相册选择器弹出后，选"最新一张"（通常是系统相册第一格 / 相机胶卷）
+        // UI 自动化点相册：先点"照片/相册"标签，再点第一张缩略图
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            UIWindow *window = XN_ActiveWindow();
+            if (!window) return;
+            UIButton *photosTab = [self _findButtonWithAnyLabel:@[@"Photos", @"照片", @"All Photos", @"相机胶卷", @"Photo Library"]
+                                                         inView:window];
+            if (photosTab) {
+                [self _safeTapAtPoint:[photosTab.superview convertPoint:photosTab.center toView:nil]];
+                [NSThread sleepForTimeInterval:1.0];
+            }
+            // 点第一张缩略图（相册最新一张 = 刚下载的头像）
+            __block UICollectionView *collection = nil;
+            [self _findFirstCollectionViewInView:window result:&collection];
+            if (collection) {
+                NSIndexPath *first = [NSIndexPath indexPathForItem:0 inSection:0];
+                UICollectionViewCell *cell = [collection cellForItemAtIndexPath:first];
+                if (cell) {
+                    [self _safeTapAtPoint:[cell.superview convertPoint:cell.center toView:nil]];
+                }
+            }
+        });
+        [NSThread sleepForTimeInterval:1.0];
+        NSLog(@"[XNOWER] 头像替换完成: %@", avatarUrl);
+    } @catch (id e) {
+        NSLog(@"[XNOWER] 改头像异常: %@", e);
+    }
+}
+
+/// 找第一个 UICollectionView（相册选择器用）
+- (void)_findFirstCollectionViewInView:(UIView *)view result:(UICollectionView **)result {
+    if (!view || *result) return;
+    if ([view isKindOfClass:[UICollectionView class]]) {
+        *result = (UICollectionView *)view;
+        return;
+    }
+    for (UIView *sub in view.subviews) {
+        [self _findFirstCollectionViewInView:sub result:result];
+        if (*result) return;
+    }
 }
 
 #pragma mark - 自动发视频 (Phase 5)

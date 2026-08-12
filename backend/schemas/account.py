@@ -71,6 +71,7 @@ class AccountDispatchRequest(BaseModel):
 class AccountBatchEditRequest(BaseModel):
     """批量修改资料（用素材库随机抽，下发设备端 edit_profile）"""
     account_ids: List[int]
+    edit_avatar: bool = False
     edit_nickname: bool = False
     edit_signature: bool = False
     edit_link: bool = False
