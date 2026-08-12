@@ -129,6 +129,13 @@ export default function AccountManagement({ token }: { token: string }) {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState('')
 
+  /* ---- Batch edit profile modal state ---- */
+  const [showBatchEdit, setShowBatchEdit] = useState(false)
+  const [editNickname, setEditNickname] = useState(true)
+  const [editSignature, setEditSignature] = useState(true)
+  const [editLink, setEditLink] = useState(true)
+  const [submittingBatch, setSubmittingBatch] = useState(false)
+
   // 手动导入表单
   const [form, setForm] = useState({
     nickname: '', username: '', aweme_number: '', password: '', cookies: '', token: '',
@@ -228,6 +235,45 @@ export default function AccountManagement({ token }: { token: string }) {
       setError('保存备注失败')
     } finally {
       setSavingRemark(false)
+    }
+  }
+
+  /* ---- Batch edit profile ---- */
+
+  const openBatchEdit = () => {
+    setEditNickname(true)
+    setEditSignature(true)
+    setEditLink(true)
+    setShowBatchEdit(true)
+  }
+
+  const submitBatchEdit = async () => {
+    if (selectedCount === 0 || submittingBatch) return
+    if (!(editNickname || editSignature || editLink)) return
+    setSubmittingBatch(true)
+    try {
+      const r = await fetch('/api/biz/v2/accounts/batch-edit-profile/', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          account_ids: Array.from(selectedIds),
+          edit_nickname: editNickname,
+          edit_signature: editSignature,
+          edit_link: editLink,
+          material_group_id: null,
+        }),
+      })
+      if (!r.ok) throw new Error((await r.text()).slice(0, 120) || '下发失败')
+      const d = await r.json()
+      alert(d.message || '已下发')
+      setShowBatchEdit(false)
+      setSelectedIds(new Set())
+      setSelectAll(false)
+      fetchAccounts()
+    } catch (e: any) {
+      alert('下发失败: ' + (e.message || '未知错误'))
+    } finally {
+      setSubmittingBatch(false)
     }
   }
 
@@ -340,13 +386,22 @@ export default function AccountManagement({ token }: { token: string }) {
           <span className="text-sm" style={{ color: 'rgba(0,0,0,0.55)' }}>
             已选 <strong style={{ color: '#1677FF' }}>{selectedCount}</strong> 项
           </span>
-          <button
-            onClick={() => { setSelectedIds(new Set()); setSelectAll(false) }}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
-            style={{ background: 'rgba(0,0,0,0.05)', color: 'rgba(0,0,0,0.50)' }}
-          >
-            取消选择
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openBatchEdit}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer flex items-center gap-1"
+              style={{ background: '#1677FF', color: '#fff' }}
+            >
+              ✏️ 批量改资料
+            </button>
+            <button
+              onClick={() => { setSelectedIds(new Set()); setSelectAll(false) }}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
+              style={{ background: 'rgba(0,0,0,0.05)', color: 'rgba(0,0,0,0.50)' }}
+            >
+              取消选择
+            </button>
+          </div>
         </div>
       )}
 
@@ -731,6 +786,59 @@ export default function AccountManagement({ token }: { token: string }) {
                 {importing && <p className="text-xs" style={{ color: '#1677FF' }}>正在导入...</p>}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ========== 8. Batch Edit Profile Modal ========== */}
+      {showBatchEdit && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
+          style={{ background: 'rgba(0,0,0,0.30)' }}
+          onClick={() => setShowBatchEdit(false)}
+        >
+          <div className="xx-card rounded-xl w-full max-w-lg p-6 my-8" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h4 className="text-sm font-medium" style={{ color: 'rgba(0,0,0,0.65)' }}>
+                ✏️ 批量修改资料（{selectedCount} 个账号）
+              </h4>
+              <button onClick={() => setShowBatchEdit(false)} className="text-lg cursor-pointer" style={{ color: 'rgba(0,0,0,0.25)' }}>✕</button>
+            </div>
+
+            <p className="text-xs mb-4" style={{ color: 'rgba(0,0,0,0.40)' }}>
+              将随机使用素材库中的素材，未配置素材的项会被跳过
+            </p>
+
+            <div className="space-y-3 mb-5">
+              {[
+                { label: '修改昵称', val: editNickname, set: setEditNickname },
+                { label: '修改签名', val: editSignature, set: setEditSignature },
+                { label: '修改链接', val: editLink, set: setEditLink },
+              ].map(opt => (
+                <label key={opt.label} className="flex items-center gap-2 cursor-pointer text-sm" style={{ color: 'rgba(0,0,0,0.65)' }}>
+                  <input type="checkbox" checked={opt.val} onChange={e => opt.set(e.target.checked)} className="cursor-pointer accent-[#1677FF]" />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowBatchEdit(false)}
+                className="px-4 py-1.5 rounded-lg text-xs font-medium cursor-pointer"
+                style={{ background: 'rgba(0,0,0,0.05)', color: 'rgba(0,0,0,0.50)' }}
+              >
+                取消
+              </button>
+              <button
+                onClick={submitBatchEdit}
+                disabled={submittingBatch || !(editNickname || editSignature || editLink)}
+                className="px-4 py-1.5 rounded-lg text-xs font-medium cursor-pointer disabled:opacity-40"
+                style={{ background: '#1677FF', color: '#fff' }}
+              >
+                {submittingBatch ? '下发中...' : '下发修改'}
+              </button>
+            </div>
           </div>
         </div>
       )}
