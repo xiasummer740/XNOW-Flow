@@ -68,6 +68,15 @@ class AccountDispatchRequest(BaseModel):
     device_id: str
 
 
+class AccountBatchEditRequest(BaseModel):
+    """批量修改资料（用素材库随机抽，下发设备端 edit_profile）"""
+    account_ids: List[int]
+    edit_nickname: bool = False
+    edit_signature: bool = False
+    edit_link: bool = False
+    material_group_id: Optional[int] = None   # 素材分组（空=全局随机）
+
+
 class AccountResponse(BaseModel):
     id: int
     nickname: Optional[str] = ""

@@ -1,20 +1,24 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func as sa_func
 from typing import Optional
 import json, csv, io, logging
+from datetime import datetime
 
 from database import get_db, SessionLocal
 from models.account import Account
 from models.device import DeviceBinding
+from models.material import Material
 from schemas.account import (
     AccountResponse, AccountImportRequest,
     AccountBatchImportRequest, AccountDispatchRequest,
+    AccountBatchEditRequest,
 )
 from schemas.common import PaginatedResponse, MessageResponse
 from dependencies import get_current_user
 from models.user import User
 from tenant import tenant_scope, ensure_owned
+from connection_manager import manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/biz/v2", tags=["accounts"])
@@ -334,3 +338,64 @@ def dispatch_accounts(
     db.commit()
     logger.info(f"分配 {len(accounts)} 个账号到设备 {req.device_id}")
     return MessageResponse(message=f"已分配 {len(accounts)} 个账号到 {req.device_id}")
+
+
+@router.post("/accounts/batch-edit-profile/", response_model=MessageResponse)
+async def batch_edit_profile(
+    req: AccountBatchEditRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """批量修改账号资料（PPT 参考产品：后台选账号→用素材库素材改头像/昵称/签名/链接）
+
+    对每个账号：
+    1. 若账号绑定设备，从素材库随机抽对应类别素材（昵称→nickname, 签名→signature, 链接→link）
+    2. 下发 edit_profile 命令到设备端
+    """
+    accounts_query = db.query(Account).filter(Account.id.in_(req.account_ids))
+    scope = tenant_scope(Account, current_user)
+    if scope is not None:
+        accounts_query = accounts_query.filter(scope)
+    accounts = accounts_query.all()
+    if not accounts:
+        raise HTTPException(status_code=404, detail="未找到指定账号")
+
+    def _random_material(category: str) -> str:
+        q = db.query(Material).filter(
+            Material.status == "active", Material.category == category
+        )
+        if req.material_group_id:
+            q = q.filter(Material.group_id == req.material_group_id)
+        mat = q.order_by(sa_func.random()).first()
+        if mat:
+            mat.used_count = (mat.used_count or 0) + 1
+            return mat.content or ""
+        return ""
+
+    dispatched = no_device = 0
+    for acc in accounts:
+        if not acc.device_id:
+            no_device += 1
+            continue
+        params = {}
+        if req.edit_nickname:
+            params["nickname"] = _random_material("nickname")
+        if req.edit_signature:
+            params["signature"] = _random_material("signature")
+        if req.edit_link:
+            params["link"] = _random_material("link")
+        if not params:
+            continue
+        payload = {
+            "type": "command",
+            "action": "edit_profile",
+            "params": params,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        await manager.send_or_enqueue_command(acc.device_id, payload)
+        dispatched += 1
+    db.commit()
+    msg = f"已下发 {dispatched} 个账号改资料"
+    if no_device:
+        msg += f"，{no_device} 个账号未绑定设备跳过"
+    return MessageResponse(message=msg)
