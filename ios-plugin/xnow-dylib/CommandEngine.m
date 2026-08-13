@@ -1420,30 +1420,41 @@ static NSArray *kNurtureComments = @[
 /// 采集直播间用户：在当前直播页面滚动收集用户名（best-effort）
 /// 在直播间采集可见用户（上滑翻列表收集用户名，去重）— 采集直播间用户/点赞用户共用
 /// 检测当前是否在直播间（扫描直播房间/播放器类名 + LIVE角标）
+/// ⚠️ 修复闪退：原实现内部 dispatch_sync(main_queue)，被主线程的 _detectPageOnMain 调用时
+/// 主线程递归死锁 → watchdog 杀进程。改为主线程直接执行，非主线程才同步调度（同 _isOnProfilePage）。
 - (BOOL)_isInLiveRoom {
-    __block BOOL found = NO;
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        @try {
-            UIView *window = XN_ActiveWindow();
-            if (!window) return;
-            for (NSString *cls in @[@"LiveRoom", @"LivePlayer", @"TTKLive", @"AWELive", @"LiveStream"]) {
-                if ([self _findViewByClassContaining:cls inView:window depth:0]) {
-                    found = YES;
-                    return;
-                }
+    if (![NSThread isMainThread]) {
+        __block BOOL result = NO;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            result = [self _isInLiveRoomOnMain];
+        });
+        return result;
+    }
+    return [self _isInLiveRoomOnMain];
+}
+
+/// 主线程直播间检测核心逻辑（_isInLiveRoom 的内部实现，必须在主线程调用）
+- (BOOL)_isInLiveRoomOnMain {
+    BOOL found = NO;
+    @try {
+        UIView *window = XN_ActiveWindow();
+        if (!window) return NO;
+        for (NSString *cls in @[@"LiveRoom", @"LivePlayer", @"TTKLive", @"AWELive", @"LiveStream"]) {
+            if ([self _findViewByClassContaining:cls inView:window depth:0]) {
+                return YES;
             }
-            // 兜底：LIVE/直播中 角标
-            __block BOOL badge = NO;
-            [self _enumerateLabelsInView:window block:^(NSString *text, UIView *view) {
-                if (badge) return;
-                NSString *t = text.uppercaseString;
-                if ([t isEqualToString:@"LIVE"] || [t isEqualToString:@"直播中"] || [t isEqualToString:@"直播"]) {
-                    badge = YES;
-                }
-            }];
-            found = badge;
-        } @catch (id e) {}
-    });
+        }
+        // 兜底：LIVE/直播中 角标
+        __block BOOL badge = NO;
+        [self _enumerateLabelsInView:window block:^(NSString *text, UIView *view) {
+            if (badge) return;
+            NSString *t = text.uppercaseString;
+            if ([t isEqualToString:@"LIVE"] || [t isEqualToString:@"直播中"] || [t isEqualToString:@"直播"]) {
+                badge = YES;
+            }
+        }];
+        found = badge;
+    } @catch (id e) {}
     return found;
 }
 
@@ -3061,23 +3072,35 @@ static NSArray *kNurtureComments = @[
 /// 真实验证当前是否在推荐 feed（首页）
 /// 严格检测：feed 特有元素(feedLikeButton 右侧操作栏) 或 类名含 Feed/Recommend
 /// （修复：旧实现把收件箱的 TTKWidgetCollectionView 误判成 feed，导致"回到首页成功"但实际没回）
+/// ⚠️ 修复闪退：原实现内部 dispatch_sync(main_queue)，被主线程的 _detectPageOnMain/_isOnProfilePageOnMain
+/// 调用时主线程递归死锁 → watchdog 杀进程。改为主线程直接执行，非主线程才同步调度。
 - (BOOL)_isOnFeed {
-    __block BOOL onFeed = NO;
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        UIWindow *window = XN_ActiveWindow();
-        if (!window) return;
-        // 方法1: feed 特有的右侧操作栏点赞按钮(feedLikeButton)，只在首页推荐流存在
-        UIView *likeBtn = [self _findViewWithAccessibilityIdentifier:kAccLike inView:window];
-        if (likeBtn) { onFeed = YES; return; }
-        // 方法2: 大滚动视图类名含 Feed/Recommend（排除收件箱 Widget/Inbox、个人页 Profile）
-        __block UIScrollView *sv = nil;
-        [self _findLargeFeedScrollViewInView:window result:&sv];
-        if (sv) {
-            NSString *cls = NSStringFromClass(sv.class);
-            if ([cls containsString:@"Feed"] || [cls containsString:@"Recommend"]) onFeed = YES;
-        }
-    });
-    return onFeed;
+    if (![NSThread isMainThread]) {
+        __block BOOL result = NO;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            result = [self _isOnFeedOnMain];
+        });
+        return result;
+    }
+    return [self _isOnFeedOnMain];
+}
+
+/// 主线程 feed 检测核心逻辑（_isOnFeed 的内部实现，必须在主线程调用）
+- (BOOL)_isOnFeedOnMain {
+    BOOL onFeed = NO;
+    UIWindow *window = XN_ActiveWindow();
+    if (!window) return NO;
+    // 方法1: feed 特有的右侧操作栏点赞按钮(feedLikeButton)，只在首页推荐流存在
+    UIView *likeBtn = [self _findViewWithAccessibilityIdentifier:kAccLike inView:window];
+    if (likeBtn) return YES;
+    // 方法2: 大滚动视图类名含 Feed/Recommend（排除收件箱 Widget/Inbox、个人页 Profile）
+    __block UIScrollView *sv = nil;
+    [self _findLargeFeedScrollViewInView:window result:&sv];
+    if (sv) {
+        NSString *cls = NSStringFromClass(sv.class);
+        if ([cls containsString:@"Feed"] || [cls containsString:@"Recommend"]) return YES;
+    }
+    return NO;
 }
 
 /// VC 诊断：枚举 rootViewController 链 + 检测 tab 容器控制器（定位 TikTok 首页切换入口）

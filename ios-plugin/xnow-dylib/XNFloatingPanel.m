@@ -283,8 +283,8 @@ static NSArray *kCountries;
     CGFloat w = kExpandedWidth - 2 * m;
     CGFloat y = 16;
 
-    // UUID 卡片
-    NSString *uuid = [[[UIDevice currentDevice] identifierForVendor] UUIDString] ?: @"UNKNOWN";
+    // UUID 卡片（统一显示 Keychain deviceUID，与激活/授权/复制机器码一致；不能用 IDFV 否则和日志不一致）
+    NSString *uuid = [DeviceIdentity deviceUID] ?: @"UNKNOWN";
     UIView *uuidCard = [self _makeCardViewWithFrame:CGRectMake(m, y, w, 66)];
     UILabel *uuidTitle = [[UILabel alloc] initWithFrame:CGRectMake(14, 10, w - 28, 14)];
     uuidTitle.text = @"设备 UUID";
