@@ -1454,12 +1454,16 @@ static NSArray *kNurtureComments = @[
                 return YES;
             }
         }
-        // 兜底：LIVE/直播中 角标（仅当不在 feed 首页时启用——
-        // 首页 feed 的直播推荐卡片/视频文案也带 LIVE 字样，会误判为直播间）
+        // 兜底：LIVE/直播中 角标（仅当不在 feed 首页 且 角标在屏幕顶部区域时启用——
+        // 直播间 LIVE 角标固定在顶部；首页 feed 的直播推荐卡片 LIVE 文字在画面中下部，双重过滤防误判）
         if (![self _isOnFeedOnMain]) {
             __block BOOL badge = NO;
+            __block CGFloat screenH = [UIScreen mainScreen].bounds.size.height;
             [self _enumerateLabelsInView:window block:^(NSString *text, UIView *view) {
                 if (badge) return;
+                // 转 window 坐标：直播间的 LIVE 角标固定在顶部（y < 屏高 25%）
+                CGRect winFrame = [view convertRect:view.bounds toView:window];
+                if (winFrame.origin.y > screenH * 0.25) return;
                 NSString *t = text.uppercaseString;
                 if ([t isEqualToString:@"LIVE"] || [t isEqualToString:@"直播中"] || [t isEqualToString:@"直播"]) {
                     badge = YES;
