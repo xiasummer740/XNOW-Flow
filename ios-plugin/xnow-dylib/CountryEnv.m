@@ -106,10 +106,13 @@ static NSString *const kXNCountryEnvKey = @"XN_CountryEnv";
     };
 
     BOOL changed = NO;
+    // ⚠️ 修复闪退：startLoading 会被 URL loading system 在任意线程并发调用，
+    // 无锁写 static gLastRewrite → NSMutableDictionary 并发修改 → EXC_BAD_ACCESS。
+    // 改为线程局部字典构建 + 加锁合并快照。
     static NSMutableDictionary *gLastRewrite = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{ gLastRewrite = [NSMutableDictionary dictionary]; });
-    [gLastRewrite removeAllObjects];
+    NSMutableDictionary *rewriteSnapshot = [NSMutableDictionary dictionary];
     for (NSUInteger i = 0; i < items.count; i++) {
         NSURLQueryItem *item = items[i];
         NSString *field = fieldMap[item.name];
@@ -118,9 +121,13 @@ static NSString *const kXNCountryEnvKey = @"XN_CountryEnv";
         if (!val) continue;
         if (![item.value isEqualToString:val]) {
             items[i] = [NSURLQueryItem queryItemWithName:item.name value:val];
-            gLastRewrite[item.name] = val;  // 记录改写快照（env_diag 诊断）
+            rewriteSnapshot[item.name] = val;  // 记录改写快照（env_diag 诊断）
             changed = YES;
         }
+    }
+    @synchronized (gLastRewrite) {
+        [gLastRewrite removeAllObjects];
+        [gLastRewrite addEntriesFromDictionary:rewriteSnapshot];
     }
     if (changed) {
         comp.queryItems = items;

@@ -760,9 +760,15 @@ static NSArray *kNurtureComments = @[
 #pragma mark - 点赞
 
 /// 递归按类名包含查找视图（深度保护）— 定位 TikTok 私有容器（如点赞区 PlayInteractionLikeView）
+/// ⚠️ 修复菜单误判：跳过隐藏/透明视图。TikTok tab 结构下，访问过的 tab 页（个人页/私信/评论）
+/// 视图常驻在层级中但 hidden=YES，不过滤会导致页面检测命中隐藏页 → 菜单与当前页面不匹配。
 - (UIView *)_findViewByClassContaining:(NSString *)className inView:(UIView *)view depth:(int)depth {
     if (depth > 30 || !view) return nil;
     @try {
+        if (view.hidden || view.alpha <= 0.02) {
+            // 当前视图隐藏，跳过其子树（隐藏容器内的子视图不可能是当前可见页面）
+            return nil;
+        }
         if ([NSStringFromClass(view.class) containsString:className]) return view;
         for (UIView *sub in view.subviews) {
             UIView *r = [self _findViewByClassContaining:className inView:sub depth:depth + 1];
@@ -1444,16 +1450,19 @@ static NSArray *kNurtureComments = @[
                 return YES;
             }
         }
-        // 兜底：LIVE/直播中 角标
-        __block BOOL badge = NO;
-        [self _enumerateLabelsInView:window block:^(NSString *text, UIView *view) {
-            if (badge) return;
-            NSString *t = text.uppercaseString;
-            if ([t isEqualToString:@"LIVE"] || [t isEqualToString:@"直播中"] || [t isEqualToString:@"直播"]) {
-                badge = YES;
-            }
-        }];
-        found = badge;
+        // 兜底：LIVE/直播中 角标（仅当不在 feed 首页时启用——
+        // 首页 feed 的直播推荐卡片/视频文案也带 LIVE 字样，会误判为直播间）
+        if (![self _isOnFeedOnMain]) {
+            __block BOOL badge = NO;
+            [self _enumerateLabelsInView:window block:^(NSString *text, UIView *view) {
+                if (badge) return;
+                NSString *t = text.uppercaseString;
+                if ([t isEqualToString:@"LIVE"] || [t isEqualToString:@"直播中"] || [t isEqualToString:@"直播"]) {
+                    badge = YES;
+                }
+            }];
+            found = badge;
+        }
     } @catch (id e) {}
     return found;
 }
@@ -1498,9 +1507,15 @@ static NSArray *kNurtureComments = @[
             if ([self _findViewByClassContaining:cls inView:window depth:0]) { return @"inbox"; }
         }
         // 私信顶栏标题: 消息/收件箱/私信
+        // ⚠️ 修复误判：只认屏幕顶部的标题 label（y < 屏高 15%）。底部 tab 栏的"消息"标签
+        // 常驻可见，若不限位置会把首页 feed 误判成私信页（feed 检测失败时尤其明显）。
         __block BOOL inboxTitle = NO;
+        __block CGFloat screenH = [UIScreen mainScreen].bounds.size.height;
         [self _enumerateLabelsInView:window block:^(NSString *text, UIView *view) {
             if (inboxTitle) return;
+            CGRect f = view.frame;
+            // 只认顶栏区域（含状态栏下方的导航标题区），排除底部 tab 栏
+            if (f.origin.y > screenH * 0.15) return;
             NSString *t = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
             if ([t isEqualToString:@"消息"] || [t isEqualToString:@"收件箱"] || [t isEqualToString:@"私信"]) {
                 inboxTitle = YES;
@@ -1697,6 +1712,10 @@ static NSArray *kNurtureComments = @[
 - (UIView *)_findViewWithAccessibilityIdentifier:(NSString *)identifier inView:(UIView *)view depth:(int)depth {
     if (depth > 30 || !view) return nil;
     @try {
+        if (view.hidden || view.alpha <= 0.02) {
+            // 跳过隐藏/透明视图（同 _findViewByClassContaining，避免命中隐藏 tab 页）
+            return nil;
+        }
         if ([view.accessibilityIdentifier.lowercaseString isEqualToString:identifier.lowercaseString]) {
             return view;
         }

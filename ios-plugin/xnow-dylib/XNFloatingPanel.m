@@ -1336,7 +1336,7 @@ static NSArray *kCountries;
 
 - (void)_createLogWindow {
     CGFloat logW = 190, logH = 110;
-    self.logView = [[UIView alloc] initWithFrame:CGRectMake(8, 60, logW, logH)];
+    self.logView = [[UIView alloc] initWithFrame:CGRectMake(8, 20, logW, logH)];
     self.logView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.25]; // 超薄透明底
     self.logView.layer.cornerRadius = 12;
     self.logView.clipsToBounds = YES;
@@ -1349,7 +1349,7 @@ static NSArray *kCountries;
     self.logTextView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.logTextView.backgroundColor = UIColor.clearColor;
     self.logTextView.textColor = [UIColor colorWithWhite:1 alpha:0.95]; // 高对比白字，清晰可读
-    self.logTextView.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
+    self.logTextView.font = [UIFont systemFontOfSize:10 weight:UIFontWeightMedium];
     self.logTextView.editable = NO;
     self.logTextView.scrollEnabled = YES;   // 开启滚动，最新日志始终可见
     self.logTextView.userInteractionEnabled = NO;
