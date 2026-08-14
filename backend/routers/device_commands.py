@@ -142,3 +142,17 @@ def get_last_ui_scan(
     if data is None:
         return {"device_id": device_id, "has_scan": False}
     return {"device_id": device_id, "has_scan": True, **data}
+
+
+@router.get("/devices/{device_id}/screenshot/")
+def get_last_screenshot(
+    device_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """读取设备最近一次截图上报（内存缓存，电脑端查看真机画面）"""
+    from routers.ws import _last_screenshot
+
+    data = _last_screenshot.get(device_id)
+    if data is None:
+        return {"device_id": device_id, "has_screenshot": False}
+    return {"device_id": device_id, "has_screenshot": True, **data}

@@ -114,6 +114,33 @@ def do_scan():
     return res
 
 
+@app.post("/api/screenshot")
+def do_screenshot():
+    """触发手机截图 → 等待上报 → 返回 base64 图。"""
+    if not _token:
+        _login()
+    before = _api("GET", f"/api/biz/v2/devices/{DEVICE}/screenshot/").get("ts")
+    try:
+        sent = _api("POST", f"/api/biz/v2/devices/{DEVICE}/command/",
+                    {"action": "screenshot", "params": {}})
+    except urllib.error.HTTPError as e:
+        return {"ok": False, "error": f"下发命令失败 HTTP {e.code}"}
+    if not sent.get("success"):
+        return {"ok": False, "error": sent.get("message", "下发失败")}
+    deadline = time.time() + POLL_TIMEOUT
+    shot = None
+    while time.time() < deadline:
+        time.sleep(1.0)
+        shot = _api("GET", f"/api/biz/v2/devices/{DEVICE}/screenshot/")
+        if shot.get("has_screenshot") and shot.get("ts") != before:
+            break
+    if not shot or not shot.get("has_screenshot") or shot.get("ts") == before:
+        return {"ok": False, "error": "手机没有上报截图（可能不在线或未执行）"}
+    shot["ok"] = True
+    shot["device"] = DEVICE
+    return shot
+
+
 if __name__ == "__main__":
     if not PASS:
         print("❌ 未读到 XNW_ADMIN_PASSWORD，检查 .env.local")

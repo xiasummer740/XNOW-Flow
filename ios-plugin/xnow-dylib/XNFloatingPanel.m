@@ -411,6 +411,16 @@ static NSArray *kCountries;
                 @{@"icon": @"stop.circle.fill", @"label": @"停止采集评论用户", @"action": @"stop_collect_comments"},
             ] arrayByAddingObjectsFromArray:base];
         }
+        if ([page isEqualToString:@"search"] || [page isEqualToString:@"friends"]) {
+            // 搜索/朋友页：基础系统项
+            return base;
+        }
+        if ([page isEqualToString:@"recorder"]) {
+            // 录制/创作页：自动发视频 + 系统
+            return [@[
+                @{@"icon": @"arrow.up.circle.fill", @"label": @"自动发视频", @"action": @"post_video"},
+            ] arrayByAddingObjectsFromArray:base];
+        }
         // 首页 feed 或未知：完整菜单（原有 13 项保留）
         return _mainMenu;
     } @catch (id e) {
@@ -1077,6 +1087,15 @@ static NSArray *kCountries;
     if ([action isEqualToString:@"set_passcode"]) {
         [self addLog:@"🔒 口令功能：请在后台配置自动回复口令"];
         [self _showToast:@"口令已开启，后台配置生效"];
+        return;
+    }
+    // 录制页：自动发视频（从相册发布最新视频）
+    if ([action isEqualToString:@"post_video"]) {
+        [self addLog:@"🎬 自动发视频：从相册发布最新视频..."];
+        CommandEngine *engine = [XNOWER sharedInstance].cmdEngine;
+        if ([engine respondsToSelector:@selector(executeCommand:completion:)]) {
+            [engine executeCommand:@{@"action": @"post_video", @"params": @{}} completion:nil];
+        }
         return;
     }
     [self _showToast:[NSString stringWithFormat:@"执行: %@", action]];

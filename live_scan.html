@@ -25,7 +25,10 @@ td.acc{color:#6ecbf5;font-family:monospace}td.cls{color:#c9d1dc;font-family:mono
 <div class="sub">点按钮 → 手机扫描当前屏幕 → 自动识别你在哪一页。先到手机把页面切换好。</div>
 <button class="btn" id="go">🔍 扫描手机当前页</button>
 <div class="hint">按一次扫一次 · 每扫一次手机上截个屏式扫描（约1-2秒）</div>
+<button class="btn" id="shot" style="margin-top:12px;background:#1a7f4b">📸 截图查看真机画面</button>
+<div class="hint">点一下手机截屏并上报，电脑端实时看真机画面（约1-2秒）</div>
 <div id="out"></div>
+<div id="shotOut"></div>
 <script>
 const out=document.getElementById('out'),go=document.getElementById('go');
 go.onclick=async()=>{
@@ -37,6 +40,18 @@ go.onclick=async()=>{
     render(r);
   }catch(e){out.innerHTML='<div class="err">❌ 连接失败：'+esc(e.message)+'</div>';}
   finally{go.disabled=false;go.textContent='🔍 扫描手机当前页';}
+};
+const shot=document.getElementById('shot'),shotOut=document.getElementById('shotOut');
+shot.onclick=async()=>{
+  shot.disabled=true; shot.textContent='⏳ 正在截图…';
+  shotOut.innerHTML='<div class="loading">正在让手机截图并上报…</div>';
+  try{
+    const r=await (await fetch('/api/screenshot',{method:'POST'})).json();
+    if(!r.ok){shotOut.innerHTML='<div class="err">❌ '+esc(r.error||'未知错误')+'</div>';return;}
+    shotOut.innerHTML='<div class="card"><div class="meta">截图时间 '+esc(r.ts)+'</div>'
+      +'<img src="data:image/jpeg;base64,'+r.image_base64+'" style="width:100%;border-radius:8px"></div>';
+  }catch(e){shotOut.innerHTML='<div class="err">❌ 连接失败：'+esc(e.message)+'</div>';}
+  finally{shot.disabled=false;shot.textContent='📸 截图查看真机画面';}
 };
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function render(r){

@@ -13,6 +13,8 @@ router = APIRouter(tags=["websocket"])
 
 # 最近一次 ui_scan 上报结果缓存（页面识别用；device_id -> {"count","elements","ts"}）
 _last_ui_scan = {}
+# 最近一次截图上报缓存（电脑端查看真机画面用；device_id -> {"image_base64","width","height","ts"}）
+_last_screenshot = {}
 
 
 def _get_device_api_id(device_id: str) -> str:
@@ -263,6 +265,18 @@ def _handle_device_message(device_id: str, msg: dict):
         _last_ui_scan[device_id] = {
             "count": count,
             "elements": data.get("elements", []),
+            "ts": datetime.utcnow().isoformat(),
+        }
+
+    elif msg_type == "screenshot":
+        # 设备截图上报（base64，电脑端浏览器查看真机画面）— 只缓存最近一张
+        data = msg.get("data", {})
+        b64 = data.get("image_base64", "")
+        logger.info(f"Device {device_id} screenshot: {len(b64)} b64 chars")
+        _last_screenshot[device_id] = {
+            "image_base64": b64,
+            "width": data.get("width"),
+            "height": data.get("height"),
             "ts": datetime.utcnow().isoformat(),
         }
 

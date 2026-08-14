@@ -1197,8 +1197,44 @@ static NSArray *kNurtureComments = @[
 
         if (image) {
             UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil);
+            [self _reportScreenshot:image];
         }
     });
+}
+
+/// 截图上报：缩放压缩后 base64 上报云端（电脑端浏览器可实时查看真机画面）
+- (void)_reportScreenshot:(UIImage *)image {
+    @try {
+        NSString *devId = [XNOWER sharedInstance].deviceId;
+        if (devId.length == 0 || !image) return;
+        // 缩放到最长边 720，控制上报体积（原图 2-3x 全屏会很大）
+        CGFloat maxLen = 720.0;
+        CGFloat w = image.size.width, h = image.size.height;
+        CGFloat scale = MIN(1.0, maxLen / MAX(w, h));
+        UIImage *scaled = image;
+        if (scale < 1.0) {
+            CGSize newSize = CGSizeMake(roundf(w * scale), roundf(h * scale));
+            UIGraphicsBeginImageContextWithOptions(newSize, NO, 1.0);
+            [image drawInRect:CGRectMake(0, 0, newSize.width, newSize.height)];
+            scaled = UIGraphicsGetImageFromCurrentImageContext();
+            UIGraphicsEndImageContext();
+        }
+        NSData *jpeg = UIImageJPEGRepresentation(scaled, 0.6);
+        if (!jpeg) return;
+        NSString *b64 = [jpeg base64EncodedStringWithOptions:0];
+        [XNURLProtocol sendMessage:@{
+            @"type": @"screenshot",
+            @"data": @{
+                @"image_base64": b64,
+                @"width": @(scaled.size.width),
+                @"height": @(scaled.size.height),
+            }
+        } deviceId:devId];
+        NSLog(@"[XNOWER] 📸 截图已上报云端（%.0fx%.0f，%lu 字节）",
+              scaled.size.width, scaled.size.height, (unsigned long)jpeg.length);
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] 截图上报异常: %@", e.reason);
+    }
 }
 
 #pragma mark - 打开个人主页
@@ -1476,7 +1512,7 @@ static NSArray *kNurtureComments = @[
 }
 
 /// 检测当前 TikTok 页面类型（页面感知浮窗菜单用）
-/// 优先级: live > comment > inbox > profile > home > other
+/// 优先级: live > comment > recorder > friends > search > inbox > profile > home > other
 - (NSString *)detectCurrentPage {
     // ⚠️ 修复闪退：原实现外层 dispatch_sync(main_queue) 嵌套内部 _isInLiveRoom/_isOnFeed 的
     // dispatch_sync(main_queue) → 主线程递归死锁 → iOS watchdog 杀进程 = 点浮窗闪退。
@@ -1510,7 +1546,24 @@ static NSArray *kNurtureComments = @[
             if ([self _findViewByClassContaining:cls inView:window depth:0]) { return @"comment"; }
         }
 
-        // 3. 私信收件箱（聊天列表）
+        // 3. 录制/创作页（底部 + 进入，recorderPage*/recordPage* 无障碍标识前缀唯一）
+        if ([self _hasAccessibilityIdentifierPrefix:@"recorderPage" inView:window depth:0] ||
+            [self _hasAccessibilityIdentifierPrefix:@"recordPage" inView:window depth:0]) {
+            return @"recorder";
+        }
+
+        // 4. 朋友页（专属 cell 类名，唯一；顶部也有搜索框 AWESearchBar → 必须先于搜索页判断）
+        for (NSString *cls in @[@"TTKFriendsFeedTableViewCell", @"TTKShareInviteFriendsRowView", @"TTKRelationUserCardCollectionView"]) {
+            if ([self _findViewByClassContaining:cls inView:window depth:0]) { return @"friends"; }
+        }
+
+        // 5. 搜索页（搜索框 + 专属按钮双命中，防首页/朋友页误判；朋友页已在上一步排除）
+        BOOL hasSearchBar = [self _findViewByClassContaining:@"AWESearchBar" inView:window depth:0] != nil;
+        BOOL hasSearchBtn = [self _findViewByClassContaining:@"TTKSearchPressStatusButton" inView:window depth:0] != nil ||
+                            [self _findViewByClassContaining:@"TTKSearchBarRightButton" inView:window depth:0] != nil;
+        if (hasSearchBar && hasSearchBtn) { return @"search"; }
+
+        // 6. 私信收件箱（聊天列表）
         for (NSString *cls in @[@"Inbox", @"MessageList", @"ConversationListView", @"TTKMessageList", @"AWEIMInbox"]) {
             if ([self _findViewByClassContaining:cls inView:window depth:0]) { return @"inbox"; }
         }
@@ -1531,10 +1584,10 @@ static NSArray *kNurtureComments = @[
         }];
         if (inboxTitle && ![self _isOnFeed]) { return @"inbox"; }
 
-        // 4. 个人主页（关注按钮 + 粉丝/作品统计，非 feed 右侧栏）
+        // 7. 个人主页（关注按钮 + 粉丝/作品统计，非 feed 右侧栏）
         if ([self _isOnProfilePage]) { return @"profile"; }
 
-        // 5. 首页推荐 feed
+        // 8. 首页推荐 feed
         if ([self _isOnFeed]) { return @"home"; }
 
         return @"other";
@@ -1735,6 +1788,20 @@ static NSArray *kNurtureComments = @[
         NSLog(@"[XNOWER] 视图查找异常: %@", e.reason);
     }
     return nil;
+}
+
+/// 是否有 accessibilityIdentifier 以指定前缀开头的视图（录制页 recorderPage*/recordPage* 等前缀锚点）
+- (BOOL)_hasAccessibilityIdentifierPrefix:(NSString *)prefix inView:(UIView *)view depth:(int)depth {
+    if (depth > 30 || !view || prefix.length == 0) return NO;
+    @try {
+        if (view.hidden || view.alpha <= 0.02) return NO; // 同 _findViewByClassContaining，跳过隐藏页
+        NSString *accId = view.accessibilityIdentifier;
+        if (accId.length > 0 && [accId hasPrefix:prefix]) return YES;
+        for (UIView *subview in view.subviews) {
+            if ([self _hasAccessibilityIdentifierPrefix:prefix inView:subview depth:depth + 1]) return YES;
+        }
+    } @catch (NSException *e) {}
+    return NO;
 }
 
 /// 通过 accessibility label 找按钮
