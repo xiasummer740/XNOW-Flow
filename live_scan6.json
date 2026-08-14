@@ -1,0 +1,597 @@
+{
+  "device_id": "iphone_0ECF42DC",
+  "has_scan": true,
+  "count": 80,
+  "elements": [
+    {
+      "y": 368,
+      "frame": "{{0, 0}, {414, 736}}",
+      "class": "AWEMaskWindow",
+      "x": 207,
+      "acc_id": "AWEMaskWindow"
+    },
+    {
+      "y": 368,
+      "frame": "{{0, 0}, {414, 736}}",
+      "class": "UILayoutContainerView",
+      "x": 207
+    },
+    {
+      "y": 368,
+      "frame": "{{0, 0}, {414, 736}}",
+      "class": "UIView",
+      "x": 207
+    },
+    {
+      "y": 368,
+      "frame": "{{0, 0}, {414, 736}}",
+      "class": "ACCInteractionView",
+      "x": 207
+    },
+    {
+      "y": 368,
+      "frame": "{{0, 0}, {414, 736}}",
+      "class": "ACCRecordPreviewContainerView",
+      "x": 207
+    },
+    {
+      "y": 34,
+      "frame": "{{143.83333333333334, 12}, {126.33333333333334, 44}}",
+      "acc_label": "Add sound",
+      "class": "AWEScrollStringButton",
+      "x": 207
+    },
+    {
+      "x": 283,
+      "isEnabled": true,
+      "y": 34,
+      "frame": "{{273.16666666666663, 24}, {20, 20}}",
+      "class": "HDRUIButton",
+      "acc_label": "Close",
+      "isSelected": false
+    },
+    {
+      "x": 207,
+      "isEnabled": true,
+      "y": 631,
+      "frame": "{{167, 591}, {80, 80}}",
+      "class": "UIButton",
+      "acc_label": "Record video",
+      "isSelected": false
+    },
+    {
+      "x": 207,
+      "isEnabled": true,
+      "y": 631,
+      "frame": "{{164, 588}, {86, 86}}",
+      "class": "ACCLightningRecordButton",
+      "acc_label": "Record video",
+      "isSelected": false
+    },
+    {
+      "x": 207,
+      "isEnabled": true,
+      "y": 631,
+      "frame": "{{167, 591}, {80, 80}}",
+      "class": "UIButton",
+      "acc_label": "Record video",
+      "isSelected": false
+    },
+    {
+      "y": 704,
+      "frame": "{{193.66666666666666, 680}, {27, 48}}",
+      "class": "UIImageView",
+      "x": 207
+    },
+    {
+      "y": 333,
+      "frame": "{{39.333333333333343, 35}, {335.33333333333326, 596}}",
+      "class": "UIImageView",
+      "x": 207
+    },
+    {
+      "y": 333,
+      "frame": "{{400.23666666666668, 139.29999999999998}, {217.9666666666667, 387.40000000000009}}",
+      "class": "UIImageView",
+      "x": 509
+    },
+    {
+      "y": 704,
+      "frame": "{{232.66666666666666, 680}, {26.999999999999972, 48}}",
+      "class": "UIImageView",
+      "x": 246
+    },
+    {
+      "y": 563,
+      "frame": "{{167, 523}, {80, 80}}",
+      "isSelected": false,
+      "class": "ACCAnimatedButton",
+      "x": 207,
+      "isEnabled": true
+    },
+    {
+      "y": 368,
+      "frame": "{{0, 0}, {414, 736}}",
+      "class": "UIView",
+      "x": 207
+    },
+    {
+      "y": 631,
+      "frame": "{{167, 591}, {80, 80}}",
+      "class": "TikTokStudioSocialImpl.ABRollRecordButtonView",
+      "x": 207
+    },
+    {
+      "y": 621,
+      "frame": "{{65.666666666666671, 596.66666666666663}, {48, 48}}",
+      "isSelected": false,
+      "class": "ACCAnimatedButton",
+      "x": 90,
+      "isEnabled": true
+    },
+    {
+      "y": 631,
+      "frame": "{{167, 591}, {80, 80}}",
+      "isSelected": false,
+      "class": "ACCAnimatedButton",
+      "x": 207,
+      "isEnabled": true
+    },
+    {
+      "x": 30,
+      "isEnabled": true,
+      "y": 34,
+      "frame": "{{8, 12}, {44, 44}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "Close screen",
+      "isSelected": false
+    },
+    {
+      "x": 84,
+      "acc_id": "(recordPageEffectsEntrance)",
+      "isEnabled": true,
+      "y": 631,
+      "frame": "{{53, 600.5}, {61, 61}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "Effects",
+      "isSelected": false
+    },
+    {
+      "y": 631,
+      "frame": "{{55.666666666666664, 603.16666666666674}, {55.999999999999993, 56}}",
+      "class": "AWEStickerSwitchImageView",
+      "x": 84
+    },
+    {
+      "x": 365,
+      "acc_id": "(recordPageCompleteButton)",
+      "isEnabled": true,
+      "y": 631,
+      "frame": "{{345, 611}, {40, 40}}",
+      "class": "ACCButton",
+      "acc_label": "Use video clip",
+      "isSelected": false
+    },
+    {
+      "y": 508,
+      "frame": "{{189, 491}, {36, 33}}",
+      "isSelected": false,
+      "class": "ACCAnimatedButton",
+      "x": 207,
+      "isEnabled": true
+    },
+    {
+      "y": 631,
+      "frame": "{{164, 588}, {86, 86}}",
+      "acc_label": "Take photo",
+      "class": "ACCNowRecordView",
+      "x": 207
+    },
+    {
+      "y": 368,
+      "frame": "{{0, 0}, {414, 736}}",
+      "class": "ACCPassThroughView",
+      "x": 207
+    },
+    {
+      "y": 631,
+      "frame": "{{0, 588}, {414, 86}}",
+      "class": "TTKHorizontalPickView",
+      "x": 207
+    },
+    {
+      "y": 631,
+      "frame": "{{0, 588}, {414, 86}}",
+      "class": "UICollectionView",
+      "x": 207
+    },
+    {
+      "y": 631,
+      "frame": "{{-28, 588}, {86, 86}}",
+      "class": "UIView",
+      "x": 15
+    },
+    {
+      "y": 631,
+      "frame": "{{62, 588}, {86, 86}}",
+      "acc_label": "Makeup 1",
+      "class": "ACCSideslipPropPickCell",
+      "x": 105
+    },
+    {
+      "y": 631,
+      "frame": "{{62, 588}, {86, 86}}",
+      "class": "UIView",
+      "x": 105
+    },
+    {
+      "y": 631,
+      "frame": "{{-28, 588}, {86, 86}}",
+      "acc_label": "DFG 343",
+      "class": "ACCSideslipPropPickCell",
+      "x": 15
+    },
+    {
+      "y": 631,
+      "frame": "{{-28, 588}, {86, 86}}",
+      "class": "UIView",
+      "x": 15
+    },
+    {
+      "y": 631,
+      "frame": "{{63, 610}, {38, 42}}",
+      "isSelected": false,
+      "class": "UIButton",
+      "x": 82,
+      "isEnabled": true
+    },
+    {
+      "x": 30,
+      "isEnabled": true,
+      "y": 34,
+      "frame": "{{8, 12}, {44, 44}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "Close screen",
+      "isSelected": false
+    },
+    {
+      "x": 386,
+      "acc_id": "recorderPageToolBarSwapCamera",
+      "isEnabled": true,
+      "y": 36,
+      "frame": "{{370, 20}, {32, 32}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "Back-facing camera view on. Flip camera view",
+      "isSelected": false
+    },
+    {
+      "y": 88,
+      "frame": "{{360, 72}, {52, 32}}",
+      "class": "TTKToolBarItemView",
+      "x": 386
+    },
+    {
+      "x": 386,
+      "acc_id": "recorderPageToolBarFlash",
+      "isEnabled": true,
+      "y": 88,
+      "frame": "{{370, 72}, {32, 32}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "Flash off. Double-tap to switch flash mode",
+      "isSelected": false
+    },
+    {
+      "y": 231,
+      "frame": "{{297.33333333333331, 127}, {114.66666666666669, 208}}",
+      "class": "TTKToolBarVerticalScrollView",
+      "x": 355
+    },
+    {
+      "x": 386,
+      "acc_id": "recorderPageToolBarCountDown",
+      "isEnabled": true,
+      "y": 153,
+      "frame": "{{370.00000000000006, 137}, {32, 32}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "Timer",
+      "isSelected": false
+    },
+    {
+      "x": 386,
+      "isEnabled": true,
+      "y": 205,
+      "frame": "{{370, 189}, {32, 32}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "Layout",
+      "isSelected": false
+    },
+    {
+      "x": 386,
+      "acc_id": "recorderPageToolBarMicrophone",
+      "isEnabled": true,
+      "y": 257,
+      "frame": "{{370, 241}, {32, 32}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "Mic",
+      "isSelected": false
+    },
+    {
+      "x": 386,
+      "acc_id": "recorderPageToolBarBeautify",
+      "isEnabled": true,
+      "y": 309,
+      "frame": "{{370, 293}, {32, 32}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "beauty",
+      "isSelected": false
+    },
+    {
+      "x": 386,
+      "acc_id": "recorderPageToolBarFilter",
+      "isEnabled": true,
+      "y": 361,
+      "frame": "{{370, 345}, {32, 32}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "Filters",
+      "isSelected": true
+    },
+    {
+      "x": 386,
+      "acc_id": "ratio",
+      "isEnabled": true,
+      "y": 413,
+      "frame": "{{370, 397}, {32, 32}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "Ratio",
+      "isSelected": false
+    },
+    {
+      "x": 386,
+      "isEnabled": true,
+      "y": 357,
+      "frame": "{{371, 345}, {30, 24}}",
+      "class": "ACCPerfButton",
+      "acc_label": "More options",
+      "isSelected": false
+    },
+    {
+      "x": 331,
+      "acc_id": "recordPageUploadButton",
+      "isEnabled": true,
+      "y": 631,
+      "frame": "{{302.5, 603}, {56, 56}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "Upload",
+      "isSelected": false
+    },
+    {
+      "y": 704,
+      "frame": "{{0, 684}, {414, 40}}",
+      "class": "AWESwitchRecordModeCollectionView",
+      "x": 207
+    },
+    {
+      "y": 704,
+      "frame": "{{174, 684}, {66, 40}}",
+      "acc_label": "POST,",
+      "class": "UIView",
+      "x": 207
+    },
+    {
+      "y": 704,
+      "frame": "{{240, 684}, {83, 40}}",
+      "acc_label": "CREATE,",
+      "class": "UIView",
+      "x": 282
+    },
+    {
+      "y": 704,
+      "frame": "{{323, 684}, {58, 40}}",
+      "acc_label": "LIVE,",
+      "class": "UIView",
+      "x": 352
+    },
+    {
+      "y": 557,
+      "frame": "{{-80, 538}, {574, 38}}",
+      "class": "UICollectionView",
+      "x": 207
+    },
+    {
+      "y": 557,
+      "frame": "{{-124, 538}, {73, 38}}",
+      "class": "UIView",
+      "x": -88
+    },
+    {
+      "y": 557,
+      "frame": "{{-51, 538}, {73, 38}}",
+      "class": "UIView",
+      "x": -15
+    },
+    {
+      "y": 557,
+      "frame": "{{22, 538}, {52, 38}}",
+      "acc_label": "You can now record 10m videos",
+      "class": "ACCSwitchSubmodeCell",
+      "x": 48
+    },
+    {
+      "y": 557,
+      "frame": "{{22, 538}, {52, 38}}",
+      "class": "UIView",
+      "x": 48
+    },
+    {
+      "y": 557,
+      "frame": "{{22, 538}, {52, 38}}",
+      "acc_label": "You can now record 10m videos",
+      "class": "TUXAXActionView",
+      "x": 48
+    },
+    {
+      "y": 557,
+      "frame": "{{74, 538}, {50, 38}}",
+      "acc_label": "Create a video of up to 60 seconds",
+      "class": "ACCSwitchSubmodeCell",
+      "x": 99
+    },
+    {
+      "y": 557,
+      "frame": "{{74, 538}, {50, 38}}",
+      "class": "UIView",
+      "x": 99
+    },
+    {
+      "y": 557,
+      "frame": "{{74, 538}, {50, 38}}",
+      "acc_label": "Create a video of up to 60 seconds",
+      "class": "TUXAXActionView",
+      "x": 99
+    },
+    {
+      "y": 557,
+      "frame": "{{124, 538}, {46, 38}}",
+      "acc_label": "Create a video of up to 15 seconds",
+      "class": "ACCSwitchSubmodeCell",
+      "x": 147
+    },
+    {
+      "y": 557,
+      "frame": "{{124, 538}, {46, 38}}",
+      "class": "UIView",
+      "x": 147
+    },
+    {
+      "y": 557,
+      "frame": "{{124, 538}, {46, 38}}",
+      "acc_label": "Create a video of up to 15 seconds",
+      "class": "TUXAXActionView",
+      "x": 147
+    },
+    {
+      "y": 557,
+      "frame": "{{170, 538}, {74, 38}}",
+      "acc_label": "TEXT",
+      "class": "ACCSwitchSubmodeCell",
+      "x": 207
+    },
+    {
+      "y": 557,
+      "frame": "{{170, 538}, {74, 38}}",
+      "class": "UIView",
+      "x": 207
+    },
+    {
+      "y": 557,
+      "frame": "{{170, 538}, {73, 38}}",
+      "acc_label": "TEXT",
+      "class": "TUXAXActionView",
+      "x": 207
+    },
+    {
+      "y": 557,
+      "frame": "{{244, 538}, {60, 38}}",
+      "class": "UIView",
+      "x": 274
+    },
+    {
+      "y": 557,
+      "frame": "{{304, 538}, {73, 38}}",
+      "acc_label": "You can now record 10m videos",
+      "class": "ACCSwitchSubmodeCell",
+      "x": 341
+    },
+    {
+      "y": 557,
+      "frame": "{{304, 538}, {73, 38}}",
+      "class": "UIView",
+      "x": 341
+    },
+    {
+      "y": 557,
+      "frame": "{{304, 538}, {73, 38}}",
+      "acc_label": "You can now record 10m videos",
+      "class": "TUXAXActionView",
+      "x": 341
+    },
+    {
+      "y": 557,
+      "frame": "{{377, 538}, {73, 38}}",
+      "class": "UIView",
+      "x": 414
+    },
+    {
+      "y": 557,
+      "frame": "{{450, 538}, {73, 38}}",
+      "acc_label": "Create a video of up to 15 seconds",
+      "class": "ACCSwitchSubmodeCell",
+      "x": 487
+    },
+    {
+      "y": 557,
+      "frame": "{{450, 538}, {73, 38}}",
+      "class": "UIView",
+      "x": 487
+    },
+    {
+      "y": 557,
+      "frame": "{{450, 538}, {73, 38}}",
+      "acc_label": "Create a video of up to 15 seconds",
+      "class": "TUXAXActionView",
+      "x": 487
+    },
+    {
+      "y": 329,
+      "frame": "{{82, 299}, {250, 60}}",
+      "isSelected": false,
+      "class": "UIButton",
+      "x": 207,
+      "isEnabled": true
+    },
+    {
+      "y": 409,
+      "frame": "{{82, 379}, {250, 60}}",
+      "isSelected": false,
+      "class": "UIButton",
+      "x": 207,
+      "isEnabled": true
+    },
+    {
+      "y": 34,
+      "frame": "{{8, 12}, {44, 44}}",
+      "isSelected": false,
+      "class": "ACCAnimatedButton",
+      "x": 30,
+      "isEnabled": true
+    },
+    {
+      "x": 30,
+      "isEnabled": true,
+      "y": 34,
+      "frame": "{{8, 12}, {44, 44}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "Back",
+      "isSelected": false
+    },
+    {
+      "x": 331,
+      "acc_id": "recordPageUploadButton",
+      "isEnabled": true,
+      "y": 631,
+      "frame": "{{302.5, 603}, {56, 56}}",
+      "class": "ACCAnimatedButton",
+      "acc_label": "Upload",
+      "isSelected": false
+    },
+    {
+      "y": 505,
+      "frame": "{{109.66666666666669, 488}, {195, 34}}",
+      "isSelected": false,
+      "class": "ACCLalalandStackEffectButton",
+      "x": 207,
+      "isEnabled": true
+    }
+  ],
+  "ts": "2026-08-14T15:52:53.062689"
+}

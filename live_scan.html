@@ -1,0 +1,55 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<title>手机当前页识别</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{font-family:'Microsoft YaHei',sans-serif;background:#0f1116;color:#e8e8e8;margin:0;padding:24px;max-width:560px}
+h1{font-size:19px;margin:0 0 4px}.sub{color:#8a8f98;font-size:12px;margin-bottom:20px}
+.btn{display:block;width:100%;padding:16px;font-size:17px;border:none;border-radius:12px;
+  background:#2f6feb;color:#fff;cursor:pointer;font-weight:bold}
+.btn:disabled{background:#3a4a5e;color:#c0c8d2;cursor:wait}
+.hint{color:#8a8f98;font-size:12px;margin:10px 2px 0;text-align:center}
+.card{background:#151b24;border:1px solid #262e3b;border-radius:12px;padding:18px;margin-top:16px}
+.big{font-size:26px;font-weight:bold;color:#fff;margin:2px 0}
+.meta{color:#9aa2ae;font-size:12px;margin-bottom:10px}
+.ev{background:#1a222d;border-left:3px solid #2f6feb;border-radius:6px;padding:8px 12px;font-size:12px;color:#b8c0cc;margin:0 0 12px}
+.ev li{margin:2px 0}
+h3{font-size:13px;margin:14px 0 8px;color:#c9d1dc}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+th{color:#8a8f98;text-align:left;font-weight:normal;padding:4px 8px;border-bottom:1px solid #2a3342}
+td{padding:4px 8px;border-bottom:1px solid #202836;vertical-align:top;color:#d6dae2}
+td.acc{color:#6ecbf5;font-family:monospace}td.cls{color:#c9d1dc;font-family:monospace;font-size:10.5px}
+.err{background:#3a1212;border:1px solid #8a2a2a;color:#ffb4b4;border-radius:8px;padding:12px 14px;margin-top:16px;font-size:13px}
+.loading{color:#8a8f98;font-size:13px;margin-top:16px;text-align:center}
+</style></head><body>
+<h1>📱 手机当前页识别</h1>
+<div class="sub">点按钮 → 手机扫描当前屏幕 → 自动识别你在哪一页。先到手机把页面切换好。</div>
+<button class="btn" id="go">🔍 扫描手机当前页</button>
+<div class="hint">按一次扫一次 · 每扫一次手机上截个屏式扫描（约1-2秒）</div>
+<div id="out"></div>
+<script>
+const out=document.getElementById('out'),go=document.getElementById('go');
+go.onclick=async()=>{
+  go.disabled=true; go.textContent='⏳ 正在让手机扫描…';
+  out.innerHTML='<div class="loading">正在让手机扫描当前屏幕并上报…</div>';
+  try{
+    const r=await (await fetch('/api/scan',{method:'POST'})).json();
+    if(!r.ok){out.innerHTML='<div class="err">❌ '+esc(r.error||'未知错误')+'</div>';return;}
+    render(r);
+  }catch(e){out.innerHTML='<div class="err">❌ 连接失败：'+esc(e.message)+'</div>';}
+  finally{go.disabled=false;go.textContent='🔍 扫描手机当前页';}
+};
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function render(r){
+  const anchors=r.fixed.filter(f=>f.acc),others=r.fixed.filter(f=>!f.acc);
+  let h='<div class="card">';
+  h+='<div class="meta">手机上报 '+r.onscreen_count+' 个屏内控件 · 锚点分 '+r.score+' / '+r.threshold+'</div>';
+  h+='<div class="big">'+esc(r.title)+'</div>';
+  h+='<ul class="ev">'+r.evidence.map(e=>'<li>'+esc(e)+'</li>').join('')+'</ul>';
+  h+='<h3>📌 识别用的固定控件（'+anchors.length+'个）</h3>';
+  if(anchors.length){h+='<table><tr><th>标识</th><th>类名</th><th>位置y</th></tr>';
+    anchors.forEach(f=>{h+='<tr><td class="acc">'+esc(f.acc)+'</td><td class="cls">'+esc(f.cls)+'</td><td>'+Math.round(f.y)+'</td></tr>';});
+    h+='</table>';}else{h+='<div class="meta">（无）</div>';}
+  h+='</div>';
+  out.innerHTML=h;
+}
+</script></body></html>

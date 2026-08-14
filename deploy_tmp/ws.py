@@ -11,7 +11,7 @@ from models.device import DeviceBinding
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["websocket"])
 
-# 最近一次 ui_scan 上报结果缓存（页面识别用；device_id -> {"count","elements","ts"}）
+# 设备最近一次 ui_scan 上报结果缓存（页面识别用，进程内内存，不落盘）
 _last_ui_scan = {}
 
 
@@ -259,7 +259,7 @@ def _handle_device_message(device_id: str, msg: dict):
         for el in data.get("elements", []):
             logger.info(f"  UI [{el.get('class','?')}] x={el.get('x')} y={el.get('y')} frame={el.get('frame','')} "
                         f"acc_id={el.get('acc_id','')} acc_label={el.get('acc_label','')} sel={el.get('isSelected')}")
-        # 缓存最近一次扫描结果，供页面识别/诊断读取
+        # 缓存最近一次结果（页面识别用）
         _last_ui_scan[device_id] = {
             "count": count,
             "elements": data.get("elements", []),
