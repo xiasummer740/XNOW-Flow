@@ -371,6 +371,8 @@ static NSArray *kCountries;
             page = [engine detectCurrentPage] ?: @"other";
         }
         self.currentPageType = page;
+        // 诊断：把页面检测结果写入浮窗日志（祥哥测试时直接反馈检测值，便于核对是否还有误判场景）
+        [self addLog:[NSString stringWithFormat:@"🔍 页面检测: %@", page]];
         NSArray *base = @[
             @{@"icon": @"doc.on.doc.fill", @"label": @"复制机器码", @"action": @"copy_device_id"},
             @{@"icon": @"doc.plaintext.fill", @"label": @"显示/关闭日志", @"action": @"toggle_log"},

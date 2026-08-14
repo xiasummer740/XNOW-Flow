@@ -695,8 +695,11 @@ static NSArray *kNurtureComments = @[
 }
 
 /// 递归查找大面积 UIScrollView（feed，UITableView 或 UICollectionView）
+/// ⚠️ 修复菜单误判：跳过隐藏/透明视图。TikTok tab 结构下访问过的 tab 页滚动视图常驻但 hidden，
+/// 不过滤会在非 feed 页面命中隐藏的 Feed 滚动视图 → _isOnFeed 误判 YES → 菜单错误。
 - (void)_findLargeFeedScrollViewInView:(UIView *)view result:(UIScrollView **)result {
     if (*result) return;
+    if (!view || view.hidden || view.alpha <= 0.02) return;
     if ([view isKindOfClass:[UITableView class]] || [view isKindOfClass:[UICollectionView class]]) {
         UIScrollView *sv = (UIScrollView *)view;
         if (sv.frame.size.width >= [UIScreen mainScreen].bounds.size.width * 0.8 &&
@@ -711,9 +714,10 @@ static NSArray *kNurtureComments = @[
     }
 }
 
-/// 递归查找主要 UIScrollView
+/// 递归查找主要 UIScrollView（同 _findLargeFeedScrollViewInView，也跳过隐藏/透明子树）
 - (void)_findFeedScrollViewInView:(UIView *)view result:(UIScrollView **)result {
     if (*result) return;
+    if (!view || view.hidden || view.alpha <= 0.02) return;
     if ([view isKindOfClass:[UIScrollView class]]) {
         UIScrollView *sv = (UIScrollView *)view;
         // 找比较大的 ScrollView（全屏级别），排除小的
@@ -1818,6 +1822,18 @@ static NSArray *kNurtureComments = @[
     [self _enumerateLabelsInView:view block:block depth:0];
 }
 
+/// 判断视图整条父链是否可见（无 hidden / 无接近透明的 alpha）
+/// ⚠️ 修复菜单误判：label 自身 hidden=NO 但父容器（tab 常驻页）hidden=YES 时，
+/// 只查 label 会误命中隐藏页的"消息/直播中/作品粉丝"等文字 → 页面误判。
+- (BOOL)_viewVisibleInHierarchy:(UIView *)view {
+    UIView *v = view;
+    while (v) {
+        if (v.hidden || v.alpha <= 0.02) return NO;
+        v = v.superview;
+    }
+    return YES;
+}
+
 - (void)_enumerateLabelsInView:(UIView *)view
                          block:(void(^)(NSString *text, UIView *view))block
                          depth:(int)depth {
@@ -1825,7 +1841,7 @@ static NSArray *kNurtureComments = @[
     @try {
         if ([view isKindOfClass:[UILabel class]]) {
             UILabel *label = (UILabel *)view;
-            if (label.text.length > 0 && !label.hidden && label.alpha > 0.1) {
+            if (label.text.length > 0 && [self _viewVisibleInHierarchy:label]) {
                 block(label.text, label);
             }
         }
