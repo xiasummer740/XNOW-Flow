@@ -18,6 +18,7 @@ SCREEN_H = 736  # TikTok 内容窗口高度，y 超出视为屏外预加载
 
 PAGE_TITLES = {
     "feed": "Feed 首页（For You）",
+    "live": "直播间（Live）",
     "profile": "个人主页（Profile）",
     "inbox": "收件箱（Inbox）",
     "search": "搜索页（Search）",
@@ -29,6 +30,17 @@ PAGE_TITLES = {
 
 # 页面锚点签名：键 = acc_id 或类名，值 = 权重。优先用 acc_id（TikTok 官方无障碍标识，跨版本最稳）
 PAGE_SIGNATURES = {
+    "live": {
+        # 直播间（真机 2026-08-15 确认）：IESLive*/HTSLive* 容器类名仅直播间出现。
+        # ⚠️ 不能加宽泛子串(如 TTKLive/AWELive)：首页 feed 的直播预览/入口容器
+        # (TTKLivePreviewPageContainerView/AWELiveFeedEntranceView) 也含这些子串 → home 误判 live。
+        # 首页只有 IESLiveSecurityView(屏外预加载 y=-1840，被 _in_screen 过滤) → 不误伤。
+        "IESLiveLayoutContainerView": 3,    # 直播间根布局容器（每屏多个）
+        "IESLiveStackView": 2,              # 直播间堆叠容器
+        "HTSLive4LayerContainerView": 2,    # 直播间四层容器
+        "GBLRoomProfileView": 2,            # 主播信息卡（仅直播间）
+        "GBLGeneralFollowButton": 1,        # 主播关注按钮
+    },
     "feed": {
         "top_tabs_recomend": 3,                # For You 顶部标签（只在 feed）
         "feedLikeButton": 3,                   # 点赞按钮（屏内）

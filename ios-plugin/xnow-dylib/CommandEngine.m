@@ -1492,7 +1492,11 @@ static NSArray *kNurtureComments = @[
     @try {
         UIView *window = XN_ActiveWindow();
         if (!window) return NO;
-        for (NSString *cls in @[@"LiveRoom", @"LivePlayer", @"TTKLive", @"AWELive", @"LiveStream"]) {
+        // 直播间核心锚点（真机 2026-08-15 验证）：仅直播间出现的容器类名。
+        // ⚠️ 旧锚点 LiveRoom/LivePlayer/TTKLive/AWELive/LiveStream 是 containsString 子串匹配，
+        // 首页 feed 的直播预览/入口容器(TTKLivePreviewPageContainerView / AWELiveFeedEntranceView)
+        // 命中 TTKLive/AWELive 子串 → home 误判 live；且真机直播页(IESLiveLayout*)反而全不命中。
+        for (NSString *cls in @[@"IESLiveLayoutContainerView", @"IESLiveStackView", @"HTSLive4LayerContainerView"]) {
             if ([self _findViewByClassContaining:cls inView:window depth:0]) {
                 return YES;
             }
