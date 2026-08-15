@@ -327,7 +327,7 @@ def t_comment_open_close():
     ok, page = assert_page("feed", tries=6, gap=2.5)
     if ok:
         fetch_screenshot("comment_closed")
-        return ("✅", "评论区 → close_overlay(收键盘+sendActions) → 回 feed ✅")
+        return ("✅", "评论区 → close_overlay(真实触摸X关闭) → 回 feed ✅")
     return ("❌", f"close_overlay 后未回 feed，当前 page={page}")
 
 
