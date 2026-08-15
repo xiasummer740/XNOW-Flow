@@ -22,10 +22,10 @@
 
 | 状态 | 问题 | 来源 | 上次更新 |
 |------|------|------|---------|
-| 🔴待修 | **search_keyword 卡死拖垮设备**：09:13:52 拉取后 90s 无结果，命令队列积压(ui_scan/check_health)，心跳停 → 09:15:59 掉线标记离线。根因=_performSearchKeyword 无超时 + _execQueue 无命令级超时 | 2026-08-15 真机 | 2026-08-15 |
-| 🔴待修 | **远程导航全失效**：①open_tab 注入 gesture 假成功(isSelected=False)切不了tab ②open_profile 深链无跳转+头像类名漂移(AWEStoryAvatarButton)+固定坐标兜底点左下(34,764)而头像在右上(384,291)。→ 采集粉丝/视频/点赞、自动关注、账号管理、直播间采集全不可达 | 2026-08-15 真机 | 2026-08-15 |
-| 🟠待修 | **评论按钮按到屏幕外**：_openCommentPanel 用不筛可见性的 findView(accId) 命中下一视频预取按钮(y=1170 AWEMaskWindow)；like 用 _findVisibleViewWithAccId 真成功，证明是查找问题非点击问题 | 2026-08-15 真机 | 2026-08-15 |
-| 🟠待修 | **任务状态全部误报**：task_engine.py:116-124 对无 target 远程指令直接判 failed，连成功执行的 like/open_search/scroll 都显示"失败/无有效目标单元"→ 后台数据失真不可信 | 2026-08-15 真机 | 2026-08-15 |
+| 待修 | **search_keyword 卡死拖垮设备（根因=主线程嵌套 dispatch_sync 自锁）**：v1.4.89 命令级超时看门狗防住了命令队列阻塞，但 **`_performSearchKeyword` 外层 dispatch_sync(main) 内调 `_performOpenSearch`（内部又 dispatch_sync(main)）→ 主线程自锁** → poll 定时器(main queue)停 + completion(main queue)不执行 → 设备离线。同类第二处：`_performCollectFans`/`_performCollectVideos` 外层 dispatch_sync(main) 内调 `_performOpenProfile`（内部又 dispatch_sync(main)）。两处均已加 isMainThread 保护（v1.4.90 待装机复验） | 2026-08-15 真机 | 2026-08-15 |
+| 已修待验 | **远程导航全失效**：v1.4.89 ①头像改 AWEStoryAvatarButton 类查找+屏内可见过滤+正确右上坐标(0.93,0.42) ②_openTab 改真touch ③open_profile 深链+头像双通道；含 v1.4.90 _performOpenProfile 主线程保护 | 2026-08-15 真机 | 2026-08-15 |
+| 已修待验 | **评论按钮按到屏幕外**：v1.4.89 评论相关3处改 _findVisibleViewWithAccId 屏内过滤 | 2026-08-15 真机 | 2026-08-15 |
+| 已修待验 | **任务状态全部误报**：后端已上线(2026-08-15 12:26)，实测部署后下发 ui_scan→任务92 done/100分(旧代码89/90/91全failed对照)；task_engine 远程指令不再判失败+WS结果回填 | 2026-08-15 真机 | 2026-08-15 |
 | 已验证 | home 误判 live：首页 feed 直播预览容器不再误判直播间（真实 feed 返回 home 菜单正确）| 2026-08-15 真机 | 2026-08-15 |
 | 已验证 | 点赞 like 真机成功：state_diag acc_label='Video liked' | 2026-08-15 真机 | 2026-08-15 |
 | 已验证 | open_search 真机成功 + scroll_down 真机成功 | 2026-08-15 真机 | 2026-08-15 |

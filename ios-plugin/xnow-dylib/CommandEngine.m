@@ -1307,7 +1307,16 @@ static NSArray *XN_NurtureComments(void) {
 #pragma mark - 打开个人主页
 
 - (void)_performOpenProfile:(NSString *)username {
-    dispatch_sync(dispatch_get_main_queue(), ^{
+    // ⚠️ 修复死锁：原实现内部 dispatch_sync(main_queue)，被 _performCollectFans/_performCollectVideos
+    // 的外层 dispatch_sync(main_queue) block 调用时 → 主线程嵌套 dispatch_sync(main) → 自锁死锁。
+    // 与 _performOpenSearch 同模式：主线程直接执行，非主线程才同步调度。
+    if (![NSThread isMainThread]) {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            [self _performOpenProfile:username];
+        });
+        return;
+    }
+    @try {
         if (username.length > 0) {
             // TikTok URL scheme 直接打开用户主页
             NSString *urlStr = [NSString stringWithFormat:@"snssdk1233://user/%@", username];
@@ -1354,7 +1363,9 @@ static NSArray *XN_NurtureComments(void) {
                 NSLog(@"[XNOWER] 未找到头像且不在推荐页，跳过打开主页");
             }
         }
-    });
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] 打开主页异常: %@", e.reason);
+    }
 }
 
 #pragma mark - 粉丝/视频数据采集（网络拦截方案）
@@ -2662,12 +2673,20 @@ static NSArray *XN_NurtureComments(void) {
 }
 
 /// 打开搜索（点右上角搜索图标，或 URL scheme）
+/// ⚠️ 修复死锁：原实现内部 dispatch_sync(main_queue)，被 _performSearchKeyword 的
+/// dispatch_sync(main_queue) block 调用时 → 主线程嵌套 dispatch_sync(main) → 自锁死锁
+/// → poll 定时器(main queue)停 + completion(main queue)不执行 → 设备离线。
+/// 改为：主线程直接执行（调用方已保证），非主线程才同步调度。与 _detectCurrentPage 同模式。
 - (void)_performOpenSearch {
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        CGSize screen = [UIScreen mainScreen].bounds.size;
-        // 首页右上角搜索图标
-        [self _safeTapAtPoint:CGPointMake(screen.width - 30, 65)];
-    });
+    if (![NSThread isMainThread]) {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            [self _performOpenSearch];
+        });
+        return;
+    }
+    CGSize screen = [UIScreen mainScreen].bounds.size;
+    // 首页右上角搜索图标
+    [self _safeTapAtPoint:CGPointMake(screen.width - 30, 65)];
 }
 
 /// 搜索关键词（打开搜索 → 输入 → 提交）
