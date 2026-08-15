@@ -18,6 +18,7 @@ SCREEN_H = 736  # TikTok 内容窗口高度，y 超出视为屏外预加载
 
 PAGE_TITLES = {
     "feed": "Feed 首页（For You）",
+    "comment": "评论区（Comments）",
     "live": "直播间（Live）",
     "profile": "个人主页（Profile）",
     "edit_profile": "编辑个人资料（Edit Profile）",
@@ -31,6 +32,15 @@ PAGE_TITLES = {
 
 # 页面锚点签名：键 = acc_id 或类名，值 = 权重。优先用 acc_id（TikTok 官方无障碍标识，跨版本最稳）
 PAGE_SIGNATURES = {
+    "comment": {
+        # 评论区（真机 2026-08-15 确认）：评论面板是 overlay，底下 feed 锚点(feedLikeButton 等)仍在屏内，
+        # 权重必须压过 feed(11分)：TTKComment* 专属类名 4 类 ≥ 3 分。
+        "TTKCommentPanelRootViewComponent": 3,      # 评论面板根（acc_id）
+        "TTKCommentExpansionView": 3,               # 评论展开视图
+        "TTKCommentAvatarView": 3,                  # 评论头像
+        "TTKCommentAnimatedButton": 2,              # 评论点赞按钮
+        "TTKCommentDislikeAnimatedButton": 2,       # 评论点踩按钮
+    },
     "live": {
         # 直播间（真机 2026-08-15 确认）：IESLive*/HTSLive* 容器类名仅直播间出现。
         # ⚠️ 不能加宽泛子串(如 TTKLive/AWELive)：首页 feed 的直播预览/入口容器
