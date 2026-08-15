@@ -415,6 +415,12 @@ static NSArray *kCountries;
             // 搜索/朋友页：基础系统项
             return base;
         }
+        if ([page isEqualToString:@"fanlist"]) {
+            // 粉丝/关注列表：自动关注 + 系统（循环点右侧 Follow，上限200自动停）
+            return [@[
+                @{@"icon": @"plus.circle.fill", @"label": @"自动关注", @"action": @"auto_follow_list"},
+            ] arrayByAddingObjectsFromArray:base];
+        }
         if ([page isEqualToString:@"recorder"]) {
             // 录制/创作页：自动发视频 + 系统
             return [@[
@@ -1095,6 +1101,15 @@ static NSArray *kCountries;
         CommandEngine *engine = [XNOWER sharedInstance].cmdEngine;
         if ([engine respondsToSelector:@selector(executeCommand:completion:)]) {
             [engine executeCommand:@{@"action": @"post_video", @"params": @{}} completion:nil];
+        }
+        return;
+    }
+    // 粉丝/关注列表：自动关注（循环点右侧 Follow，上限200自动停）
+    if ([action isEqualToString:@"auto_follow_list"]) {
+        [self addLog:@"👥 自动关注：粉丝列表循环点关注，上限200自动停..."];
+        CommandEngine *engine = [XNOWER sharedInstance].cmdEngine;
+        if ([engine respondsToSelector:@selector(executeCommand:completion:)]) {
+            [engine executeCommand:@{@"action": @"auto_follow_list", @"params": @{}} completion:nil];
         }
         return;
     }

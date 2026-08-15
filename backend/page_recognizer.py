@@ -22,6 +22,7 @@ PAGE_TITLES = {
     "inbox": "收件箱（Inbox）",
     "search": "搜索页（Search）",
     "friends": "朋友页（Friends）",
+    "fan_list": "粉丝/关注列表（Fans）",
     "recorder": "录制/创作页（Recorder）",
     "other": "未知页面",
 }
@@ -64,6 +65,16 @@ PAGE_SIGNATURES = {
         "TTKFriendsFeedTableViewCell": 3,               # 朋友 feed 卡片（唯一）
         "TTKShareInviteFriendsRowView": 2,              # 分享/邀请朋友行
         "TTKRelationUserCardCollectionView": 1,         # 关系用户卡片流
+    },
+    "fan_list": {
+        # 粉丝/关注列表（真机 2026-08-15 确认）：列表每行都有 关注按钮+故事头像+LIVE标，
+        # 5 类锚点只在本页出现（7 份存档零碰撞）。TTKRelationButton 给 2 分：
+        # 其它用户主页也有单个关注按钮，单独命中(2)<阈值3 不会误判，但列表页 5 类全中=11 分
+        "TTKStoryAvatarView": 3,                # 每行故事头像（列表唯一）
+        "TTKRelationButton": 2,                 # 每行关注/加好友按钮
+        "AWEUIListCellActionButton": 2,         # 每行操作按钮
+        "GBLFeedStaticLiveMarkView": 2,         # 每行 LIVE 标（无 LIVE 文字标签，不触发 live 页）
+        "AWESlidingTabButton": 2,               # 顶部 粉丝/关注 滑动 tab
     },
     "recorder": {
         # 录制/创作页（真机 2026-08-14 确认）：底部 + 按钮进入，acc_id 全部带专属前缀

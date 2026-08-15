@@ -144,6 +144,8 @@ static NSArray *kNurtureComments = @[
             @"open_live":         @(CommandActionOpenLive),
             // 回关/指定关注
             @"follow_user":       @(CommandActionFollowUser),
+            // 粉丝列表自动关注（点右侧 Follow→上滑→循环，上限200自动停）
+            @"auto_follow_list":  @(CommandActionAutoFollowList),
             // 指定视频评论
             @"comment_video":     @(CommandActionCommentVideo),
             // 环境诊断
@@ -269,6 +271,11 @@ static NSArray *kNurtureComments = @[
 
             case CommandActionFollowUser:
                 result = [self _performFollowUser:params];
+                hasResult = YES;
+                break;
+
+            case CommandActionAutoFollowList:
+                result = [self _performAutoFollowList:params];
                 hasResult = YES;
                 break;
 
@@ -1512,7 +1519,7 @@ static NSArray *kNurtureComments = @[
 }
 
 /// 检测当前 TikTok 页面类型（页面感知浮窗菜单用）
-/// 优先级: live > comment > recorder > friends > search > inbox > profile > home > other
+/// 优先级: live > comment > recorder > friends > search > fanlist > inbox > profile > home > other
 - (NSString *)detectCurrentPage {
     // ⚠️ 修复闪退：原实现外层 dispatch_sync(main_queue) 嵌套内部 _isInLiveRoom/_isOnFeed 的
     // dispatch_sync(main_queue) → 主线程递归死锁 → iOS watchdog 杀进程 = 点浮窗闪退。
@@ -1563,7 +1570,14 @@ static NSArray *kNurtureComments = @[
                             [self _findViewByClassContaining:@"TTKSearchBarRightButton" inView:window depth:0] != nil;
         if (hasSearchBar && hasSearchBtn) { return @"search"; }
 
-        // 6. 私信收件箱（聊天列表）
+        // 6. 粉丝/关注列表（每行 故事头像+关注按钮 双命中；顶部"粉丝/关注"滑动 tab 会被
+        //    _isOnProfilePage 统计行匹配 → 必须先于 profile 判断；防其它用户主页误判：那页
+        //    只有单个关注按钮，无双命中）
+        BOOL hasStoryAvatar = [self _findViewByClassContaining:@"TTKStoryAvatarView" inView:window depth:0] != nil;
+        BOOL hasRelationBtn = [self _findViewByClassContaining:@"TTKRelationButton" inView:window depth:0] != nil;
+        if (hasStoryAvatar && hasRelationBtn) { return @"fanlist"; }
+
+        // 7. 私信收件箱（聊天列表）
         for (NSString *cls in @[@"Inbox", @"MessageList", @"ConversationListView", @"TTKMessageList", @"AWEIMInbox"]) {
             if ([self _findViewByClassContaining:cls inView:window depth:0]) { return @"inbox"; }
         }
@@ -1584,10 +1598,10 @@ static NSArray *kNurtureComments = @[
         }];
         if (inboxTitle && ![self _isOnFeed]) { return @"inbox"; }
 
-        // 7. 个人主页（关注按钮 + 粉丝/作品统计，非 feed 右侧栏）
+        // 8. 个人主页（关注按钮 + 粉丝/作品统计，非 feed 右侧栏）
         if ([self _isOnProfilePage]) { return @"profile"; }
 
-        // 8. 首页推荐 feed
+        // 9. 首页推荐 feed
         if ([self _isOnFeed]) { return @"home"; }
 
         return @"other";
@@ -1761,6 +1775,213 @@ static NSArray *kNurtureComments = @[
         [self _performSwipeUp]; // 切到下一个视频
         [NSThread sleepForTimeInterval:interval];
     }
+}
+
+#pragma mark - 粉丝列表自动关注
+
+/// 粉丝列表自动关注：循环点右侧 Follow 按钮 → 上滑 → 再点，单次上限 limit（默认200）自动停。
+/// 日志格式对齐需求：显示行左侧的用户名（"正在关注:xxx" / "关注用户[xxx][成功/失败]" / "关注异常[原因]"）。
+/// 运行在 execQueue，UI 步骤 dispatch_sync 主线程。停止条件：达上限 / 滑3轮找不到按钮(到底) / 连续5次点击失败。
+- (NSDictionary *)_performAutoFollowList:(NSDictionary *)params {
+    int limit = [params[@"limit"] intValue] ?: 200;
+    if (limit <= 0 || limit > 500) limit = 200;
+    [self _logStep:@"auto_follow_list"];
+    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"👥 自动关注开始：单次上限 %d 人", limit]];
+    __block int followed = 0;
+    int emptyRounds = 0;
+    int failStreak = 0;
+    for (int i = 0; i < 2000; i++) {   // 总轮次保险上限，防死循环
+        if (followed >= limit) break;
+        // 1. 找屏内最顶部可关注按钮（主线程）
+        __block UIView *btn = nil;
+        __block NSString *beforeText = nil;
+        __block CGRect btnFrame = CGRectZero;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            btn = [self _findTopFollowableButtonInList];
+            if (btn) {
+                beforeText = [self _buttonStateText:btn];
+                btnFrame = [btn.superview convertRect:btn.frame toView:nil];
+            }
+        });
+        if (!btn) {
+            emptyRounds++;
+            if (emptyRounds >= 3) break;   // 滑3次还找不到 = 列表到底/全已关注
+            [self _scrollTopListUp];
+            [NSThread sleepForTimeInterval:0.8];
+            continue;
+        }
+        emptyRounds = 0;
+        __block NSString *name = nil;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            name = [self _usernameInRowForButton:btn];
+        });
+        NSString *label = name.length ? name : @"未知用户";
+        [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"正在关注:%@", label]];
+        // 2. 点击关注
+        @try {
+            CGPoint pt = CGPointMake(CGRectGetMidX(btnFrame), CGRectGetMidY(btnFrame));
+            [self _safeTapAtPoint:pt];
+        } @catch (NSException *e) {
+            [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"关注异常[%@]", e.reason ?: @"点击失败"]];
+            [self _scrollTopListUp];
+            [NSThread sleepForTimeInterval:0.8];
+            continue;
+        }
+        [NSThread sleepForTimeInterval:0.8];   // 等关注动画
+        // 3. 验证结果（主线程重读按钮状态）
+        __block BOOL success = NO;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            NSString *after = [self _buttonStateText:btn];
+            if (after.length) {
+                if ([self _isFollowedStateText:after]) {
+                    success = YES;   // 已关注/互相关注 → 成功
+                } else if (beforeText.length && ![after isEqualToString:beforeText]) {
+                    success = YES;   // 状态文字变了但没读成关注词 → 视为已触发
+                } else {
+                    success = NO;    // 文字没变且非关注状态 → 点击未生效
+                }
+            } else {
+                success = YES;   // 无状态文字可读 → best-effort 视为已触发
+            }
+        });
+        if (success) {
+            followed++;
+            failStreak = 0;
+            [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"关注用户[%@][成功]", label]];
+            if (followed % 10 == 0) {
+                [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"📊 已关注 %d/%d", followed, limit]];
+            }
+        } else {
+            failStreak++;
+            [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"关注用户[%@][失败]", label]];
+            if (failStreak >= 5) {
+                [[XNOWER sharedInstance] addLog:@"⏹ 连续5次点击失败，自动停止"];
+                break;
+            }
+        }
+        // 4. 上滑到下一行
+        [self _scrollTopListUp];
+        [NSThread sleepForTimeInterval:0.8];
+    }
+    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏹ 自动关注结束：共关注 %d 人", followed]];
+    return @{
+        @"status": @"success",
+        @"message": [NSString stringWithFormat:@"自动关注结束：共关注 %d 人", followed],
+        @"followed": @(followed),
+    };
+}
+
+/// 找屏幕内最顶部的"可关注"关注按钮（TTKRelationButton，排除已关注状态）
+- (UIView *)_findTopFollowableButtonInList {
+    UIWindow *window = XN_ActiveWindow();
+    if (!window) return nil;
+    CGSize screen = [UIScreen mainScreen].bounds.size;
+    NSMutableArray *views = [NSMutableArray array];
+    [self _collectViewsOfClassContaining:@"TTKRelationButton" inView:window depth:0 into:views];
+    UIView *best = nil;
+    CGFloat bestY = CGFLOAT_MAX;
+    for (UIView *v in views) {
+        if (!v.superview) continue;
+        CGRect f = [v.superview convertRect:v.frame toView:window];
+        if (!CGRectIntersectsRect(f, CGRectMake(0, 0, screen.width, screen.height))) continue;  // 屏外预加载不算
+        NSString *txt = [self _buttonStateText:v];
+        if ([self _isFollowedStateText:txt]) continue;   // 已关注/互相关注 → 跳过
+        if (f.origin.y < bestY) { bestY = f.origin.y; best = v; }
+    }
+    return best;
+}
+
+/// 收集类名包含关键字的视图（跳过隐藏/透明子树，同 _findViewByClassContaining 的过滤）
+- (void)_collectViewsOfClassContaining:(NSString *)className inView:(UIView *)view depth:(int)depth into:(NSMutableArray *)outArr {
+    if (depth > 30 || !view || !outArr) return;
+    @try {
+        if (view.hidden || view.alpha <= 0.02) return;
+        if ([NSStringFromClass(view.class) containsString:className]) [outArr addObject:view];
+        for (UIView *sub in view.subviews) {
+            [self _collectViewsOfClassContaining:className inView:sub depth:depth + 1 into:outArr];
+        }
+    } @catch (NSException *e) {}
+}
+
+/// 汇总按钮的状态文字：accessibilityLabel + UIButton title + 子 UILabel 文本
+- (NSString *)_buttonStateText:(UIView *)view {
+    if (!view) return @"";
+    NSMutableString *t = [NSMutableString string];
+    @try {
+        if (view.accessibilityLabel.length) [t appendString:view.accessibilityLabel];
+        if ([view isKindOfClass:[UIButton class]]) {
+            UIButton *b = (UIButton *)view;
+            if (b.currentTitle.length) [t appendFormat:@" %@", b.currentTitle];
+            if (b.titleLabel.text.length) [t appendFormat:@" %@", b.titleLabel.text];
+        }
+        for (UIView *sub in view.subviews) {
+            if ([sub isKindOfClass:[UILabel class]]) {
+                UILabel *l = (UILabel *)sub;
+                if (l.text.length) [t appendFormat:@" %@", l.text];
+            }
+        }
+    } @catch (NSException *e) {}
+    return t;
+}
+
+/// 判断按钮是否已处于"已关注"状态
+- (BOOL)_isFollowedStateText:(NSString *)txt {
+    if (!txt.length) return NO;
+    static NSArray *keys = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        keys = @[@"已关注", @"互相关注", @"关注中", @"已加入", @"Following", @"following",
+                 @"Unfollow", @"已连接", @"移除"];
+    });
+    for (NSString *k in keys) {
+        if ([txt rangeOfString:k options:NSCaseInsensitiveSearch].location != NSNotFound) return YES;
+    }
+    return NO;
+}
+
+/// 从关注按钮所在行提取左侧用户名（行内找按钮左侧第一个非空文本 label）
+- (NSString *)_usernameInRowForButton:(UIView *)followBtn {
+    if (!followBtn) return @"";
+    UIView *cell = followBtn.superview;
+    for (int i = 0; i < 8 && cell; i++) {
+        NSString *cls = NSStringFromClass(cell.class);
+        if ([cell isKindOfClass:[UITableViewCell class]] || [cls containsString:@"Cell"] ||
+            [cls containsString:@"ContentView"]) {
+            break;
+        }
+        cell = cell.superview;
+    }
+    if (!cell) cell = followBtn.superview;
+    __block NSString *name = nil;
+    __block CGFloat btnX = [followBtn.superview convertPoint:followBtn.center toView:cell].x;
+    [self _enumerateLabelsInView:cell block:^(NSString *text, UIView *view) {
+        if (name.length) return;
+        if (view == followBtn) return;
+        NSString *t = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (t.length < 1) return;
+        CGFloat vx = [view.superview convertPoint:view.center toView:cell].x;
+        if (vx >= btnX) return;   // 只要按钮左侧的 label（用户名），右侧是 Follow 按钮自身
+        name = t;
+    }];
+    return name ?: @"";
+}
+
+/// 列表上滑：找屏幕内最大的可见滚动视图（粉丝/关注列表），setContentOffset 上移约 60% 屏高
+/// （不用真实滑动手势——非 feed 页注入滑动曾触发 TikTok 崩溃，见 _safeScrollBy 的 #if 0）
+- (void)_scrollTopListUp {
+    UIWindow *window = XN_ActiveWindow();
+    if (!window) return;
+    __block UIScrollView *target = nil;
+    [self _findFeedScrollViewInView:window result:&target];
+    if (!target) return;
+    @try {
+        CGFloat pageH = target.frame.size.height;
+        CGFloat maxY = MAX(0, target.contentSize.height - pageH);
+        CGFloat targetY = target.contentOffset.y + pageH * 0.6;
+        if (targetY > maxY) targetY = maxY;
+        if (targetY - target.contentOffset.y < 1) return;   // 已到底
+        [target setContentOffset:CGPointMake(0, targetY) animated:YES];
+    } @catch (NSException *e) {}
 }
 
 #pragma mark - 视图辅助方法
