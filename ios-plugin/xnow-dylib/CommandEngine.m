@@ -720,12 +720,32 @@ static NSArray *XN_NurtureComments(void) {
     NSMutableArray *elements = [NSMutableArray array];
     [self _scanInteractiveViewsInView:window depth:0 result:elements];
     NSLog(@"[XNOWER] UI扫描: %lu 个控件", (unsigned long)elements.count);
+
+    // 【v1.4.92 控件地图】页面上下文：当前页 + tab 索引 + 屏幕尺寸，随扫描上报，后端按页沉淀参考表
+    NSDictionary *pageCtx = @{};
+    NSNumber *tabIdx = @(-1);
+    @try {
+        NSString *page = [self detectCurrentPage];
+        if (page.length) pageCtx = @{@"page": page};
+        NSDictionary *tab = [self _performVCScan][@"tab_controller"];
+        if ([tab isKindOfClass:[NSDictionary class]]) tabIdx = tab[@"selectedIndex"] ?: @(-1);
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] 控件地图页面上文识别异常: %@", e.reason);
+    }
+    CGSize sc = [UIScreen mainScreen].bounds.size;
+
     @try {
         NSString *devId = [XNOWER sharedInstance].deviceId;
         if (devId.length > 0) {
             [XNURLProtocol sendMessage:@{
                 @"type": @"ui_scan",
-                @"data": @{@"count": @(elements.count), @"elements": elements}
+                @"data": @{
+                    @"count": @(elements.count),
+                    @"elements": elements,
+                    @"page": pageCtx,
+                    @"tab": tabIdx,
+                    @"screen": [NSString stringWithFormat:@"%.0fx%.0f", sc.width, sc.height],
+                }
             } deviceId:devId];
         }
     } @catch (NSException *e) {}
@@ -743,6 +763,7 @@ static NSArray *XN_NurtureComments(void) {
             CGPoint center = CGPointMake(CGRectGetMidX(frameInWindow), CGRectGetMidY(frameInWindow));
             NSMutableDictionary *d = [NSMutableDictionary dictionary];
             d[@"class"] = NSStringFromClass(view.class) ?: @"nil";
+            d[@"superclass"] = view.superclass ? NSStringFromClass(view.superclass) : @"";
             d[@"frame"] = NSStringFromCGRect(frameInWindow);
             d[@"x"] = @(round(center.x));
             d[@"y"] = @(round(center.y));
@@ -752,6 +773,30 @@ static NSArray *XN_NurtureComments(void) {
                 UIControl *c = (UIControl *)view;
                 d[@"isSelected"] = @(c.isSelected);
                 d[@"isEnabled"] = @(c.isEnabled);
+                d[@"isUIControl"] = @YES;
+                // 按钮标题 / 文本字段（识别操作目标用）
+                if ([view isKindOfClass:[UIButton class]]) {
+                    NSString *t = [(UIButton *)view titleForState:UIControlStateNormal];
+                    if (t.length) d[@"title"] = t;
+                } else if ([view isKindOfClass:[UITextField class]]) {
+                    NSString *t = [(UITextField *)view text];
+                    if (t.length) d[@"title"] = t;
+                }
+            }
+            // 大面积滚动容器（主可滚动区，标注 isScroll 供滑动定位用）
+            if ([view isKindOfClass:[UIScrollView class]]) {
+                CGSize sc = [UIScreen mainScreen].bounds.size;
+                if (view.frame.size.width >= sc.width * 0.8 && view.frame.size.height >= sc.height * 0.5) {
+                    d[@"isScroll"] = @YES;
+                }
+            }
+            // 手势类型（关键：纯手势控件合成触摸触发不了，target-action 才可靠——控件地图里一眼识别可点击性）
+            if (view.gestureRecognizers.count) {
+                NSMutableArray *gs = [NSMutableArray array];
+                for (UIGestureRecognizer *gr in view.gestureRecognizers) {
+                    [gs addObject:NSStringFromClass(gr.class)];
+                }
+                d[@"gestures"] = gs;
             }
             [result addObject:d];
         } @catch (NSException *e) {}
@@ -2632,11 +2677,65 @@ static NSArray *XN_NurtureComments(void) {
     }
 }
 
+/// 从窗口递归找 tab 容器控制器（presented + child，深度保护）——供 _tapTab 直接切 selectedIndex 用
+- (UITabBarController *)_findTabBarControllerInWindow:(UIWindow *)window {
+    __block UITabBarController *found = nil;
+    void (^walk)(UIViewController *, int) = nil;
+    walk = ^(UIViewController *vc, int depth) {
+        if (found || !vc || depth > 20) return;
+        if ([vc isKindOfClass:[UITabBarController class]] ||
+            [NSStringFromClass(vc.class) containsString:@"TabBarController"]) {
+            found = (UITabBarController *)vc;
+            return;
+        }
+        if (vc.presentedViewController) walk(vc.presentedViewController, depth + 1);
+        for (UIViewController *ch in vc.childViewControllers) walk(ch, depth + 1);
+    };
+    walk(window.rootViewController, 0);
+    return found;
+}
+
+/// 按目标 VC 类名在 tab bar 里找对应索引并 setSelectedIndex（unwraps UINavigationController）
+/// ⚠️ 不用硬编码索引：本 build tab bar viewControllers.count=4，类名匹配最稳（实测 inbox=3 但类名识别无歧义）
+- (BOOL)_selectTabByViewControllerClass:(UITabBarController *)tc classString:(NSString *)clsString {
+    Class cls = NSClassFromString(clsString);
+    if (!cls || !tc.viewControllers.count) return NO;
+    NSArray *vcs = tc.viewControllers;
+    for (NSUInteger i = 0; i < vcs.count; i++) {
+        UIViewController *vc = vcs[i];
+        if ([vc isKindOfClass:[UINavigationController class]]) {
+            vc = ((UINavigationController *)vc).topViewController;
+        }
+        if (vc && [vc isKindOfClass:cls]) {
+            tc.selectedIndex = i;
+            return YES;
+        }
+    }
+    return NO;
+}
+
 - (void)_tapTab:(NSString *)tab {
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIWindow *window = XN_ActiveWindow();
         if (!window) return;
         CGSize screen = [UIScreen mainScreen].bounds.size;
+
+        // 0. 【v1.4.92】直接运行时切 tab：TTKTabBarButton 纯手势(UITapGestureRecognizer)，
+        //    合成触摸绕过手势管理器永远触发不了(实测 isSelected 恒 False / touch_diag target_actions 空)。
+        //    用类名找索引 → setSelectedIndex 直达，不依赖触摸。
+        UITabBarController *tabC = [self _findTabBarControllerInWindow:window];
+        if (tabC) {
+            NSString *targetClass = nil;
+            if ([tab isEqualToString:@"home"])          targetClass = @"AWEFeedRootViewController";
+            else if ([tab isEqualToString:@"inbox"])    targetClass = @"TTKInboxWidgetViewController";
+            else if ([tab isEqualToString:@"profile"])  targetClass = @"TTKProfileHomeViewController";
+            else if ([tab isEqualToString:@"friends"])  targetClass = @"TTKFriendsRootViewController";
+            if (targetClass && [self _selectTabByViewControllerClass:tabC classString:targetClass]) {
+                NSLog(@"[XNOWER] tapTab:%@ → setSelectedIndex:%ld (直接运行时切换)", tab, (long)tabC.selectedIndex);
+                self->_currentPage = tab;
+                return;
+            }
+        }
 
         // 1. 官方 accessibility identifier 精确定位 tab（ui_scan 实测: a11y_vo_home / a11y_vo_inbox / a11y_vo_profile）
         NSString *accId = nil;
@@ -3589,33 +3688,76 @@ static NSArray *XN_NurtureComments(void) {
 
 /// 关闭评论面板：优先点右上角 "Close comment section" 按钮（实测屏内 y=219，不被键盘遮挡）；
 /// 兜底点 mask（"Close keyboard"）收键盘再点关面板；最后验证页面离开 comment。
+/// 找到窗口里最顶层 presented VC（沿 presentedViewController 链走到底）
+- (UIViewController *)_topPresentedViewControllerOfWindow:(UIWindow *)window {
+    UIViewController *vc = window.rootViewController;
+    if (!vc) return nil;
+    while (vc.presentedViewController) vc = vc.presentedViewController;
+    return vc;
+}
+
 - (NSDictionary *)_closeCommentPanel {
     @try {
         CGSize screen = [UIScreen mainScreen].bounds.size;
-        // 1. 主方案：点评论区右上角关闭按钮
-        UIButton *closeBtn = [self _findButtonWithAnyLabel:@[@"Close comment section", @"Close comment"]
-                                                    inView:XN_ActiveWindow()];
+        // 0. 【v1.4.92】先收键盘：直接 resignFirstResponder（不走点击——键盘关闭是 UITapGestureRecognizer，
+        //    合成触摸绕过手势管理器触发不了）。键盘不关，"Close comment section" X 按钮不显示 → 主方案必然找不到。
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            [[UIApplication sharedApplication] sendAction:@selector(resignFirstResponder)
+                                                      to:nil from:nil forEvent:nil];
+        });
+        [NSThread sleepForTimeInterval:0.6];
+
+        // 1. 主方案【v1.4.94】真实触摸 X 关闭按钮。v1.4.93 用 sendActions 对手势按钮无效
+        //    （TikTok 按钮是 UITapGestureRecognizer，sendActions 不走 hitTest/手势识别，实测点了没反应）。
+        //    XNTouchSimulator 注入真实 UITouch/UIEvent（like/open_search 实测有效）。
+        __block UIButton *closeBtn = nil;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            closeBtn = [self _findButtonWithAnyLabel:@[@"Close comment section", @"Close comment"]
+                                             inView:XN_ActiveWindow()];
+        });
         if (closeBtn) {
-            CGPoint p = [closeBtn.superview convertPoint:closeBtn.center toView:nil];
-            if (p.x > 0 && p.x < screen.width && p.y > 0 && p.y < screen.height) {
-                [self _safeTapAtPoint:p];
-                [NSThread sleepForTimeInterval:1.2];
-                if (![[self detectCurrentPage] isEqualToString:@"comment"]) {
-                    return @{@"status": @"success", @"message": @"评论面板已关闭"};
-                }
+            CGPoint center = [closeBtn.superview convertPoint:closeBtn.center toView:nil];
+            [self _safeTapAtPoint:center];
+            [NSThread sleepForTimeInterval:1.2];
+            if (![[self detectCurrentPage] isEqualToString:@"comment"]) {
+                return @{@"status": @"success", @"message": @"评论面板已关闭(真实触摸X按钮)"};
             }
         }
-        // 2. 兜底：点 mask 收键盘 + 关面板（点两次）
-        __strong UIView *mask = nil;
-        [self _findVisibleViewWithAccId:@"CommentInputMaskViewComponent"
-                                 inView:XN_ActiveWindow() screen:screen depth:0 result:&mask];
-        if (mask) {
-            CGPoint p = [mask.superview convertPoint:mask.center toView:nil];
-            [self _safeTapAtPoint:p];
-            [NSThread sleepForTimeInterval:0.6];
-            [self _safeTapAtPoint:p];
-            [NSThread sleepForTimeInterval:1.0];
+
+        // 2. 兜底 A：真实触摸面板上方暗色区（外点关闭）。v1.4.93 点 mask 中心 y≈368 落在评论列表本体上
+        //    （MaskView 全屏 0..736，中心正对面板内部）不触发关闭；面板从 y≈199 起，
+        //    上方暗色带是 y≈64~199（Explore 之下、面板头之上），外点在这里生效。
+        [self _safeTapAtPoint:CGPointMake(screen.width * 0.5, screen.height * 0.13)];
+        [NSThread sleepForTimeInterval:1.0];
+        if (![[self detectCurrentPage] isEqualToString:@"comment"]) {
+            return @{@"status": @"success", @"message": @"评论面板已关闭(点暗色区外点)"};
         }
+
+        // 3. 兜底 B：下滑关闭（底部弹层支持下滑 dismiss 手势）
+        [XNTouchSimulator swipeFrom:CGPointMake(screen.width * 0.5, screen.height * 0.35)
+                                 to:CGPointMake(screen.width * 0.5, screen.height * 0.8)];
+        [NSThread sleepForTimeInterval:1.2];
+        if (![[self detectCurrentPage] isEqualToString:@"comment"]) {
+            return @{@"status": @"success", @"message": @"评论面板已关闭(下滑)"};
+        }
+
+        // 4. 兜底 C：dismiss 顶层评论 VC（presented modal 场景）。评论区面板实为 feed cell 的
+        //    child VC（vc_scan 实证），此策略通常不命中，保留作最后手段。
+        __block BOOL dismissed = NO;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            UIViewController *top = [self _topPresentedViewControllerOfWindow:XN_ActiveWindow()];
+            if (top && [NSStringFromClass(top.class) containsString:@"Comment"]) {
+                [top.presentingViewController dismissViewControllerAnimated:YES completion:nil];
+                dismissed = YES;
+            }
+        });
+        if (dismissed) {
+            [NSThread sleepForTimeInterval:1.2];
+            if (![[self detectCurrentPage] isEqualToString:@"comment"]) {
+                return @{@"status": @"success", @"message": @"评论面板已关闭(VC dismiss)"};
+            }
+        }
+
         if ([[self detectCurrentPage] isEqualToString:@"comment"]) {
             return @{@"status": @"failed", @"message": @"评论面板关闭失败"};
         }

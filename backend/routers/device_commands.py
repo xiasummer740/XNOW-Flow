@@ -177,3 +177,21 @@ def get_last_screenshot(
     if data is None:
         return {"device_id": device_id, "has_screenshot": False}
     return {"device_id": device_id, "has_screenshot": True, **data}
+
+
+@router.get("/devices/{device_id}/control-map/")
+def get_control_map(
+    device_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """控件地图（v1.4.92）：返回设备各页沉淀的扫描参考表 {page: {elements, ts, tab, screen}}"""
+    from tenant import resolve_owned_device
+    device = resolve_owned_device(db, device_id, current_user)
+    if not device:
+        raise HTTPException(status_code=404, detail="设备不存在")
+
+    from routers.ws import _last_control_map
+
+    pages = _last_control_map.get(device_id, {})
+    return {"device_id": device_id, "page_count": len(pages), "pages": pages}

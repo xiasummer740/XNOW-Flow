@@ -15,6 +15,8 @@ router = APIRouter(tags=["websocket"])
 _last_ui_scan = {}
 # 最近一次截图上报缓存（电脑端查看真机画面用；device_id -> {"image_base64","width","height","ts"}）
 _last_screenshot = {}
+# 控件地图沉淀（v1.4.92；device_id -> {page: {"elements":[...], "ts":..., "tab":..., "screen":...}}）
+_last_control_map = {}
 
 
 def _get_device_api_id(device_id: str) -> str:
@@ -299,6 +301,15 @@ def _handle_device_message(device_id: str, msg: dict):
         _last_ui_scan[device_id] = {
             "count": count,
             "elements": data.get("elements", []),
+            "ts": datetime.utcnow().isoformat(),
+        }
+        # 控件地图沉淀（v1.4.92）：按页累积，全盘扫描后即得参考表
+        page = (data.get("page") or {}).get("page", "unknown")
+        _last_control_map.setdefault(device_id, {})[page] = {
+            "count": count,
+            "elements": data.get("elements", []),
+            "tab": data.get("tab"),
+            "screen": data.get("screen"),
             "ts": datetime.utcnow().isoformat(),
         }
 
