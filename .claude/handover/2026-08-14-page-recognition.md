@@ -103,6 +103,18 @@
 - 本地识别器 13 页签名 + 13 份存档全量回归零误判。
 - ⚠️ **改 page_recognizer.py 必须重启 bridge**（启动时 import，不重启不生效）。
 
+### 11. collect_fans 崩溃排查 + 激活修复 + 崩溃捕获升级（2026-08-15，v1.4.87）
+- 祥哥装 v1.4.86 后跑「采集粉丝」→ 崩溃。server.log 时间线：06:08/06:16 两次无指令崩溃（浏览时）+ 06:18 collect_fans 指令后 **13 秒崩溃**（`🚨 CRASH: [last_action] collect_fans`）。
+- **崩溃性质**：上报无信号文件/无异常文件（只有 last_action）→ 系统级 kill（watchdog/JETSAM，SIGKILL 无法捕获），非 ObjC 异常/段错误。
+- **collect_fans 滚动失效（功能 bug）**：`_performSwipeUp`→`_safeScrollBy` **只在 feed 页生效，粉丝列表页 no-op**（CommandEngine.m:535 注释"非 feed 页滑动可能触发 TikTok 崩溃"）→ 采集空转采不到数据。
+- **崩溃捕获盲区**：信号 handler 用 `getenv("HOME")` 写文件，注入环境下 HOME 未必等于沙盒路径 → 信号文件写丢、上报端枚举 NSHomeDirectory() 找不到 → 上报永远只有 last_action 没堆栈。
+- **激活丢失**：设备 device_id=`iphone_0ECF42DC`，卡 7YDYWY 绑定旧 UUID `451D0095-...`（device_bindings 里两条记录同 secret=50A2C5D6 → 同一台设备铁证）→ check_device_license 查不到 → 绑定 403「未激活卡密」。已 SQL 把 license id=2 device_id/udid 改为 iphone_0ECF42DC。
+- **v1.4.87 修复**：
+  - collect_fans 滚动换 `_scrollTopListUp`（程序化 setContentOffset，auto_follow 已验证列表页可滚）
+  - collect_fans 关键步骤加 `_logStep`（open_profile/tap_fans_btn/round=N/done=N）→ 下次崩溃能定位到步骤
+  - XNOWER.m 信号 handler 改用启动时缓存的真实沙盒路径（static g_crash_write_dir）+ 写信号名(SIGSEGV/SIGABRT/SIGBUS/SIGILL) + backtrace(execinfo.h)
+- **注意**：设备重装 TikTok 后 NSUserDefaults 清空 → device_id 可能变（identifierForVendor）→ 卡绑定旧 ID 失配 → 需同步改 license 绑定。
+
 ## 待办（下个接力点）
 1. **装机验证 v1.4.86**（合并 9页检测修复+截图+fanlist+自动关注+live修复）：① 13 页浮窗菜单（重点：首页不再误判 live） ② 截图上报（浏览器 http://127.0.0.1:8091/ 「📸 截图查看真机画面」） ③ 粉丝列表"自动关注"：日志显示左侧用户名、循环点 Follow→上滑→再点、200 自动停
 2. 验证通过 → 更新 ISSUES.md（「页面感知浮窗菜单真机验证」+「home 误判 live」+「粉丝列表自动关注」三条 待修→已验证），其余待修项顺带真机验证
