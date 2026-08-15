@@ -1135,7 +1135,11 @@ static NSArray *kNurtureComments = @[
 /// 评论点赞主流程：打开评论 → 循环点赞+下滑 → 关闭
 - (void)_performLikeComments:(int)count {
     [self _logStep:@"like_comment"];
-    [self _openCommentPanel];
+    // 已在评论区（评论面板已打开）则跳过再次打开：auto_comment_like 按钮就在评论页触发，
+    // 重复点评论按钮可能把面板关掉 → 白赞
+    if (![[self detectCurrentPage] isEqualToString:@"comment"]) {
+        [self _openCommentPanel];
+    }
     [NSThread sleepForTimeInterval:1.8];
 
     int liked = 0;
@@ -1258,6 +1262,14 @@ static NSArray *kNurtureComments = @[
             }
         }
 
+        // ⚠️ 已在个人主页则跳过点头像：在主页点头像会命中自己头像，触发 TikTok
+        //    手势 action 内部 dispatch_sync 回主线程 → 主线程递归死锁 → watchdog 杀进程。
+        //    （collect_fans/collect_videos 等从 feed 打开主页的动作，主页已开则多余）
+        if ([self _isOnProfilePageOnMain]) {
+            NSLog(@"[XNOWER] 已在个人主页，跳过点头像");
+            return;
+        }
+
         // 回退：点击当前视频创作者头像（优先无障碍标识，再按类名，避免点错控件）
         UIView *avatarView = [self _findViewWithAccessibilityIdentifier:kAccProfileAvatar
                                                                  inView:XN_ActiveWindow()];
@@ -1290,7 +1302,9 @@ static NSArray *kNurtureComments = @[
 
     [self _logStep:@"collect_fans:open_profile"];
     dispatch_sync(dispatch_get_main_queue(), ^{
-        // 1. 打开当前用户的个人主页（点头像）
+        // 1. 打开当前用户的个人主页（点头像）— _performOpenProfile 内部会在
+        //    已在个人主页时跳过（在主页点头像会命中自己头像，触发 TikTok 手势 action
+        //    死锁 → watchdog 杀进程，86/87 三次崩溃同一根因）
         [self _performOpenProfile:@""];
     });
 
@@ -1608,7 +1622,12 @@ static NSArray *kNurtureComments = @[
         if (inboxTitle && ![self _isOnFeed]) { return @"inbox"; }
 
         // 8. 个人主页（关注按钮 + 粉丝/作品统计，非 feed 右侧栏）
-        if ([self _isOnProfilePage]) { return @"profile"; }
+        //    区分"我的主页"(profile_mine) vs "别人主页"(profile_other)：我的主页右上角有设置⚙️/
+        //    添加简介/找朋友，别人主页是返回箭头+关注私信按钮区(cta_social_interaction) → 两页菜单不同
+        if ([self _isOnProfilePage]) {
+            if ([self _isMyProfileOnMain]) { return @"profile_mine"; }
+            return @"profile_other";
+        }
 
         // 9. 首页推荐 feed
         if ([self _isOnFeed]) { return @"home"; }
@@ -1654,6 +1673,20 @@ static NSArray *kNurtureComments = @[
             }
         }];
         return (match >= 2);
+    } @catch (id e) {}
+    return NO;
+}
+
+/// 检测是否为"我的主页"（区别于别人主页）：右上角设置⚙️(nav_bar_end_settings) 仅我的主页有
+/// （别人主页右上角是铃铛/更多）；bio_add_bio=未设置简介时的"添加简介"辅助判据。
+/// 两特征真机扫描已验证互斥。未命中任何我的特征 → 判定为别人主页(profile_other)。
+/// ⚠️ 仅主线程调用（_detectPageOnMain 内部），内部 _hasAccessibilityIdentifierPrefix 无 dispatch
+- (BOOL)_isMyProfileOnMain {
+    UIWindow *window = XN_ActiveWindow();
+    if (!window) return NO;
+    @try {
+        if ([self _hasAccessibilityIdentifierPrefix:@"nav_bar_end_settings" inView:window depth:0]) return YES;
+        if ([self _hasAccessibilityIdentifierPrefix:@"bio_add_bio" inView:window depth:0]) return YES;
     } @catch (id e) {}
     return NO;
 }

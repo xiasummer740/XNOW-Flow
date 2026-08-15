@@ -379,9 +379,10 @@ static NSArray *kCountries;
             @{@"icon": @"xmark.circle.fill", @"label": @"关闭", @"action": @"close_panel"},
         ];
         if ([page isEqualToString:@"live"]) {
-            // 直播间：直播采集 + 系统
+            // 直播间：直播采集 + 点赞采集（点赞本就是直播间功能）+ 系统
             return [@[
                 @{@"icon": @"person.3.fill", @"label": @"采集直播间粉丝", @"action": @"collect_live"},
+                @{@"icon": @"heart.fill", @"label": @"采集点赞", @"action": @"collect_likes"},
                 @{@"icon": @"play.rectangle.fill", @"label": @"开始采集", @"action": @"start_live_collect"},
             ] arrayByAddingObjectsFromArray:base];
         }
@@ -394,12 +395,19 @@ static NSArray *kCountries;
                 @{@"icon": @"trash.fill", @"label": @"一键清空所有数据", @"action": @"clear_data"},
             ] arrayByAddingObjectsFromArray:base];
         }
-        if ([page isEqualToString:@"profile"]) {
-            // 个人主页：关注/粉丝 + 账号 + 系统
+        if ([page isEqualToString:@"profile_mine"]) {
+            // 我的主页：账号管理 + 系统（自己主页没有粉丝/关注/点赞可采，不配采集类按钮）
+            return [@[
+                @{@"icon": @"person.2.fill", @"label": @"账号管理", @"action": @"account_mgmt"},
+            ] arrayByAddingObjectsFromArray:base];
+        }
+        if ([page isEqualToString:@"profile_other"]) {
+            // 别人主页：营销核心场景（自动关注这个人 / 采他的粉丝 / 采他的作品）+ 停止 + 账号
             return [@[
                 @{@"icon": @"plus.circle.fill", @"label": @"自动关注", @"action": @"auto_follow"},
+                @{@"icon": @"person.3.fill", @"label": @"采集粉丝", @"action": @"collect_fans"},
                 @{@"icon": @"stop.circle.fill", @"label": @"停止采集粉丝用户", @"action": @"stop_collect_fans"},
-                @{@"icon": @"heart.fill", @"label": @"采集点赞", @"action": @"collect_likes"},
+                @{@"icon": @"play.rectangle.fill", @"label": @"采集视频", @"action": @"collect_videos"},
                 @{@"icon": @"person.2.fill", @"label": @"账号管理", @"action": @"account_mgmt"},
             ] arrayByAddingObjectsFromArray:base];
         }
@@ -427,7 +435,19 @@ static NSArray *kCountries;
                 @{@"icon": @"arrow.up.circle.fill", @"label": @"自动发视频", @"action": @"post_video"},
             ] arrayByAddingObjectsFromArray:base];
         }
-        // 首页 feed 或未知：完整菜单（原有 13 项保留）
+        if ([page isEqualToString:@"home"]) {
+            // 首页 feed：工具菜单（feed 上没有粉丝/视频/点赞可采 → 移除采集粉丝/采集视频/采集点赞）
+            return [@[
+                @{@"icon": @"network", @"label": @"绑定云控后台", @"action": @"bind_server"},
+                @{@"icon": @"person.2.fill", @"label": @"账号管理", @"action": @"account_mgmt"},
+                @{@"icon": @"square.and.arrow.down.fill", @"label": @"下载无水印视频", @"action": @"dl_video"},
+                @{@"icon": @"globe", @"label": @"设置国家", @"action": @"set_country"},
+                @{@"icon": @"trash.fill", @"label": @"一键清理所有数据", @"action": @"clear_data"},
+                @{@"icon": @"power", @"label": @"关闭服务器链接", @"action": @"disconnect"},
+                @{@"icon": @"leaf.fill", @"label": @"养号", @"action": @"nurture"},
+            ] arrayByAddingObjectsFromArray:base];
+        }
+        // 未知页面：完整工具菜单（原有 13 项保留兜底）
         return _mainMenu;
     } @catch (id e) {
         return _mainMenu;
@@ -1056,13 +1076,22 @@ static NSArray *kCountries;
     }
     // 页面感知新增 action 映射
     if ([action isEqualToString:@"collect_live"] || [action isEqualToString:@"start_live_collect"]) {
-        [self addLog:@"🔴 开始采集直播间粉丝..."];
-        [self.delegate floatingPanelDidTapCollectFans:self];
+        // 直播间"采集直播间粉丝/开始采集"：采直播间可见用户（collect_live_users）
+        // ⚠️ 修复：原绑定 floatingPanelDidTapCollectFans → collect_fans 会打开个人主页采粉丝（错）
+        [self addLog:@"🔴 开始采集直播间用户..."];
+        CommandEngine *engine = [XNOWER sharedInstance].cmdEngine;
+        if ([engine respondsToSelector:@selector(executeCommand:completion:)]) {
+            [engine executeCommand:@{@"action": @"collect_live_users", @"params": @{@"count": @20}} completion:nil];
+        }
         return;
     }
     if ([action isEqualToString:@"auto_follow"]) {
-        [self addLog:@"➕ 启动自动关注..."];
-        [self.delegate floatingPanelDidTapSmartBrowse:self];
+        // 别人主页"自动关注"：点当前页关注按钮（_performFollow），复用 follow 命令
+        [self addLog:@"➕ 自动关注当前用户..."];
+        CommandEngine *engine = [XNOWER sharedInstance].cmdEngine;
+        if ([engine respondsToSelector:@selector(executeCommand:completion:)]) {
+            [engine executeCommand:@{@"action": @"follow"} completion:nil];
+        }
         return;
     }
     if ([action isEqualToString:@"stop_collect_fans"] || [action isEqualToString:@"stop_collect_comments"]) {
@@ -1073,8 +1102,12 @@ static NSArray *kCountries;
         return;
     }
     if ([action isEqualToString:@"auto_comment_like"]) {
-        [self addLog:@"👍 启动自动评论点赞..."];
-        [self.delegate floatingPanelDidTapSmartBrowse:self];
+        // 评论区"自动评论点赞"：打开评论→循环点赞→下滑（_performLikeComments），复用 like_comment 命令
+        [self addLog:@"👍 自动评论点赞（20条）..."];
+        CommandEngine *engine = [XNOWER sharedInstance].cmdEngine;
+        if ([engine respondsToSelector:@selector(executeCommand:completion:)]) {
+            [engine executeCommand:@{@"action": @"like_comment", @"params": @{@"count": @20}} completion:nil];
+        }
         return;
     }
     // 翻译功能：toggle 实时翻译 / 设置翻译语言
