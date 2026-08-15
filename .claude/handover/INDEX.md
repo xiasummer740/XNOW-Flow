@@ -18,7 +18,7 @@
 - [手机当前页实时识别 6 页](2026-08-14-page-recognition.md) — 识别闭环(云端ui_scan缓存+本机8091桥接)+6页签名零误判+首页菜单bug根因(8/12旧包缺检测修复)，待重打包(修复+截图+菜单)
 
 ## 2026-08-15
-- [手机当前页实时识别 → 9页+自动关注](2026-08-14-page-recognition.md) — 同文件追加：fan_list第9页识别(5锚点11分，须在profile前判防滑动tab误判)+auto_follow_list指令(循环点Follow→程序化上滑→上限200自动停+左侧用户名日志)，待v1.4.85装机验证
+- [手机当前页实时识别 → 13页+自动关注+live修复](2026-08-14-page-recognition.md) — 同文件追加：fan_list第9页+auto_follow_list指令+home误判live根因(直播预览容器TTKLive/AWELive子串误伤，换IESLive专属锚点)+签名库扩13页(comment/live/edit_profile/chat/settings等)，待v1.4.86装机验证
 
 ## 历史
 - [v1.4.35 (2026-08-07)](2026-08-07-v1.4.35.md) — 账号检测修复、触摸注入、前端合并

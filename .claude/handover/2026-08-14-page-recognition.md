@@ -76,11 +76,39 @@
 - 循环停止条件：`followed>=limit(200) / emptyRounds>=3（空滚3次到底）/ failStreak>=5（连续失败5次）`。每 10 个成功打 `📊 已关注 %d/%d`。
 - 验证逻辑：点击后 `_buttonStateText:` 取按钮文案，含 已关注/互相关注/关注中/Following/Unfollow/已连接 等 → 成功；无文案 best-effort 判成功。
 
+### 9. home 误判 live 根因 + 修复（v1.4.86）
+- 祥哥装 v1.4.85 后报"home 检测成 live"。真机双页扫描对比定位：
+  - **home 页**含 `TTKLivePreviewPageContainerView`/`AWELiveFeedEntranceView`（首页直播预览/入口容器，可见）→ 旧锚点 `@"TTKLive"`/`@"AWELive"` 用 **containsString 子串匹配** → 命中误判 live！
+  - **真机直播页** `IESLiveLayoutContainerView`×62/`IESLiveStackView`×15/HTSLive4LayerContainerView → 旧 5 类名反而**全不命中**（漏检）→ 双向失效。
+  - 修复：`_isInLiveRoomOnMain` 第1步换成直播间专属锚点 `IESLiveLayoutContainerView/IESLiveStackView/HTSLive4LayerContainerView`（home 页 0 命中，直播页 3 全中）。模拟验证 ✓ 本地识别器同步加 live 签名（含 PAGE_TITLES）。
+- **教训：TikTok 私有类名用 containsString 子串匹配极易误伤**（首页直播预览容器 TTKLive* 与直播间容器共前缀）。直播判定用"直播间专属容器"而非"Live 相关类名"。
+
+### 10. 页面签名库扩充（2026-08-15 祥哥配合逐页扫描，共 13 页）
+| 页 | 锚点(权重) | 得分 | 存档 |
+|---|---|---|---|
+| feed 首页 | top_tabs_recomend(3)/feedLikeButton(3)/explore… | 11 | live_scan.json |
+| comment 评论区 | TTKCommentPanelRoot(3)/Expansion(3)/Avatar(3)/AnimatedBtn(2)/Dislike(2) **压过底下feed 11分** | 13 | comment_scan.json |
+| live 直播间 | IESLiveLayoutContainer(3)/IESLiveStack(2)/HTSLive4Layer(2)/GBLRoomProfile(2)/GBLGeneralFollow(1) | 10 | live_page_scan.json |
+| profile 主页(自己/他人) | TTKProfileTabVideoButton(3)/relation_info_*(2×3)/header_avatar(2) | 12-15 | profile_my/other_profile_scan.json |
+| edit_profile 编辑资料 | TUXToggle(3)/TUXRadio(3)/TUXAlertBadge(2)/TTKSocialAvatarProgressBanner(2) | 10 | edit_profile_scan.json |
+| inbox 收件箱 | TTKInbox* 类名 | 7 | live_scan3.json |
+| chat 私信对话 | AWEIMMessageListTableView(3)/TikTokIMImpl.ChatActionBarIconCell(3)/AWEIMMessageStateIcon(2)/AWEIMAvatarLoading(2) — **与 inbox(TTKInbox*)零重叠** | 10 | chat_scan.json |
+| settings 设置页 | TTKSettingsCollectionViewCell(3)/TTKSettingsNewHeader(2)/TUXDisclosureView(2) | 7 | settings_scan.json |
+| friends 朋友页 | TTKFriendsFeedTableViewCell(3)/… | 6 | live_scan4.json |
+| search 搜索页 | AWESearchBar(3)/TTKSearch* | 7 | live_scan5.json |
+| recorder 录制页 | recorderPage*/recordPage* | 16 | live_scan6.json |
+| fan_list 粉丝列表 | TTKStoryAvatarView(3)/TTKRelationButton(2)/… | 11 | fan_list_scan.json |
+- 工具：`scan_to_file.py <out.json>`（触发 ui_scan→等上报→存原始 elements），桥接 `/api/scan` 返回识别结果。
+- **TikTok 当前底部只有 4 tab**（首页/朋友/私信/我的）+ 加号，"发现/Explore"已并入 For You，无独立页。
+- 本地识别器 13 页签名 + 13 份存档全量回归零误判。
+- ⚠️ **改 page_recognizer.py 必须重启 bridge**（启动时 import，不重启不生效）。
+
 ## 待办（下个接力点）
-1. **装机验证 v1.4.85**（替代 v1.4.84，合并 8页+截图+fanlist+自动关注）：① 9 页浮窗菜单（尤其 search/friends/recorder/fanlist 四新页 + 首页完整13项） ② 截图上报（浏览器 http://127.0.0.1:8091/ 点「📸 截图查看真机画面」应显示真机画面） ③ 粉丝列表点"自动关注"：日志显示左侧用户名、循环点 Follow→上滑→再点、200 自动停
-2. 验证通过 → 更新 ISSUES.md（「页面感知浮窗菜单真机验证」+「粉丝列表自动关注」两条 待修→已验证），其余待修项顺带真机验证
-3. 发版门禁：ISSUES.md 全表「已验证」才发版；此批=页面修复+截图+菜单+fanlist+自动关注（安全第二批 TLS/secret header 等4项待修未含）
-4. ⚠️ 上次 v1.4.84 上传被 hold（被 v1.4.85 取代），构建产物清理：删本地 `TikTok_XNOW_v1.4.84_BH.ipa`
+1. **装机验证 v1.4.86**（合并 9页检测修复+截图+fanlist+自动关注+live修复）：① 13 页浮窗菜单（重点：首页不再误判 live） ② 截图上报（浏览器 http://127.0.0.1:8091/ 「📸 截图查看真机画面」） ③ 粉丝列表"自动关注"：日志显示左侧用户名、循环点 Follow→上滑→再点、200 自动停
+2. 验证通过 → 更新 ISSUES.md（「页面感知浮窗菜单真机验证」+「home 误判 live」+「粉丝列表自动关注」三条 待修→已验证），其余待修项顺带真机验证
+3. 发版门禁：ISSUES.md 全表「已验证」才发版；此批=页面修复+截图+菜单+fanlist+自动关注+live修复（安全第二批 TLS/secret header 等4项待修未含）
+4. ⚠️ 待祥哥确认首次点评论区闪退（一次，重启后可开）——非必现，若再现需查 dylib 崩溃日志
+5. ⚠️ v1.4.85 上传中途停掉（被 86 取代），VPS 已清 .uploading 残留，本地 85 已删，保留 79-83/86
 
 ## 连接信息
 - 云端 192.129.210.52:8000（域名 yunkong.taikon.top 走 Cloudflare 同源）
