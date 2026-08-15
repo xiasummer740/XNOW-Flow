@@ -3,7 +3,7 @@
 build-bh-simple.py — 不修改主二进制，只替换 FLEXing.dylib
 不破坏原始代码签名，避免安装时报签名错误
 """
-import zipfile, shutil, os, sys, tempfile, io
+import zipfile, shutil, os, sys, tempfile, io, plistlib
 
 BASE_IPA = 'TikTok_43.7.0_BH.ipa'
 CONFIG_PATHS = ['ios-plugin/xnow-dylib/Config.plist', 'build-artifacts/Config.plist']
@@ -50,13 +50,21 @@ def main():
         os.chmod(our_dst, 0o755)
         print(f"  ✅ 已复制 xnower.dylib → FLEXing.dylib ({len(our_dylib_data)} bytes)")
 
-        # 嵌入 Config.plist
+        # 嵌入 Config.plist（注入构建版本号，浮窗主菜单显示，与 build-bh-ipa.py 一致）
         print("\n[3/4] 嵌入 Config.plist...")
         cfg_dst = os.path.join(app_dir, "xnower-config.plist")
         for src in CONFIG_PATHS:
             if os.path.exists(src):
-                shutil.copy2(src, cfg_dst)
-                print(f"  ✅ {src}")
+                try:
+                    with open(src, 'rb') as cf:
+                        cfg = plistlib.load(cf)
+                    cfg["XNOWER_BuildVersion"] = version
+                    with open(cfg_dst, 'wb') as cf:
+                        plistlib.dump(cfg, cf)
+                    print(f"  ✅ {src} (version={version})")
+                except Exception as e:
+                    print(f"  ⚠️ 解析失败，直接复制原文件: {e}")
+                    shutil.copy2(src, cfg_dst)
                 break
         else:
             print("  ⚠️ 未找到 Config.plist")

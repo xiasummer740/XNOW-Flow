@@ -131,6 +131,36 @@ def _apply_account_update(account: Account, account_data: dict, device_id: str):
     account.device_id = device_id
 
 
+def _mark_task_from_result(device_id: str, data: dict):
+    """设备命令结果回填任务状态：/command/ 路由创建的 running 任务按执行结果标记 done/failed"""
+    from models.task import Task
+    action = data.get("action", "")
+    status = data.get("status", "")
+    if not action:
+        return
+    db = SessionLocal()
+    try:
+        task = (
+            db.query(Task)
+            .filter(Task.device == device_id, Task.type == action, Task.status == "running")
+            .order_by(Task.id.desc())
+            .first()
+        )
+        if task:
+            ok = status == "success"
+            task.status = "done" if ok else "failed"
+            task.progress = 100
+            task.finished_at = datetime.utcnow()
+            task.last_log = ("✅ " if ok else "❌ ") + str(data.get("message", ""))
+            if not ok and data.get("message"):
+                task.error = str(data.get("message", ""))
+            db.commit()
+    except Exception as e:
+        logger.error(f"_mark_task_from_result error: {e}")
+    finally:
+        db.close()
+
+
 def _upsert_account(device_id: str, account_data: dict):
     """从设备上报创建或更新账号记录（按租户隔离，防跨租户篡改）"""
     from sqlalchemy.exc import IntegrityError
@@ -233,6 +263,10 @@ def _handle_device_message(device_id: str, msg: dict):
     elif msg_type == "result":
         data = msg.get("data", {})
         logger.info(f"Device {device_id} result: {data}")
+        # 回填远程指令任务状态（/command/ 路由创建的 running 任务 → done/success 或 failed）
+        # 旧实现永不回填 + task_engine 又误判"无有效目标单元" → 后台所有指令显示失败（状态误报根因）
+        if isinstance(data, dict) and data.get("action"):
+            _mark_task_from_result(device_id, data)
         # 采集结果（collect_fans/collect_comments/collect_live_users 等）入库
         if isinstance(data, dict) and isinstance(data.get("users"), list):
             _insert_collected_data(device_id, data)
@@ -498,6 +532,9 @@ async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", devi
                     # 任务执行结果回传
                     data = msg.get("data", {})
                     logger.info(f"Device {device_id} result: {data}")
+                    # 回填远程指令任务状态（与 HTTP 轮询共用 helper）
+                    if isinstance(data, dict) and data.get("action"):
+                        _mark_task_from_result(device_id, data)
                     # 采集结果（collect_fans/collect_comments/collect_live_users 等）入库
                     if isinstance(data, dict) and isinstance(data.get("users"), list):
                         _insert_collected_data(device_id, data)

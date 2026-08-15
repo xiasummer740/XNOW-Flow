@@ -117,6 +117,11 @@ class TaskEngine:
         targets = config.get("targets") or []
         total = task.total or len(targets) or 0
         if total <= 0 or not targets:
+            # 远程指令（route 即时下发，config 为空、无 targets）→ 不判失败：
+            # 已由 /command/ 路由直接下发，等设备 WS 结果回填状态（done/success）。
+            # 旧逻辑在此直接判 failed → 连成功执行的 like/open_search 都显示"无有效目标单元"（任务状态误报根因）
+            if not task.config and not config.get("action"):
+                return
             task.status = "failed"
             task.error = "无有效目标单元"
             task.last_log = "❌ 无有效目标，任务失败"

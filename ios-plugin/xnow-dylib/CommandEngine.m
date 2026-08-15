@@ -32,31 +32,41 @@ static const CGFloat kLikeBtnRatioX = 0.92;    // 屏幕右侧
 static const CGFloat kLikeBtnRatioY = 0.46;
 static const CGFloat kFollowBtnRatioX = 0.92;
 static const CGFloat kFollowBtnRatioY = 0.395;
-static const CGFloat kAvatarRatioX = 0.08;
-static const CGFloat kAvatarRatioY = 0.82;
+// v1.4.89: 头像实测在右侧交互栏 (384,311)/(414,736) ≈ (0.93, 0.42)，旧的(0.08,0.82)点左下角是错的
+static const CGFloat kAvatarRatioX = 0.93;
+static const CGFloat kAvatarRatioY = 0.42;
 
 // 随机评论文本池（养号模式2用，多样化避免被限，50+条分类）
-static NSArray *kNurtureComments = @[
-    // 赞美类
-    @"太棒了！", @"拍得真好", @"太美了", @"厉害了", @"这也太强了", @"绝了",
-    @"爱了爱了", @"真不错", @"超级喜欢", @"好有质感", @"太震撼了", @"无敌了",
-    @"神仙视频", @"宝藏博主", @"太优秀了", @"太会拍了",
-    // 互动类
-    @"支持一下", @"收藏了", @"已点赞", @"关注了", @"必须支持", @"推荐给大家",
-    @"学到了", @"说的太对了", @"感同身受", @"一直看你的视频",
-    // 疑问/交流类
-    @"这个怎么做的？", @"用的什么设备？", @"在哪拍的？", @"背景音乐是什么？",
-    @"求教程", @"求同款", @"怎么做到的？", @"下次也带我一起",
-    // 简短类
-    @"哈哈哈", @"哈哈哈哈哈哈", @"好可爱", @"加油加油", @"牛", @"👍👍",
-    @"好棒", @"不错", @"强", @"好", @"可以", @"哇", @"棒棒哒",
-    // 表情/语气类
-    @"😍😍", @"🥰🥰", @"😄😄", @"🔥🔥", @"❤️❤️", @"🫶🫶",
-    @"哈哈哈哈笑死我了", @"这也太搞笑了吧", @"看完心情都好了",
-];
+// 惰性初始化函数：文件作用域对象字面量非编译期常量（clang 报错），需运行时创建
+static NSArray *XN_NurtureComments(void) {
+    static NSArray *arr = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        arr = @[
+            // 赞美类
+            @"太棒了！", @"拍得真好", @"太美了", @"厉害了", @"这也太强了", @"绝了",
+            @"爱了爱了", @"真不错", @"超级喜欢", @"好有质感", @"太震撼了", @"无敌了",
+            @"神仙视频", @"宝藏博主", @"太优秀了", @"太会拍了",
+            // 互动类
+            @"支持一下", @"收藏了", @"已点赞", @"关注了", @"必须支持", @"推荐给大家",
+            @"学到了", @"说的太对了", @"感同身受", @"一直看你的视频",
+            // 疑问/交流类
+            @"这个怎么做的？", @"用的什么设备？", @"在哪拍的？", @"背景音乐是什么？",
+            @"求教程", @"求同款", @"怎么做到的？", @"下次也带我一起",
+            // 简短类
+            @"哈哈哈", @"哈哈哈哈哈哈", @"好可爱", @"加油加油", @"牛", @"👍👍",
+            @"好棒", @"不错", @"强", @"好", @"可以", @"哇", @"棒棒哒",
+            // 表情/语气类
+            @"😍😍", @"🥰🥰", @"😄😄", @"🔥🔥", @"❤️❤️", @"🫶🫶",
+            @"哈哈哈哈笑死我了", @"这也太搞笑了吧", @"看完心情都好了",
+        ];
+    });
+    return arr;
+}
 
 @interface CommandEngine ()
 @property (nonatomic, strong) dispatch_queue_t execQueue;
+@property (nonatomic, strong) dispatch_queue_t timeoutQueue;  // 命令超时保护用并发队列
 @property (nonatomic, strong) NSMutableDictionary *collectedFans;
 @property (nonatomic, strong) NSMutableDictionary *collectedVideos;
 @property (nonatomic, assign) BOOL isCollectingData;
@@ -70,6 +80,7 @@ static NSArray *kNurtureComments = @[
     self = [super init];
     if (self) {
         _execQueue = dispatch_queue_create("com.xnow.command", DISPATCH_QUEUE_SERIAL);
+        _timeoutQueue = dispatch_queue_create("com.xnow.command.timeout", DISPATCH_QUEUE_CONCURRENT);
         _currentPage = @"unknown";
         _collectedFans = [NSMutableDictionary dictionary];
         _collectedVideos = [NSMutableDictionary dictionary];
@@ -164,7 +175,10 @@ static NSArray *kNurtureComments = @[
     CommandAction action = [self actionFromString:actionStr];
 
     dispatch_async(_execQueue, ^{
-        NSDictionary *result = [self _executeAction:action params:params actionName:actionStr];
+        // v1.4.89 超时保护：单条命令超时立即返回（不阻塞串行队列），防止一条卡死拖垮设备+掉线
+        // （search_keyword 实测 90s+ 无返回、命令队列积压、心跳停→离线，即此根因）
+        NSDictionary *result = [self _executeActionWithTimeout:action params:params actionName:actionStr
+                                                       timeout:[self _commandTimeoutForAction:action]];
         // 指令完成 → 清除崩溃前指令标记（崩溃时标记保留，下次启动上报）
         @try {
             [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"XN_LastAction"];
@@ -176,6 +190,45 @@ static NSArray *kNurtureComments = @[
             });
         }
     });
+}
+
+/// 命令级超时：在并发队列上执行，超时返回失败结果（泄漏的卡死块不再阻塞后续命令）
+- (NSDictionary *)_executeActionWithTimeout:(CommandAction)action
+                                     params:(NSDictionary *)params
+                                 actionName:(NSString *)actionName
+                                    timeout:(NSTimeInterval)timeout {
+    if (timeout <= 0) {
+        return [self _executeAction:action params:params actionName:actionName];
+    }
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    __block NSDictionary *result = nil;
+    dispatch_async(_timeoutQueue, ^{
+        result = [self _executeAction:action params:params actionName:actionName];
+        dispatch_semaphore_signal(sem);
+    });
+    if (dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeout * NSEC_PER_SEC))) != 0) {
+        NSLog(@"[XNOWER] ⚠️ 命令 %@ 执行超时(%ds)，跳过继续（防卡死拖垮设备）", actionName, (int)timeout);
+        return @{@"status": @"failed", @"message": [NSString stringWithFormat:@"命令超时(%ds)", (int)timeout], @"action": actionName};
+    }
+    return result;
+}
+
+/// 每类命令的超时（秒）：快速命令 30s，搜索 15s（易卡），采集/养号长任务 600s
+- (NSTimeInterval)_commandTimeoutForAction:(CommandAction)action {
+    switch (action) {
+        case CommandActionSearchKeyword:
+            return 15;
+        case CommandActionCollectFans:
+        case CommandActionCollectVideos:
+        case CommandActionCollectComments:
+        case CommandActionCollectLiveUsers:
+        case CommandActionCollectLikes:
+        case CommandActionAutoFollowList:
+        case CommandActionSmartBrowse:
+            return 600;
+        default:
+            return 30;
+    }
 }
 
 // ======== 指令派发 ========
@@ -949,9 +1002,10 @@ static NSArray *kNurtureComments = @[
     [self _logStep:@"comment"];
     // Step 1: 打开评论面板
     dispatch_sync(dispatch_get_main_queue(), ^{
-        // 找评论按钮
-        UIView *commentView = [self _findViewWithAccessibilityIdentifier:kAccComment
-                                                                  inView:XN_ActiveWindow()];
+        // 找评论按钮（v1.4.89: 必须屏幕内可见，否则命中屏外预加载按钮点 AWEMaskWindow）
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        __strong UIView *commentView = nil;
+        [self _findVisibleViewWithAccId:kAccComment inView:XN_ActiveWindow() screen:screen depth:0 result:&commentView];
         if (commentView) {
             [self _safeTapAtPoint:[commentView.superview convertPoint:commentView.center toView:nil]];
         } else {
@@ -1024,8 +1078,10 @@ static NSArray *kNurtureComments = @[
 /// 打开评论面板（复用评论入口逻辑）
 - (void)_openCommentPanel {
     dispatch_sync(dispatch_get_main_queue(), ^{
-        UIView *commentView = [self _findViewWithAccessibilityIdentifier:kAccComment
-                                                                  inView:XN_ActiveWindow()];
+        // v1.4.89: 必须屏幕内可见（旧实现命中屏外 y=1170 预加载按钮 → 点 AWEMaskWindow 评论面板打不开）
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        __strong UIView *commentView = nil;
+        [self _findVisibleViewWithAccId:kAccComment inView:XN_ActiveWindow() screen:screen depth:0 result:&commentView];
         if (commentView) {
             [self _safeTapAtPoint:[commentView.superview convertPoint:commentView.center toView:nil]];
         } else {
@@ -1270,9 +1326,16 @@ static NSArray *kNurtureComments = @[
             return;
         }
 
-        // 回退：点击当前视频创作者头像（优先无障碍标识，再按类名，避免点错控件）
+        // 回退：点击当前视频创作者头像（优先无障碍标识，再按类名+屏幕内可见，避免点错控件）
+        CGSize screen = [UIScreen mainScreen].bounds.size;
         UIView *avatarView = [self _findViewWithAccessibilityIdentifier:kAccProfileAvatar
                                                                  inView:XN_ActiveWindow()];
+        // v1.4.89: 头像类名实测已漂移到 AWEStoryAvatarButton（ui_scan: @becky_bfit @(384,311)），
+        // 旧类 AWEPlayInteractionUserAvatarView 已不存在；且必须屏幕内可见（feed 有屏外预加载的第二个头像）
+        if (!avatarView) {
+            avatarView = [self _findVisibleViewByClassContaining:@"AWEStoryAvatarButton"
+                                                          inView:XN_ActiveWindow() screen:screen];
+        }
         if (!avatarView) {
             avatarView = [self _findViewByClassContaining:@"AWEPlayInteractionUserAvatarView"
                                                   inView:XN_ActiveWindow() depth:0];
@@ -1284,7 +1347,6 @@ static NSArray *kNurtureComments = @[
             __block UIScrollView *feedScroll = nil;
             [self _findLargeFeedScrollViewInView:XN_ActiveWindow() result:&feedScroll];
             if (feedScroll) {
-                CGSize screen = [UIScreen mainScreen].bounds.size;
                 [self _safeTapAtPoint:CGPointMake(
                     screen.width * kAvatarRatioX,
                     screen.height * kAvatarRatioY)];
@@ -1439,10 +1501,11 @@ static NSArray *kNurtureComments = @[
 - (NSDictionary *)_performCollectComments:(int)count {
     __block NSMutableArray *users = [NSMutableArray array];
 
-    // 1. 打开评论面板（点头评按钮）
+    // 1. 打开评论面板（点头评按钮，v1.4.89: 必须屏幕内可见）
     dispatch_sync(dispatch_get_main_queue(), ^{
-        UIView *commentView = [self _findViewWithAccessibilityIdentifier:kAccComment
-                                                                 inView:XN_ActiveWindow()];
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        __strong UIView *commentView = nil;
+        [self _findVisibleViewWithAccId:kAccComment inView:XN_ActiveWindow() screen:screen depth:0 result:&commentView];
         if (commentView) {
             [self _safeTapAtPoint:[commentView.superview convertPoint:commentView.center toView:nil]];
         } else {
@@ -2403,6 +2466,31 @@ static NSArray *kNurtureComments = @[
     } @catch (NSException *e) {}
 }
 
+/// 按类名包含查找屏幕内可见视图（feed 有屏外预加载副本，必须命中当前屏幕内的）
+- (UIView *)_findVisibleViewByClassContaining:(NSString *)className inView:(UIView *)view screen:(CGSize)screen {
+    __strong UIView *found = nil;
+    [self _findVisibleViewByClassContaining:className inView:view screen:screen depth:0 result:&found];
+    return found;
+}
+
+- (void)_findVisibleViewByClassContaining:(NSString *)className inView:(UIView *)view screen:(CGSize)screen depth:(int)depth result:(__strong UIView **)result {
+    if (*result || !view || depth > 30) return;
+    @try {
+        if ([NSStringFromClass(view.class) containsString:className]) {
+            CGRect f = [view.superview convertRect:view.frame toView:XN_ActiveWindow()];
+            if (CGRectIntersectsRect(f, CGRectMake(0, 0, screen.width, screen.height)) &&
+                f.size.width > 8 && f.size.height > 8) {
+                *result = view;
+                return;
+            }
+        }
+        for (UIView *sub in view.subviews) {
+            [self _findVisibleViewByClassContaining:className inView:sub screen:screen depth:depth + 1 result:result];
+            if (*result) return;
+        }
+    } @catch (NSException *e) {}
+}
+
 /// 互动养号专用安全点赞：找屏幕内可见 feedLikeButton + sendActions + 成功验证(状态变化)
 - (BOOL)_performLikeSafe {
     __block BOOL ok = NO;
@@ -2523,61 +2611,6 @@ static NSArray *kNurtureComments = @[
     }
 }
 
-/// 直接触发 view 上的 UITapGestureRecognizer（tab 按钮无 UIControl action，合成触摸对 iOS17 手势无效）
-/// 方式1: NSInvocation 调私有 _setState:Recognized → 手势状态机触发 target-action（最可靠）
-/// 方式2: 健壮 KVC 取 _targets/_target/_action 直接 performSelector
-- (BOOL)_triggerTapGestureOnView:(UIView *)view {
-    for (UIGestureRecognizer *gr in view.gestureRecognizers) {
-        if (![gr isKindOfClass:[UITapGestureRecognizer class]]) continue;
-        // 方式1: _setState:Recognized 注入
-        @try {
-            SEL setStateSel = NSSelectorFromString(@"_setState:");
-            if ([gr respondsToSelector:setStateSel]) {
-                NSMethodSignature *sig = [gr methodSignatureForSelector:setStateSel];
-                if (sig) {
-                    NSInteger state = UIGestureRecognizerStateRecognized;
-                    NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
-                    inv.target = gr; inv.selector = setStateSel;
-                    [inv setArgument:&state atIndex:2];
-                    [inv invoke];
-                    // 复位状态（避免手势卡在 Recognized 影响后续）
-                    state = UIGestureRecognizerStatePossible;
-                    NSInvocation *inv2 = [NSInvocation invocationWithMethodSignature:sig];
-                    inv2.target = gr; inv2.selector = setStateSel;
-                    [inv2 setArgument:&state atIndex:2];
-                    [inv2 invoke];
-                    NSLog(@"[XNOWER] _setState:Recognized 注入成功 → %@", NSStringFromClass(view.class));
-                    return YES;
-                }
-            }
-        } @catch (NSException *e) {
-            NSLog(@"[XNOWER] _setState inject error: %@", e.reason);
-        }
-        // 方式2: 直接调 target-action（健壮提取 SEL）
-        @try {
-            id targetsObj = [gr valueForKey:@"_targets"];
-            if ([targetsObj isKindOfClass:[NSArray class]]) {
-                for (id t in (NSArray *)targetsObj) {
-                    id target = [t valueForKey:@"_target"];
-                    id actionVal = [t valueForKey:@"_action"];
-                    SEL sel = NULL;
-                    if ([actionVal isKindOfClass:[NSString class]]) sel = NSSelectorFromString(actionVal);
-                    else if ([actionVal isKindOfClass:[NSValue class]]) sel = (SEL)[actionVal pointerValue];
-                    else sel = (SEL)(uintptr_t)(NSUInteger)actionVal;
-                    if (sel && target && [target respondsToSelector:sel]) {
-                        [target performSelector:sel withObject:gr];
-                        NSLog(@"[XNOWER] 手势 target-action 直接调用成功 → %@", NSStringFromClass(view.class));
-                        return YES;
-                    }
-                }
-            }
-        } @catch (NSException *e) {
-            NSLog(@"[XNOWER] gesture target error: %@", e.reason);
-        }
-    }
-    return NO;
-}
-
 - (void)_tapTab:(NSString *)tab {
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIWindow *window = XN_ActiveWindow();
@@ -2592,14 +2625,12 @@ static NSArray *kNurtureComments = @[
         if (accId) {
             UIView *tabView = [self _findViewWithAccessibilityIdentifier:accId inView:window];
             if (tabView) {
-                // 核心：直接操纵 tab 按钮的 UITapGestureRecognizer（_setState:Recognized 触发处理函数，
-                // 绕过触摸系统——tab 无 UIControl action，合成触摸对 iOS17 手势无效）
-                if ([self _triggerTapGestureOnView:tabView]) {
-                    self->_currentPage = tab;
-                    return;
-                }
-                // 兜底：合成触摸
-                [self _safeTapAtPoint:[tabView.superview convertPoint:tabView.center toView:nil]];
+                // v1.4.89: 改用真实触摸投递（XNTouchSimulator 合成 UITouch/UIEvent，like/open_search 实测有效）。
+                // 旧的 _setState:Recognized 注入返回成功但 isSelected 仍为 False（touch_diag 实测 tab 未切换），
+                // 且注入成功直接 return 短路了真实触摸兜底 → 导航失效根因。
+                CGPoint center = [tabView.superview convertPoint:tabView.center toView:nil];
+                [self _safeTapAtPoint:center];
+                NSLog(@"[XNOWER] tapTab:%@ 命中 %@ center=(%.0f,%.0f)", tab, NSStringFromClass(tabView.class), center.x, center.y);
                 self->_currentPage = tab;
                 return;
             }
@@ -3427,7 +3458,8 @@ static NSArray *kNurtureComments = @[
 
 /// 随机选一条养号评论（避免连续重复）
 - (NSString *)_randomComment {
-    NSUInteger count = kNurtureComments.count;
+    NSArray *pool = XN_NurtureComments();
+    NSUInteger count = pool.count;
     if (count == 0) return @"太棒了";
     static NSUInteger sLastIdx = NSUIntegerMax;
     NSUInteger idx = arc4random_uniform((uint32_t)count);
@@ -3435,7 +3467,7 @@ static NSArray *kNurtureComments = @[
         idx = (idx + 1) % count;  // 换一条，避免连续相同
     }
     sLastIdx = idx;
-    return kNurtureComments[idx];
+    return pool[idx];
 }
 
 /// 真实验证当前是否在推荐 feed（首页）
