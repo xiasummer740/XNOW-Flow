@@ -24,6 +24,7 @@ PAGE_TITLES = {
     "edit_profile": "编辑个人资料（Edit Profile）",
     "inbox": "收件箱（Inbox）",
     "chat": "私信对话页（Chat）",
+    "settings": "设置页（Settings）",
     "search": "搜索页（Search）",
     "friends": "朋友页（Friends）",
     "fan_list": "粉丝/关注列表（Fans）",
@@ -59,6 +60,12 @@ PAGE_SIGNATURES = {
         "TikTokIMImpl.ChatActionBarIconCell": 3,    # 聊天动作栏按钮
         "AWEIMMessageStateIconView": 2,     # 消息状态图标
         "AWEIMAvatarLoadingView": 2,        # 头像加载
+    },
+    "settings": {
+        # 设置页（真机 2026-08-15 确认）：我的主页 → 右上角齿轮。TTKSettings* 前缀专属。
+        "TTKSettingsCollectionViewCell": 3,                 # 设置项 cell
+        "TTKSettingsNewHeaderCollectionReusableView": 2,    # 设置页 header
+        "TUXDisclosureView": 2,                            # 设置项右箭头
     },
     "edit_profile": {
         # 编辑个人资料（真机 2026-08-15 确认）：我的主页 → 编辑资料。TUX 表单控件密集 + 头像进度横幅专属。
