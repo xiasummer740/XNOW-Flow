@@ -157,6 +157,8 @@ static NSArray *XN_NurtureComments(void) {
             @"follow_user":       @(CommandActionFollowUser),
             // 粉丝列表自动关注（点右侧 Follow→上滑→循环，上限200自动停）
             @"auto_follow_list":  @(CommandActionAutoFollowList),
+            // 关闭浮层面板（评论区等 overlay，v1.4.91）
+            @"close_overlay":     @(CommandActionCloseOverlay),
             // 指定视频评论
             @"comment_video":     @(CommandActionCommentVideo),
             // 环境诊断
@@ -329,6 +331,11 @@ static NSArray *XN_NurtureComments(void) {
 
             case CommandActionAutoFollowList:
                 result = [self _performAutoFollowList:params];
+                hasResult = YES;
+                break;
+
+            case CommandActionCloseOverlay:
+                result = [self _performCloseOverlay];
                 hasResult = YES;
                 break;
 
@@ -1071,6 +1078,9 @@ static NSArray *XN_NurtureComments(void) {
             }
         }
     });
+
+    // v1.4.91: 发送后自动关评论面板（点右上角 X 关闭，防 overlay 残留遮 tab bar 困死设备）
+    [self _closeCommentPanel];
 }
 
 #pragma mark - 评论点赞（like_comment，PPT 模块4 曝光玩法核心）
@@ -3564,7 +3574,63 @@ static NSArray *XN_NurtureComments(void) {
 
 /// 切回首页并真实验证在 feed；最多尝试 4 轮，成功返回 YES
 /// 每轮：a11y_vo_home 点击 tab → 验证；不行则换一个 deep link scheme 强制回主界面
+/// v1.4.91: 关闭当前浮层面板（评论区等 overlay）。评论面板打开后无关闭机制，会遮挡 tab bar → go_home 失效、设备困死。
+- (NSDictionary *)_performCloseOverlay {
+    [self _logStep:@"close_overlay"];
+    @try {
+        if ([[self detectCurrentPage] isEqualToString:@"comment"]) {
+            return [self _closeCommentPanel];
+        }
+    } @catch (NSException *e) {
+        return @{@"status": @"failed", @"message": [NSString stringWithFormat:@"关闭面板异常: %@", e.reason]};
+    }
+    return @{@"status": @"success", @"message": @"当前无浮层面板或已关闭"};
+}
+
+/// 关闭评论面板：优先点右上角 "Close comment section" 按钮（实测屏内 y=219，不被键盘遮挡）；
+/// 兜底点 mask（"Close keyboard"）收键盘再点关面板；最后验证页面离开 comment。
+- (NSDictionary *)_closeCommentPanel {
+    @try {
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        // 1. 主方案：点评论区右上角关闭按钮
+        UIButton *closeBtn = [self _findButtonWithAnyLabel:@[@"Close comment section", @"Close comment"]
+                                                    inView:XN_ActiveWindow()];
+        if (closeBtn) {
+            CGPoint p = [closeBtn.superview convertPoint:closeBtn.center toView:nil];
+            if (p.x > 0 && p.x < screen.width && p.y > 0 && p.y < screen.height) {
+                [self _safeTapAtPoint:p];
+                [NSThread sleepForTimeInterval:1.2];
+                if (![[self detectCurrentPage] isEqualToString:@"comment"]) {
+                    return @{@"status": @"success", @"message": @"评论面板已关闭"};
+                }
+            }
+        }
+        // 2. 兜底：点 mask 收键盘 + 关面板（点两次）
+        __strong UIView *mask = nil;
+        [self _findVisibleViewWithAccId:@"CommentInputMaskViewComponent"
+                                 inView:XN_ActiveWindow() screen:screen depth:0 result:&mask];
+        if (mask) {
+            CGPoint p = [mask.superview convertPoint:mask.center toView:nil];
+            [self _safeTapAtPoint:p];
+            [NSThread sleepForTimeInterval:0.6];
+            [self _safeTapAtPoint:p];
+            [NSThread sleepForTimeInterval:1.0];
+        }
+        if ([[self detectCurrentPage] isEqualToString:@"comment"]) {
+            return @{@"status": @"failed", @"message": @"评论面板关闭失败"};
+        }
+        return @{@"status": @"success", @"message": @"评论面板已关闭"};
+    } @catch (NSException *e) {
+        return @{@"status": @"failed", @"message": [NSString stringWithFormat:@"关闭面板异常: %@", e.reason]};
+    }
+}
+
 - (BOOL)_gotoHomeFeed {
+    // v1.4.91: 先关浮层（评论区等 overlay 会遮挡 tab bar → 先关面板再点 tab）
+    if ([[self detectCurrentPage] isEqualToString:@"comment"]) {
+        [self _closeCommentPanel];
+        [NSThread sleepForTimeInterval:0.8];
+    }
     // deep link 候选（TikTok 深链需特定 path 才有路由；裸 scheme 无路由被忽略，逐个试）
     NSArray<NSString *> *schemes = @[
         @"snssdk1233://",

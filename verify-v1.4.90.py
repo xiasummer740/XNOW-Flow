@@ -154,7 +154,8 @@ def t_comment():
     scan, err = get_scan()
     if err:
         return ("❌", err)
-    labels = [e.get("label", "") for e in scan.get("elements", []) if e.get("label")]
+    # ⚠️ 字段名修复：ui-scan 元素用 acc_label（2026-08-15 实测），旧代码读 label 恒空 → 误报失败
+    labels = [e.get("acc_label", "") for e in scan.get("elements", []) if e.get("acc_label")]
     has_comment_ui = any(any(k in lb for k in ("评论", "发送", "Comment", "Reply", "留言")) for lb in labels)
     return ("✅" if has_comment_ui else "❌",
             f"打开评论面板后找到评论UI={'是' if has_comment_ui else '否'}，元素{scan.get('count')}个")

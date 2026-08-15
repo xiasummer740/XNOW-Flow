@@ -22,10 +22,11 @@
 
 | 状态 | 问题 | 来源 | 上次更新 |
 |------|------|------|---------|
-| 待修 | **search_keyword 卡死拖垮设备（根因=主线程嵌套 dispatch_sync 自锁）**：v1.4.89 命令级超时看门狗防住了命令队列阻塞，但 **`_performSearchKeyword` 外层 dispatch_sync(main) 内调 `_performOpenSearch`（内部又 dispatch_sync(main)）→ 主线程自锁** → poll 定时器(main queue)停 + completion(main queue)不执行 → 设备离线。同类第二处：`_performCollectFans`/`_performCollectVideos` 外层 dispatch_sync(main) 内调 `_performOpenProfile`（内部又 dispatch_sync(main)）。两处均已加 isMainThread 保护（v1.4.90 待装机复验） | 2026-08-15 真机 | 2026-08-15 |
-| 已修待验 | **远程导航全失效**：v1.4.89 ①头像改 AWEStoryAvatarButton 类查找+屏内可见过滤+正确右上坐标(0.93,0.42) ②_openTab 改真touch ③open_profile 深链+头像双通道；含 v1.4.90 _performOpenProfile 主线程保护 | 2026-08-15 真机 | 2026-08-15 |
-| 已修待验 | **评论按钮按到屏幕外**：v1.4.89 评论相关3处改 _findVisibleViewWithAccId 屏内过滤 | 2026-08-15 真机 | 2026-08-15 |
-| 已修待验 | **任务状态全部误报**：后端已上线(2026-08-15 12:26)，实测部署后下发 ui_scan→任务92 done/100分(旧代码89/90/91全failed对照)；task_engine 远程指令不再判失败+WS结果回填 | 2026-08-15 真机 | 2026-08-15 |
+| 已验证 | **search_keyword 卡死拖垮设备（根因=主线程嵌套 dispatch_sync 自锁）**：v1.4.90 isMainThread 保护生效，**真机实测通过**（2026-08-15 14:30 search_keyword 下发→2s 内完成返回 success→22s 后设备仍响应+check_health 可再下发，死锁彻底解除） | 2026-08-15 真机 | 2026-08-15 |
+| 部分验证 | **远程导航全失效**：v1.4.89/90 修复后命令**不崩溃、设备稳定**（✅ 死锁维度），但 **⚠️ 真实导航仍受限于 overlay：评论区打开后键盘弹起遮 tab bar，go_home/go_back/deep link 全部无法回 feed，设备困死在评论区**（v1.4.90 实测，见下条新发现）。feed 内 go_home 点击 Home tab isSelected=False（模拟触摸不触发 UITapGestureRecognizer），只是设备本就在 feed 才"看起来成功" | 2026-08-15 真机 | 2026-08-15 |
+| 待修 | **评论区 overlay 无法关闭 → 设备困死**（v1.4.90 新发现）：_performComment 打开评论面板后无关闭机制；面板弹键盘遮 tab bar，go_home/go_back/snssdk1233://feed 深链均无效。复验脚本 t_navigation "4连pass"是假阳性（设备当时本就在 feed）。修复方向：① _performComment 完成后主动关面板（点 Close 按钮/下滑）② _gotoHomeFeed 开头先关 overlay 再点 tab | 2026-08-15 真机 | 2026-08-15 |
+| 已验证 | **评论按钮按到屏幕外**：v1.4.89 屏内过滤生效，**真机实测通过**（2026-08-15 14:29 comment 命令点击 AWEFeedVideoButton 命中评论区，面板打开，Add comment/Post comment/Read 13 comment replies 等控件全部屏内可见）。注：复验脚本曾误报失败（字段读 label 实为 acc_label，已修脚本） | 2026-08-15 真机 | 2026-08-15 |
+| 已验证 | **任务状态全部误报**：后端已上线(2026-08-15 12:26)，实测部署后下发 ui_scan→任务92 done/100分(旧代码89/90/91全failed对照)；task_engine 远程指令不再判失败+WS结果回填。**v1.4.90 复验**：check_health 下发返回 `{'status':'active','health_score':100}`，设备状态正常回传（复验脚本只验设备响应，done/failed 回填见 92 号对照） | 2026-08-15 真机 | 2026-08-15 |
 | 已验证 | home 误判 live：首页 feed 直播预览容器不再误判直播间（真实 feed 返回 home 菜单正确）| 2026-08-15 真机 | 2026-08-15 |
 | 已验证 | 点赞 like 真机成功：state_diag acc_label='Video liked' | 2026-08-15 真机 | 2026-08-15 |
 | 已验证 | open_search 真机成功 + scroll_down 真机成功 | 2026-08-15 真机 | 2026-08-15 |

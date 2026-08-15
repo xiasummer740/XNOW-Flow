@@ -97,6 +97,9 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 
     // 粉丝列表自动关注 (v1.4.85) — 在粉丝/关注列表循环点右侧 Follow 按钮 → 上滑 → 再点，单次上限200自动停
     CommandActionAutoFollowList,
+
+    // 关闭浮层面板 (v1.4.91) — 关闭评论区等 overlay（评论面板打开后无关闭机制，会遮挡 tab bar 导致 go_home 失效、设备困死）
+    CommandActionCloseOverlay,
 };
 
 @interface CommandEngine : NSObject
