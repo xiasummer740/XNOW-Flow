@@ -39,13 +39,48 @@
 ## 首页菜单 bug 根因（不是配置问题！）
 祥哥报"首页浮窗菜单不对"。查证：**手机上是 8/12 旧包，缺 8/14 的页面判定修复**（git 提交 c0c8164/0e280b6/c7458a4：隐藏视图过滤、LIVE 徽章防误判、私信标题限位）。识别逻辑在 iOS 端 `CommandEngine.m _detectPageOnMain`（优先级 live>comment>inbox>profile>home）+ `XNFloatingPanel.m _buildPageMenu`（live/inbox/profile/comment 专属，其余→`_mainMenu` 13项）。
 
-## 待办（新对话接力点）
-1. **重打包**（祥哥之前说"等一等"，现在识别全完了可推进）：一次打包带上
-   - ① 8/14 页面判定修复（首页菜单恢复 13 项完整）
-   - ② 截图上传（`_performScreenshot` CommandEngine.m:1187 目前只存相册，需加 [XNURLProtocol sendMessage] 上报 → 电脑能看真机画面）
-   - ③ 各页专属菜单（首页=完整13项，其它页=祥哥定的专属功能；**recorder 录制页菜单祥哥还没定**）
-2. 发版门禁：攒批一次发（页面修复+截图+菜单）→ CI `build-dylib.yml`（push ios-plugin/** 触发 macOS 构建）→ 装机验证
-3. 记忆/文档：这次核心认知（HTTP轮询拓扑/识别签名/首页bug根因）已同步到 project-xnow-flow-setup.md
+## 本次接力完成（2026-08-15，祥哥拍板后全做）
+- iOS `_detectPageOnMain` 补 recorder/friends/search 三页识别 → **8页**（live>comment>recorder>friends>search>inbox>profile>home）
+  - recorder: `recorderPage*`/`recordPage*` acc_id 前缀（新增 `_hasAccessibilityIdentifierPrefix:inView:depth:`）
+  - friends: TTKFriendsFeedTableViewCell 专属 cell（必须先于 search 判，朋友页也有 AWESearchBar）
+  - search: AWESearchBar + TTKSearch* 双命中，防首页/朋友页误判
+- 浮窗菜单 `_buildPageMenu`: search/friends→基础3项；recorder→自动发视频(post_video)+基础3项
+- 截图上报闭环（祥哥确认"对，就这么干"）：`_performScreenshot` 缩放720px→JPEG 0.6→base64→`[XNURLProtocol sendMessage]`→云端 `_last_screenshot` 缓存→`GET /devices/{id}/screenshot/`→桥接 `/api/screenshot`→live_scan.html「截图查看真机画面」按钮
+- CI `build-dylib.yml` 构建成功（xnower-dylib artifact）
+- 云端 ws.py/device_commands.py 已部署 + `systemctl restart xnow-backend` + 新接口验证通过
+- 本地桥接已重启（Stop-Process + Start-Process 全路径）
+- 已打包 `TikTok_XNOW_v1.4.84_BH.ipa`（build-bh-ipa.py，DEFLATED 压缩）
+  - ⚠️ 版本号教训：先打了 v1.4.77，但 VPS static 已有 v1.4.79-83（**文档只记到 v1.4.76，VPS 实际已到 1.4.83**，多会话版本漂移）→ 重打 v1.4.84。判断版本源看 **VPS `/opt/xnow-flow/static/` 最高版本 + 1**，别信文档。另：VPS 上 1.4.79-83 全是 8/14 页面修复**之前**构建的，都缺页面判定修复。
+
+## 本次接力再追加（2026-08-15，fan_list 识别 + 自动关注）
+### 7. 粉丝/关注列表页识别（第9页）
+- 祥哥在粉丝列表页点扫描 → 识别为"未知页面"。真机扫描 `fan_list_scan.json`（287元素）确认 5 类锚点**只在本页出现**（7 份存档零碰撞）：
+  | 锚点 | 权重 | 说明 |
+  |---|---|---|
+  | TTKStoryAvatarView | 3 | 每行故事头像（列表唯一） |
+  | TTKRelationButton | 2 | 每行关注/加好友按钮 |
+  | AWEUIListCellActionButton | 2 | 每行操作按钮 |
+  | GBLFeedStaticLiveMarkView | 2 | 每行 LIVE 标（无"LIVE/直播"文字，不触发 live 页） |
+  | AWESlidingTabButton | 2 | 顶部 粉丝/关注 滑动 tab |
+  - 得分 11/3。**TTKRelationButton 给 2 不给 3**：其它用户主页也有单个关注按钮，命中(2)<3 不会误判；列表页 5 类全中=11。
+- **iOS `_detectPageOnMain`** 优先级更新为 `live>comment>recorder>friends>search>fanlist>inbox>profile>home`，fanlist 检测 = `TTKStoryAvatarView + TTKRelationButton` **双命中**（防其它用户主页误判——那页只有一个 TTKRelationButton）。
+- **必须排在 profile 之前**：profile 签名含"作品/粉丝/获赞/关注"后缀 label，粉丝列表顶部"粉丝/关注"滑动 tab 会触发。
+- 本地识别器验证：`fan_list` 11/3 ✓，6 份存档零回归。**改 page_recognizer.py 后 bridge 已重启生效**（复测 fan_list_scan.json=fan_list 11/3）。
+
+### 8. 自动关注指令 auto_follow_list（v1.4.85）
+- 祥哥需求：粉丝列表点"自动关注" → 循环点右侧 Follow → 上滑 → 再点 → **单次上限200** → 自动停；**日志显示行左侧用户名**。
+- 日志格式对齐祥哥示例：`正在关注:<label>` / `关注用户[<用户名>][成功|失败]` / `关注异常[<原因>]`（全仓+git历史搜"正在关注/关注用户/关注异常"均无 → 是外部工具格式，全新实现）。
+- 新增 `CommandActionAutoFollowList` + 指令名 `auto_follow_list`，`XNFloatingPanel` fanlist 菜单"自动关注"。
+- **滚动用 `_scrollTopListUp` 程序化 setContentOffset**（`_safeScrollBy:` 只对 feed 生效，非 feed 页 no-op；真实滑动手势注入被 `#if 0` 禁用防 TikTok 崩溃）。
+- **用户名提取必须 `dispatch_sync(main)`**（走 UIKit 遍历 label）——最早在 execQueue 直接调会线程错。
+- 循环停止条件：`followed>=limit(200) / emptyRounds>=3（空滚3次到底）/ failStreak>=5（连续失败5次）`。每 10 个成功打 `📊 已关注 %d/%d`。
+- 验证逻辑：点击后 `_buttonStateText:` 取按钮文案，含 已关注/互相关注/关注中/Following/Unfollow/已连接 等 → 成功；无文案 best-effort 判成功。
+
+## 待办（下个接力点）
+1. **装机验证 v1.4.85**（替代 v1.4.84，合并 8页+截图+fanlist+自动关注）：① 9 页浮窗菜单（尤其 search/friends/recorder/fanlist 四新页 + 首页完整13项） ② 截图上报（浏览器 http://127.0.0.1:8091/ 点「📸 截图查看真机画面」应显示真机画面） ③ 粉丝列表点"自动关注"：日志显示左侧用户名、循环点 Follow→上滑→再点、200 自动停
+2. 验证通过 → 更新 ISSUES.md（「页面感知浮窗菜单真机验证」+「粉丝列表自动关注」两条 待修→已验证），其余待修项顺带真机验证
+3. 发版门禁：ISSUES.md 全表「已验证」才发版；此批=页面修复+截图+菜单+fanlist+自动关注（安全第二批 TLS/secret header 等4项待修未含）
+4. ⚠️ 上次 v1.4.84 上传被 hold（被 v1.4.85 取代），构建产物清理：删本地 `TikTok_XNOW_v1.4.84_BH.ipa`
 
 ## 连接信息
 - 云端 192.129.210.52:8000（域名 yunkong.taikon.top 走 Cloudflare 同源）
