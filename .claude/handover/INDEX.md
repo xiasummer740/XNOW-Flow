@@ -19,6 +19,7 @@
 
 ## 2026-08-15
 - [手机当前页实时识别 → 13页+自动关注+live修复](2026-08-14-page-recognition.md) — 同文件追加：fan_list第9页+auto_follow_list指令+home误判live根因(直播预览容器TTKLive/AWELive子串误伤，换IESLive专属锚点)+签名库扩13页(comment/live/edit_profile/chat/settings等)，待v1.4.86装机验证
+- [v1.4.88 全自动真机验证](2026-08-15-v1.4.88-verification.md) — 命令通道/点赞/搜索/滚动/页面检测✅；4个确认bug(search_keyword卡死拖垮设备🔴、远程导航全失效🔴、评论按屏幕外🟠、任务状态全误报🟠)；采集=0根因=导航坏；证据=VERIFY-REPORT-2026-08-15.md，待授权修P0/P1
 
 ## 历史
 - [v1.4.35 (2026-08-07)](2026-08-07-v1.4.35.md) — 账号检测修复、触摸注入、前端合并
