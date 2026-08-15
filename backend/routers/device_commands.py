@@ -122,20 +122,35 @@ async def report_account(device_id: str, data: Dict[str, Any]):
 
 @router.get("/devices/online/")
 def get_online_devices(
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """获取所有在线设备"""
-    return {
-        "devices": manager.get_online_devices(),
-    }
+    """获取所有在线设备（按租户过滤，admin 看全部）"""
+    from tenant import tenant_scope
+
+    online_ids = manager.get_online_devices()
+    if not online_ids:
+        return {"devices": []}
+    query = db.query(DeviceBinding).filter(DeviceBinding.name.in_(online_ids))
+    scope = tenant_scope(DeviceBinding, current_user)
+    if scope is not None:
+        query = query.filter(scope)
+    owned = {d.name for d in query.all()}
+    return {"devices": [did for did in online_ids if did in owned]}
 
 
 @router.get("/devices/{device_id}/ui-scan/")
 def get_last_ui_scan(
     device_id: str,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """读取设备最近一次 ui_scan 上报结果（内存缓存，页面识别用）"""
+    from tenant import resolve_owned_device
+    device = resolve_owned_device(db, device_id, current_user)
+    if not device:
+        raise HTTPException(status_code=404, detail="设备不存在")
+
     from routers.ws import _last_ui_scan
 
     data = _last_ui_scan.get(device_id)
@@ -147,9 +162,15 @@ def get_last_ui_scan(
 @router.get("/devices/{device_id}/screenshot/")
 def get_last_screenshot(
     device_id: str,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """读取设备最近一次截图上报（内存缓存，电脑端查看真机画面）"""
+    from tenant import resolve_owned_device
+    device = resolve_owned_device(db, device_id, current_user)
+    if not device:
+        raise HTTPException(status_code=404, detail="设备不存在")
+
     from routers.ws import _last_screenshot
 
     data = _last_screenshot.get(device_id)
