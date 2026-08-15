@@ -1287,8 +1287,8 @@ static NSArray *kNurtureComments = @[
 
 - (NSDictionary *)_performCollectFans:(int)count {
     __block NSMutableArray *fans = [NSMutableArray array];
-    __block BOOL done = NO;
 
+    [self _logStep:@"collect_fans:open_profile"];
     dispatch_sync(dispatch_get_main_queue(), ^{
         // 1. 打开当前用户的个人主页（点头像）
         [self _performOpenProfile:@""];
@@ -1297,6 +1297,7 @@ static NSArray *kNurtureComments = @[
     [NSThread sleepForTimeInterval:3.0];
 
     // 2. 点击粉丝列表按钮
+    [self _logStep:@"collect_fans:tap_fans_btn"];
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIButton *fansBtn = [self _findButtonWithAnyLabel:@[@"fans", @"Fans", @"followers",
                                                              @"粉丝", @"Followers"]
@@ -1309,16 +1310,19 @@ static NSArray *kNurtureComments = @[
     [NSThread sleepForTimeInterval:2.0];
 
     // 3. 滚动采集粉丝列表
+    // ⚠️ 不能用 _performSwipeUp（→_safeScrollBy 只在 feed 页生效，列表页 no-op），
+    // 用 _scrollTopListUp 程序化 setContentOffset（同 auto_follow，已验证列表页可滚）。
     int collected = 0;
     int emptyScrolls = 0;
     while (collected < count && emptyScrolls < 5) {
         // 通过 accessibility 采集当前可见的粉丝条目
         [self _collectVisibleFans:fans limit:count];
         int before = (int)fans.count;
+        [self _logStep:[NSString stringWithFormat:@"collect_fans:round=%d", before]];
 
-        // 下滑加载更多
+        // 列表上滑加载更多
         dispatch_sync(dispatch_get_main_queue(), ^{
-            [self _performSwipeUp];
+            [self _scrollTopListUp];
         });
         [NSThread sleepForTimeInterval:1.5];
 
@@ -1330,6 +1334,7 @@ static NSArray *kNurtureComments = @[
         collected = (int)fans.count;
     }
 
+    [self _logStep:[NSString stringWithFormat:@"collect_fans:done=%d", collected]];
     return @{
         @"status": @"success",
         @"message": [NSString stringWithFormat:@"采集粉丝 %lu 人", (unsigned long)fans.count],

@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
+#include <execinfo.h>
 
 // ======== 崩溃诊断 ========
 // 未捕获 ObjC 异常 → 写文件；SIGSEGV/SIGABRT → 写标记文件。下次启动上报后端。
@@ -28,6 +29,30 @@ static NSString *XN_CrashDir(void) {
     NSString *home = NSHomeDirectory();
     if (home.length == 0) return NSTemporaryDirectory();
     return [home stringByAppendingPathComponent:@"Documents"];
+}
+
+// 信号处理器可用的崩溃写入目录（async-signal-safe，不能调 ObjC）。
+// ⚠️ 不能用 getenv("HOME")：注入环境下 HOME 未必等于沙盒路径，导致信号文件写丢、
+//    上报端(枚举 NSHomeDirectory())找不到 → 崩溃上报永远只有 last_action。启动时缓存真实路径。
+static char g_crash_write_dir[512] = {0};
+
+static void XN_InitCrashWriteDir(void) {
+    NSString *dir = XN_CrashDir();
+    const char *utf8 = dir.UTF8String;
+    if (utf8) {
+        strncpy(g_crash_write_dir, utf8, sizeof(g_crash_write_dir) - 1);
+        g_crash_write_dir[sizeof(g_crash_write_dir) - 1] = '\0';
+    }
+}
+
+static const char *XN_SignalName(int sig) {
+    switch (sig) {
+        case SIGSEGV: return "SIGSEGV";
+        case SIGABRT: return "SIGABRT";
+        case SIGBUS:  return "SIGBUS";
+        case SIGILL:  return "SIGILL";
+        default:      return "OTHER";
+    }
 }
 
 static void XN_WriteCrashFile(NSString *name, NSString *content) {
@@ -47,19 +72,20 @@ static void XN_UncaughtExceptionHandler(NSException *exception) {
 }
 
 static void XN_SignalHandler(int sig) {
-    // 写标记文件（优先 HOME/Documents，回退 TMPDIR——HOME 在注入环境下可能取不到）
-    const char *home = getenv("HOME");
-    const char *tmp = getenv("TMPDIR");
-    char path[600];
-    if (home) {
-        snprintf(path, sizeof(path), "%s/Documents/xn_crash_sig_%d", home, sig);
+    // 写标记文件到启动时缓存的沙盒目录（回退 getenv HOME——与旧逻辑一致兜底）
+    const char *dir = g_crash_write_dir[0] ? g_crash_write_dir : getenv("HOME");
+    if (dir && dir[0]) {
+        char path[600];
+        snprintf(path, sizeof(path), "%s/xn_crash_sig_%d", dir, sig);
         int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        if (fd >= 0) { const char *m = "signal"; write(fd, m, strlen(m)); close(fd); }
-    }
-    if (tmp) {
-        snprintf(path, sizeof(path), "%s/xn_crash_sig_%d", tmp, sig);
-        int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        if (fd >= 0) { const char *m = "signal"; write(fd, m, strlen(m)); close(fd); }
+        if (fd >= 0) {
+            dprintf(fd, "signal %d (%s)\n", sig, XN_SignalName(sig));
+            // 尽量带出调用栈（async-signal-safe；注入符号可能解析不全，但底层地址仍有价值）
+            void *frames[32];
+            int n = backtrace(frames, 32);
+            if (n > 0) backtrace_symbols_fd(frames, n, fd);
+            close(fd);
+        }
     }
     // 恢复默认处理并重抛信号，确保进程真正终止（不吞崩溃）
     signal(sig, SIG_DFL);
@@ -215,6 +241,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     NSLog(@"[XNOWER] 🚀 start() 已执行 — dylib 加载成功");
 
     // 崩溃诊断：捕获未处理异常 + 段错误，写文件下次启动上报
+    XN_InitCrashWriteDir();  // 先缓存沙盒路径，信号处理器才能写到上报端能枚举到的地方
     NSSetUncaughtExceptionHandler(&XN_UncaughtExceptionHandler);
     signal(SIGSEGV, XN_SignalHandler);
     signal(SIGABRT, XN_SignalHandler);
