@@ -23,6 +23,7 @@ PAGE_TITLES = {
     "profile": "个人主页（Profile）",
     "edit_profile": "编辑个人资料（Edit Profile）",
     "inbox": "收件箱（Inbox）",
+    "chat": "私信对话页（Chat）",
     "search": "搜索页（Search）",
     "friends": "朋友页（Friends）",
     "fan_list": "粉丝/关注列表（Fans）",
@@ -51,6 +52,13 @@ PAGE_SIGNATURES = {
         "HTSLive4LayerContainerView": 2,    # 直播间四层容器
         "GBLRoomProfileView": 2,            # 主播信息卡（仅直播间）
         "GBLGeneralFollowButton": 1,        # 主播关注按钮
+    },
+    "chat": {
+        # 私信对话页（真机 2026-08-15 确认）：inbox 收件箱(TTKInbox*)与对话页(AWEIM*/TikTokIMImpl*)零重叠
+        "AWEIMMessageListTableView": 3,     # 消息列表（对话页专属）
+        "TikTokIMImpl.ChatActionBarIconCell": 3,    # 聊天动作栏按钮
+        "AWEIMMessageStateIconView": 2,     # 消息状态图标
+        "AWEIMAvatarLoadingView": 2,        # 头像加载
     },
     "edit_profile": {
         # 编辑个人资料（真机 2026-08-15 确认）：我的主页 → 编辑资料。TUX 表单控件密集 + 头像进度横幅专属。
