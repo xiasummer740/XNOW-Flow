@@ -20,6 +20,7 @@ PAGE_TITLES = {
     "feed": "Feed 首页（For You）",
     "live": "直播间（Live）",
     "profile": "个人主页（Profile）",
+    "edit_profile": "编辑个人资料（Edit Profile）",
     "inbox": "收件箱（Inbox）",
     "search": "搜索页（Search）",
     "friends": "朋友页（Friends）",
@@ -40,6 +41,13 @@ PAGE_SIGNATURES = {
         "HTSLive4LayerContainerView": 2,    # 直播间四层容器
         "GBLRoomProfileView": 2,            # 主播信息卡（仅直播间）
         "GBLGeneralFollowButton": 1,        # 主播关注按钮
+    },
+    "edit_profile": {
+        # 编辑个人资料（真机 2026-08-15 确认）：我的主页 → 编辑资料。TUX 表单控件密集 + 头像进度横幅专属。
+        "TUXToggle": 3,                     # 开关控件（8个，表单页特征）
+        "TUXRadio": 3,                      # 单选控件（8个）
+        "TUXAlertBadge": 2,                 # 徽章控件（8个）
+        "TTKSocialAvatarProgressBannerView": 2,  # 社交头像进度横幅（编辑资料页专属）
     },
     "feed": {
         "top_tabs_recomend": 3,                # For You 顶部标签（只在 feed）
