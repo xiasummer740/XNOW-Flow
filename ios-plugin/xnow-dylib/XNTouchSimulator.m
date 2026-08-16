@@ -171,7 +171,20 @@
     } @catch (NSException *e) {
         NSLog(@"[XNTouch] hitTest error: %@", e.reason);
     }
-    [self _reportTapDiagnostic:point view:view];      // 诊断上报命中的控件
+    [self tapView:view atPoint:point window:window reportDiagnostic:YES];
+}
+
++ (void)tapView:(UIView *)view atPoint:(CGPoint)point {
+    if (![NSThread isMainThread]) {
+        dispatch_sync(dispatch_get_main_queue(), ^{ [self tapView:view atPoint:point]; });
+        return;
+    }
+    [self tapView:view atPoint:point window:XN_ActiveWindow() reportDiagnostic:YES];
+}
+
++ (void)tapView:(UIView *)view atPoint:(CGPoint)point window:(UIWindow *)window reportDiagnostic:(BOOL)diag {
+    if (!view || !window) return;
+    if (diag) [self _reportTapDiagnostic:point view:view];      // 诊断上报目标控件
 
     // 若是 UIControl（按钮），直接触发其 action（比合成触摸更可靠，不依赖手势识别）
     if ([view isKindOfClass:[UIControl class]]) {

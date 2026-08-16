@@ -1405,7 +1405,12 @@ static NSArray *XN_NurtureComments(void) {
                                                   inView:XN_ActiveWindow() depth:0];
         }
         if (avatarView) {
-            [self _safeTapAtPoint:[avatarView.superview convertPoint:avatarView.center toView:nil]];
+            CGPoint avatarCenter = [avatarView.superview convertPoint:avatarView.center toView:nil];
+            // ⚠️ v1.4.99: 头像不在 hitTest 响应链（实测 hitTest 返回父级 TTKFeedInteractionBackgroundView），
+            //    tapAtPoint 按点命中不到 → UIControl action 分支永不触发 → 点头像无效（open_profile 导航失败）。
+            //    直接对头像 view 触发：UIControl action + 手势 state=Ended + 合成触摸（touch.view=头像），
+            //    绕过 hitTest，让 TikTok 头像 tap handler 命中。
+            [XNTouchSimulator tapView:avatarView atPoint:avatarCenter];
         } else {
             // 固定坐标兜底仅当在 feed 页（避免非 feed 页点错控件崩溃）
             __block UIScrollView *feedScroll = nil;

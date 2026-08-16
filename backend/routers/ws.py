@@ -149,7 +149,9 @@ def _mark_task_from_result(device_id: str, data: dict):
             .first()
         )
         if task:
-            ok = status == "success"
+            # check_health 设备返回 status=active（健康）→ 视同成功；
+            # 其余命令 status=success 才算成功。
+            ok = status in ("success", "active")
             task.status = "done" if ok else "failed"
             task.progress = 100
             task.finished_at = datetime.utcnow()

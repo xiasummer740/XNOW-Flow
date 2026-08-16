@@ -11,6 +11,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// 真实模拟一次点击（touchesBegan → touchesEnded）
 + (void)tapAtPoint:(CGPoint)point;
 
+/// 对指定 view 直接触发一次点击（绕过 hitTest：TikTok 部分按钮被父容器拦截，按点命中不到）。
+/// 与 tapAtPoint: 同样走 UIControl action + 手势 state=Ended + 合成触摸（touch.view=该 view）三重机制。
++ (void)tapView:(UIView *)view atPoint:(CGPoint)point;
+
 /// 真实模拟一次滑动（touchesBegan → touchesMoved×N → touchesEnded）
 + (void)swipeFrom:(CGPoint)from to:(CGPoint)to;
 
