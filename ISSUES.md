@@ -13,8 +13,8 @@
 | 已验证 | 设备鉴权收紧：UUID 校验 + 恒定时间比较 + 关迁移期放行 | 2026-08-11 全面审查 | 2026-08-11 |
 | 待修 | 无 TLS 明文传输（uvicorn:8000 公网明文）→ 需 nginx 443 + 设备改 https（第二批） | 2026-08-11 全面审查 | 2026-08-11 |
 | 待修 | 设备 secret 走 URL 明文进日志 → 改 header 传输（第二批，需设备端改造+装机） | 2026-08-11 全面审查 | 2026-08-11 |
-| 待修 | batch_login 把解密后账号凭证明文下发 → 限权/TLS 保护（第二批） | 2026-08-11 全面审查 | 2026-08-11 |
-| 待修 | get_online_devices 无租户过滤，跨租户泄露设备状态 | 2026-08-11 全面审查 | 2026-08-11 |
+| 待修 | batch_login 把解密后账号凭证明文下发 → 明文传输风险归并「无 TLS」项（已做限权 ensure_owned，凭证仅发往用户自有设备；TLS 443 上线后消除） | 2026-08-11 全面审查 | 2026-08-16 |
+| 已验证 | get_online_devices 无租户过滤 → 已加 tenant_scope 过滤（device_commands.py:135-140），已部署 VPS 验证存在 | 2026-08-11 全面审查 | 2026-08-16 |
 
 ## 🟠 功能（设备端待装机验证）
 
@@ -23,7 +23,7 @@
 | 状态 | 问题 | 来源 | 上次更新 |
 |------|------|------|---------|
 | 已验证 | **search_keyword 卡死拖垮设备（根因=主线程嵌套 dispatch_sync 自锁）**：v1.4.90 isMainThread 保护生效，**真机实测通过**（2026-08-15 14:30 search_keyword 下发→2s 内完成返回 success→22s 后设备仍响应+check_health 可再下发，死锁彻底解除） | 2026-08-15 真机 | 2026-08-15 |
-| 部分验证 | **远程导航全失效**：v1.4.89/90 修复后命令**不崩溃、设备稳定**（✅ 死锁维度），但 **⚠️ 真实导航仍受限于 overlay：评论区打开后键盘弹起遮 tab bar，go_home/go_back/deep link 全部无法回 feed，设备困死在评论区**（v1.4.90 实测，见下条新发现）。feed 内 go_home 点击 Home tab isSelected=False（模拟触摸不触发 UITapGestureRecognizer），只是设备本就在 feed 才"看起来成功" | 2026-08-15 真机 | 2026-08-15 |
+| 部分验证 | **远程导航**：评论区困死已修（v1.4.97b close_overlay 物理移除面板，装机验证 ✅）；**feed 点头像 open_profile 失效**（hitTest 被父容器 TTKFeedInteractionBackgroundView 拦截，AWEStoryAvatarButton 不在响应链）→ v1.4.99 新增 XNTouchSimulator tapView: 直接对头像触发（绕过 hitTest），待装机验证 | 2026-08-15 真机 | 2026-08-16 |
 | 待修 | **评论区 overlay 无法关闭 → 设备困死**（v1.4.90 新发现）：_performComment 打开评论面板后无关闭机制；面板弹键盘遮 tab bar，go_home/go_back/snssdk1233://feed 深链均无效。复验脚本 t_navigation "4连pass"是假阳性（设备当时本就在 feed）。修复方向：① _performComment 完成后主动关面板（点 Close 按钮/下滑）② _gotoHomeFeed 开头先关 overlay 再点 tab | 2026-08-15 真机 | 2026-08-15 |
 | 已验证 | **评论按钮按到屏幕外**：v1.4.89 屏内过滤生效，**真机实测通过**（2026-08-15 14:29 comment 命令点击 AWEFeedVideoButton 命中评论区，面板打开，Add comment/Post comment/Read 13 comment replies 等控件全部屏内可见）。注：复验脚本曾误报失败（字段读 label 实为 acc_label，已修脚本） | 2026-08-15 真机 | 2026-08-15 |
 | 已验证 | **任务状态全部误报**：后端已上线(2026-08-15 12:26)，实测部署后下发 ui_scan→任务92 done/100分(旧代码89/90/91全failed对照)；task_engine 远程指令不再判失败+WS结果回填。**v1.4.90 复验**：check_health 下发返回 `{'status':'active','health_score':100}`，设备状态正常回传（复验脚本只验设备响应，done/failed 回填见 92 号对照） | 2026-08-15 真机 | 2026-08-15 |
@@ -41,7 +41,7 @@
 | 待修 | 回关自动私信真机验证：关注成功后自动私信(取话术) | 2026-08-12 开发 | 2026-08-12 |
 | 待修 | 统一素材库/视频管理/广告管理页真机验证（后端已上线） | 2026-08-12 开发 | 2026-08-12 |
 | 待修 | 设备端 poll 静默失败无重连 → 掉线后永不恢复（昨晚 go_home 后掉线根因，需装机新版） | 2026-08-10 真机 | 2026-08-11 |
-| 待修 | 共享 forward session 被 finishTasksAndInvalidate 销毁（copy-paste 错误，潜在崩/卡雷） | 2026-08-11 全面审查 | 2026-08-11 |
+| 待修 | 共享 forward session 被 finishTasksAndInvalidate 销毁（copy-paste 错误，潜在崩/卡雷）→ **已修**：XNURLProtocol.m:429 改独立 session 不复用共享，待装机验证 | 2026-08-11 全面审查 | 2026-08-16 |
 | 待修 | 授权检查把网络瞬时失败当未激活 → 清激活停轮询（潜在雷） | 2026-08-11 全面审查 | 2026-08-11 |
 | 待修 | v1.4.76 follow 验证：state_diag 应显示 "Following X"（上次设备掉线未完成） | 2026-08-10 真机 | 2026-08-11 |
 | 待修 | 硬件 UDID(IOPlatformUUID) 能否拿到 + 激活是否稳定 | 2026-08-10 接力 | 2026-08-11 |
