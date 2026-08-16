@@ -3789,6 +3789,7 @@ static NSArray *XN_NurtureComments(void) {
     __block NSString *panelCls = nil;
     __block BOOL foundBtn = NO;
     __block NSArray<NSString *> *cands = nil;
+    __block UIViewController *foundPanel = nil;
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIButton *btn = [self _findButtonWithAnyLabel:@[@"Close comment section", @"Close comment"]
                                                inView:XN_ActiveWindow()];
@@ -3807,6 +3808,7 @@ static NSArray *XN_NurtureComments(void) {
         }
         if (panel) {
             panelCls = NSStringFromClass(panel.class);
+            foundPanel = panel;
             calledSel = [self _findCloseMethodOn:panel];
             cands = [self _candidateCloseMethodsOn:panel];
             if (calledSel) {
@@ -3830,12 +3832,23 @@ static NSArray *XN_NurtureComments(void) {
         }
     }
 
-    // 【v1.4.97 终极保底】物理移除评论面板视图——不依赖 TikTok 任何内部方法。
-    // 页面检测锚点是类名（AWECommentContainer/CommentListView 等），ui_scan 实证面板根
-    // TTKCommentPanelRootViewComponent 全屏 414x736，视图树里一定存在；找到后 removeFromSuperview，
-    // 锚点随之消失 → detectCurrentPage 不再判 comment → 导航不再困死。比"直接调关闭方法"更可靠：
-    // 不管 TikTok 内部状态机，物理层面把面板移出视图树。
-    BOOL removed = [self _physicallyRemoveCommentPanelView];
+    // 【v1.4.97b 终极保底】物理移除评论面板视图——不依赖 TikTok 任何内部方法。
+    // v1.4.97 实测类名匹配失效：评论面板 VC=TTKCommentPanelViewController 已找到，但评论区真实
+    // 控件类名是 AWECommentListHeaderView / TTKCommentAvatarView 等，匹配列表删到的只是
+    // TikTokCommentImpl label，面板容器没被移除。修复：优先直接移除 VC 的 view 整棵子树
+    // （评论区 UI 一定在它下面，ui_scan 实证控件覆盖 y=198~689），类名匹配只作兜底。
+    BOOL removed = NO;
+    if (foundPanel && foundPanel.view) {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            UIView *pv = foundPanel.view;
+            [pv removeFromSuperview];
+            for (UIView *sub in [pv.subviews copy]) { [sub removeFromSuperview]; }
+        });
+        removed = YES;
+    }
+    if (!removed) {
+        removed = [self _physicallyRemoveCommentPanelView];
+    }
     if (removed) {
         [NSThread sleepForTimeInterval:1.0];
         if (![[self detectCurrentPage] isEqualToString:@"comment"]) {
@@ -3852,34 +3865,35 @@ static NSArray *XN_NurtureComments(void) {
     return @{@"status": @"failed", @"diag": diag};
 }
 
-/// v1.4.97：物理移除评论面板视图（终极保底）。
-/// 递归窗口视图树，找到类名含 CommentPanel/TikTokCommentImpl/Comment 的面板根视图，
-/// removeFromSuperview 直接移出视图树。面板根移除后其整棵子树（评论列表/输入条/X按钮）全部消失，
-/// 页面检测锚点（AWECommentContainer/CommentListView）也随之消失 → detectCurrentPage 不再判 comment。
-/// 必须在主线程调用（UIKit 约束）。
+/// v1.4.97b：物理移除评论面板视图（终极保底，类名匹配兜底版）。
+/// 递归窗口视图树，命中评论区专属类名（ui_scan 实测 AWEComment/TTKComment 前缀 + 旧锚点）即
+/// removeFromSuperview。v1.4.97 教训：类名匹配删到 TikTokCommentImpl label 不生效——评论区
+/// 真实控件类是 AWECommentListHeaderView / TTKCommentAvatarView 等，已全部纳入；且改为遍历
+/// 删除所有命中视图（不 break），而不是只删第一个。必须在主线程调用（UIKit 约束）。
 - (BOOL)_physicallyRemoveCommentPanelView {
     __block BOOL removed = NO;
     dispatch_sync(dispatch_get_main_queue(), ^{
         for (UIWindow *w in [UIApplication sharedApplication].windows) {
             NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithArray:w.subviews];
-            while (stack.count && !removed) {
+            while (stack.count) {
                 UIView *v = stack.lastObject;
                 [stack removeLastObject];
                 NSString *cls = NSStringFromClass(v.class) ?: @"";
-                // 面板根视图（ui_scan 实证）或评论区容器：命中即整棵移除
-                if ([cls containsString:@"CommentPanelRootView"] ||
+                // 评论区专属类：AWEComment* / TTKComment* / CommentList / AWESubCommentFooter 等
+                if ([cls hasPrefix:@"AWEComment"] ||
+                    [cls hasPrefix:@"TTKComment"] ||
+                    [cls hasPrefix:@"AWESubComment"] ||
                     [cls containsString:@"TikTokCommentImpl"] ||
-                    [cls containsString:@"AWECommentContainer"] ||
+                    [cls containsString:@"CommentPanelRootView"] ||
                     [cls isEqualToString:@"CommentListView"] ||
                     [cls isEqualToString:@"AWEBottomComment"] ||
                     [cls containsString:@"CommentContainerView"]) {
                     [v removeFromSuperview];
                     removed = YES;
-                    break;
+                } else {
+                    [stack addObjectsFromArray:v.subviews];
                 }
-                [stack addObjectsFromArray:v.subviews];
             }
-            if (removed) break;
         }
     });
     return removed;
