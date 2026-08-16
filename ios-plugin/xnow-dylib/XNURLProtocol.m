@@ -85,16 +85,11 @@ static volatile CFAbsoluteTime sLastPing = 0;
 /// 通用请求（纯完成回调，无 semaphore）
 + (void)_sendRequest:(NSString *)method path:(NSString *)path body:(NSData *)body
           completion:(void (^)(NSData *data, NSError *error))completion {
-    // 附加设备密钥鉴权
+    // 【v1.4.97 安全修复】设备密钥不再拼进 URL query（server.log/代理会明文记录泄露设备密钥），
+    // 改走 X-Device-Secret 请求头。后端双兼容：header 优先，query 兜底（旧设备/旧后端过渡期）。
     NSString *secret = [self _deviceSecret];
-    NSString *authPath = path;
-    if (secret.length > 0) {
-        authPath = [path containsString:@"?"] ?
-            [NSString stringWithFormat:@"%@&secret=%@", path, secret] :
-            [NSString stringWithFormat:@"%@?secret=%@", path, secret];
-    }
     NSString *urlStr = [NSString stringWithFormat:@"http://%@:%d%@",
-                         XN_BACKEND_HOST, XN_BACKEND_PORT, authPath];
+                         XN_BACKEND_HOST, XN_BACKEND_PORT, path];
     NSURL *url = [NSURL URLWithString:urlStr];
     if (!url) { if (completion) completion(nil, [NSError errorWithDomain:@"XN" code:9 userInfo:nil]); return; }
 
@@ -103,6 +98,9 @@ static volatile CFAbsoluteTime sLastPing = 0;
     if (body) {
         req.HTTPBody = body;
         [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    }
+    if (secret.length > 0) {
+        [req setValue:secret forHTTPHeaderField:@"X-Device-Secret"];
     }
     req.timeoutInterval = 10;
 

@@ -197,21 +197,42 @@
         }
     }
 
-    // 直接触发 view 上所有手势识别器的 target-action（TikTok 按钮多用手势识别器，不响应 sendActions）
-    for (UIGestureRecognizer *gr in view.gestureRecognizers) {
-        @try {
-            NSArray *targets = [gr valueForKey:@"_targets"];
-            for (id t in targets) {
-                id target = [t valueForKey:@"_target"];
-                id actionVal = [t valueForKey:@"_action"];
-                SEL sel = [actionVal isKindOfClass:[NSString class]] ? NSSelectorFromString(actionVal)
-                                                                    : (SEL)(uintptr_t)[actionVal pointerValue];
-                if (sel && target && [target respondsToSelector:sel]) {
-                    [target performSelector:sel withObject:gr];
+    // 直接触发手势识别器的 target-action（TikTok 按钮多用手势识别器，不响应 sendActions）。
+    // ⚠️ v1.4.95 修复：合成触摸走不完手势状态机，TikTok 的 tap handler 普遍 if(state==Ended) 才执行，
+    //    直接 performSelector 时手势 state 仍是 Possible → 被状态检查拦死（评论区 X 按钮实测：触摸命中但关不掉）。
+    //    这里对 tap 类手势先把 state 置为 Ended（已识别）再触发 target，触发后还原。
+    //    同时沿 superview 链上溯触发 tap 手势（mask 外点关闭的 gesture 挂在父视图上，命中视图自身无手势）。
+    NSMutableArray<UIView *> *fireChain = [NSMutableArray array];
+    [fireChain addObject:view];
+    UIView *sup = view.superview;
+    int depth = 0;
+    while (sup && depth < 3) { [fireChain addObject:sup]; sup = sup.superview; depth++; }
+    for (UIView *fireView in fireChain) {
+        for (UIGestureRecognizer *gr in fireView.gestureRecognizers) {
+            @try {
+                if (![gr isKindOfClass:[UITapGestureRecognizer class]]) continue;  // 仅 tap：长按/拖拽触发会误动作
+                UIGestureRecognizerState origState = gr.state;
+                // v1.4.96：补 _touches —— TikTok 的 tap handler 除查 state 外还查
+                // numberOfTouches/locationInView，合成触摸没被系统关联到手势，_touches 空 → handler 提前 return。
+                UITouch *synTouch = [self _makeTouchAt:point phase:UITouchPhaseEnded view:fireView window:window];
+                if (synTouch) {
+                    [gr setValue:@[synTouch] forKey:@"_touches"];
                 }
+                [gr setValue:@(UIGestureRecognizerStateEnded) forKey:@"_state"];  // KVC 写私有 ivar，让 handler 的 state 检查通过
+                NSArray *targets = [gr valueForKey:@"_targets"];
+                for (id t in targets) {
+                    id target = [t valueForKey:@"_target"];
+                    id actionVal = [t valueForKey:@"_action"];
+                    SEL sel = [actionVal isKindOfClass:[NSString class]] ? NSSelectorFromString(actionVal)
+                                                                        : (SEL)(uintptr_t)[actionVal pointerValue];
+                    if (sel && target && [target respondsToSelector:sel]) {
+                        [target performSelector:sel withObject:gr];
+                    }
+                }
+                [gr setValue:@(origState) forKey:@"_state"];
+            } @catch (NSException *e) {
+                NSLog(@"[XNTouch] gesture invoke error: %@", e.reason);
             }
-        } @catch (NSException *e) {
-            NSLog(@"[XNTouch] gesture invoke error: %@", e.reason);
         }
     }
 

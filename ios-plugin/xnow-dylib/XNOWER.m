@@ -626,6 +626,14 @@ __attribute__((destructor)) static void XNOWERUnload() {
             typeof(self) s = ws;
             if (!s) return;
             if (!licensed) {
+                // 【v1.4.97 修复】info==nil 表示请求失败（网络瞬时错误/后端不可达），
+                // 不是"未激活"——绝不能清本地激活标志、弹激活界面（否则网络抖一下设备就失联）。
+                // 真正未激活时后端返回 JSON {licensed:false}（info 非空），才走激活流程。
+                if (!info) {
+                    [s addLog:@"⚠️ 授权检查网络失败，稍后自动重试"];
+                    [s _scheduleAuthRetry];
+                    return;
+                }
                 s->_isConnected = NO;
                 [s.floatingPanel setConnected:NO];
                 // 清除本地激活标志（防止旧备份残留导致跳过激活界面）

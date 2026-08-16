@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from routers.ws import _extract_device_secret
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, Any, Dict
@@ -81,9 +82,9 @@ async def send_device_command(
 
 
 @router.post("/commands/report/")
-async def report_command(data: Dict[str, Any], secret: str = ""):
+async def report_command(data: Dict[str, Any], secret: str = Depends(_extract_device_secret)):
     """手机端浮窗上报指令（替代 WebSocket，兼容 HTTP）"""
-    from routers.ws import _verify_device_auth
+    from routers.ws import _verify_device_auth, _extract_device_secret
     action = data.get("action", "unknown")
     device_id = data.get("device_id", "unknown")
     params = data.get("params", {})

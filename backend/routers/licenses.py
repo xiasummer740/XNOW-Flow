@@ -10,6 +10,7 @@ import logging
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from routers.ws import _extract_device_secret
 from sqlalchemy.orm import Session
 
 from database import get_db, SessionLocal
@@ -175,7 +176,7 @@ def get_my_quota(
 def activate_license(
     body: dict,
     db: Session = Depends(get_db),
-    secret: str = "",
+    secret: str = Depends(_extract_device_secret),
 ):
     """设备输入卡密激活（设备级操作，用设备密钥 secret 鉴权，不要求管理员 JWT）
     body: {key, device_id, udid}
@@ -241,7 +242,7 @@ def activate_license(
 def check_device_license(
     device_id: str,
     db: Session = Depends(get_db),
-    secret: str = "",
+    secret: str = Depends(_extract_device_secret),
 ):
     """检查设备当前授权状态（连接时调用，设备密钥鉴权）
 

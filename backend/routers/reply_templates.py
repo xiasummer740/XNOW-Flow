@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from routers.ws import _extract_device_secret
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -38,7 +39,7 @@ def list_templates(
 @router.post("/reply-templates/device-random/")
 def device_random_template(
     device_id: str = "",
-    secret: str = "",
+    secret: str = Depends(_extract_device_secret),
     db: Session = Depends(get_db),
 ):
     """设备端回关自动私信：随机取一条激活话术（设备 secret 鉴权，不需 admin JWT）"""

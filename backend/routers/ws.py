@@ -1,4 +1,4 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, Request
 import json
 import logging
 from datetime import datetime
@@ -393,6 +393,15 @@ _UUID_RE = re.compile(
 )
 
 
+def _extract_device_secret(request: Request, secret: str = "") -> str:
+    """设备密钥双兼容解析：X-Device-Secret 请求头优先，query 参数兜底。
+
+    v1.4.97 起设备端把密钥改走 header（避免进 server.log/代理日志明文泄露）。
+    保留 query 兜底是让旧设备在后端升级后仍能连上，过渡期后移除。
+    """
+    return request.headers.get("X-Device-Secret") or secret
+
+
 def _verify_device_auth(device_id: str, secret: str) -> bool:
     """验证设备请求的共享密钥
 
@@ -514,9 +523,10 @@ async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", devi
     连接后保持长连接，接收指令并回传状态。
     api_id: 用户 API 标识
     device_code: 设备编号（1-20）
-    secret: 设备共享密钥（鉴权）
+    secret: 设备共享密钥（鉴权，header 或 query）
     """
-    # 设备鉴权
+    # 设备鉴权（v1.4.97 起 header 优先，query 兜底）
+    secret = ws.headers.get("X-Device-Secret") or secret
     if not _verify_device_auth(device_id, secret):
         await ws.close(code=4001, reason="unauthorized")
         return
@@ -612,12 +622,12 @@ async def device_websocket(device_id: str, ws: WebSocket, api_id: str = "", devi
 # ========== HTTP 轮询端点（避开 BH TikTok 长连接检测） ==========
 
 @router.post("/ws/{device_id}")
-async def device_http_post(device_id: str, request: Request, secret: str = ""):
+async def device_http_post(device_id: str, request: Request, secret: str = Depends(_extract_device_secret)):
     """设备通过 HTTP POST 上报数据
 
     替代 WebSocket 的消息通道，每次请求短连接。
     设备定时 POST 上报状态/账号/结果，同时带回积压指令。
-    需携带设备共享密钥（secret 查询参数）鉴权。
+    需携带设备共享密钥（X-Device-Secret 请求头，旧版 query secret 兜底）鉴权。
     """
     # 设备鉴权
     if not _verify_device_auth(device_id, secret):
@@ -663,12 +673,12 @@ async def device_http_post(device_id: str, request: Request, secret: str = ""):
 
 
 @router.get("/ws/{device_id}/poll")
-async def device_http_poll(device_id: str, request: Request, secret: str = ""):
+async def device_http_poll(device_id: str, request: Request, secret: str = Depends(_extract_device_secret)):
     """设备轮询获取积压指令
 
     设备定时（每 5 秒）GET 此端点，获取服务端下发的指令。
     无指令时返回 204 No Content。
-    需携带设备共享密钥（secret 查询参数）鉴权。
+    需携带设备共享密钥（X-Device-Secret 请求头，旧版 query secret 兜底）鉴权。
     """
     # 设备鉴权
     if not _verify_device_auth(device_id, secret):

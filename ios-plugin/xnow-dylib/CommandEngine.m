@@ -3696,8 +3696,198 @@ static NSArray *XN_NurtureComments(void) {
     return vc;
 }
 
+/// v1.4.95：从视图 nextResponder 链上溯，找最近的 UIViewController（X 按钮 → header → 面板 VC）
+- (UIViewController *)_viewControllerOfView:(UIView *)view {
+    id resp = view;
+    while (resp) {
+        if ([resp isKindOfClass:[UIViewController class]]) return resp;
+        resp = [resp nextResponder];
+    }
+    return nil;
+}
+
+/// v1.4.95：递归收集窗口 VC 层级（presented / child / tab / nav 全部展开）
+- (void)_collectViewControllers:(UIViewController *)vc into:(NSMutableArray *)outList {
+    if (!vc || [outList containsObject:vc]) return;
+    [outList addObject:vc];
+    if (vc.presentedViewController) [self _collectViewControllers:vc.presentedViewController into:outList];
+    for (UIViewController *c in vc.childViewControllers) [self _collectViewControllers:c into:outList];
+    if ([vc isKindOfClass:[UITabBarController class]]) {
+        for (UIViewController *c in [(UITabBarController *)vc viewControllers]) [self _collectViewControllers:c into:outList];
+    }
+    if ([vc isKindOfClass:[UINavigationController class]]) {
+        for (UIViewController *c in [(UINavigationController *)vc viewControllers]) [self _collectViewControllers:c into:outList];
+    }
+}
+
+/// v1.4.95：在对象（沿 superclass 链）上找"关闭类"无参方法，按语义打分取最高分。
+/// 分数规则：含 panel+3、含 comment+2、以 close/dismiss/hide/remove/exit 开头+3、包含+1、
+///         含 hint/bubble/notice/toast/keyboard/reddot(无关浮层)-3。避免挑中 hideCommentHintView 之类。
+- (NSString *)_findCloseMethodOn:(id)obj {
+    NSString *best = nil;
+    int bestScore = -99;
+    Class cls = [obj class];
+    while (cls && cls != [NSObject class]) {
+        unsigned int count = 0;
+        Method *methods = class_copyMethodList(cls, &count);
+        for (unsigned int i = 0; i < count; i++) {
+            SEL sel = method_getName(methods[i]);
+            NSString *name = NSStringFromSelector(sel);
+            if (method_getNumberOfArguments(methods[i]) != 2) continue;  // 仅无参(self+_cmd)
+            int score = 0;
+            BOOL hasCloseWord = NO;
+            NSArray *words = @[@"close", @"dismiss", @"hide", @"remove", @"exit"];
+            for (NSString *w in words) {
+                if ([name containsString:w] || [name containsString:w.capitalizedString]) { score += 1; hasCloseWord = YES; }
+                if ([name hasPrefix:w] || [name hasPrefix:w.capitalizedString]) score += 3;
+            }
+            if (!hasCloseWord) continue;                                  // 不是关闭类方法，跳过
+            if ([name containsString:@"panel"] || [name containsString:@"Panel"]) score += 3;
+            if ([name containsString:@"comment"] || [name containsString:@"Comment"]) score += 2;
+            for (NSString *bad in @[@"hint", @"bubble", @"notice", @"toast", @"keyboard", @"reddot",
+                                    @"Hint", @"Bubble", @"Notice", @"Toast", @"Keyboard", @"RedDot"]) {
+                if ([name containsString:bad]) score -= 3;
+            }
+            if (score > bestScore) { bestScore = score; best = name; }
+        }
+        free(methods);
+        cls = class_getSuperclass(cls);
+    }
+    return (bestScore > 0) ? best : nil;
+}
+
+/// v1.4.96：dump 评论面板 VC 的关闭类方法列表 → 返回字符串数组（观测：锁定真实方法）
+- (NSArray<NSString *> *)_candidateCloseMethodsOn:(id)obj {
+    NSMutableArray *names = [NSMutableArray array];
+    Class cls = [obj class];
+    while (cls && cls != [NSObject class]) {
+        unsigned int count = 0;
+        Method *methods = class_copyMethodList(cls, &count);
+        for (unsigned int i = 0; i < count; i++) {
+            NSString *n = NSStringFromSelector(method_getName(methods[i]));
+            BOOL interesting = ([n containsString:@"close"] || [n containsString:@"Close"] ||
+                                [n containsString:@"dismiss"] || [n containsString:@"Dismiss"] ||
+                                [n containsString:@"hide"] || [n containsString:@"Hide"] ||
+                                [n containsString:@"remove"] || [n containsString:@"Remove"] ||
+                                [n containsString:@"panel"] || [n containsString:@"Panel"]);
+            if (interesting) {
+                [names addObject:[NSString stringWithFormat:@"%@(%uarg)",
+                                  n, method_getNumberOfArguments(methods[i]) - 2]];
+            }
+        }
+        free(methods);
+        cls = class_getSuperclass(cls);
+    }
+    return names;
+}
+
+/// v1.4.96：主方案——直接调评论面板 VC 的关闭方法（不模拟触摸，祥哥思路：激活卡密那种直接走内部代码）
+/// 返回 @{@"status":@"success"...} 表示已关闭；返回 @{@"status":@"failed", @"diag":<诊断>} 未命中
+/// （diag 会被 _closeCommentPanel 拼进最终 result message，server.log 可见——addLog 是设备端本地日志，后端看不到）
+- (NSDictionary *)_closeCommentPanelByCode {
+    __block NSString *calledSel = nil;
+    __block NSString *panelCls = nil;
+    __block BOOL foundBtn = NO;
+    __block NSArray<NSString *> *cands = nil;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *btn = [self _findButtonWithAnyLabel:@[@"Close comment section", @"Close comment"]
+                                               inView:XN_ActiveWindow()];
+        if (btn) foundBtn = YES;
+        UIViewController *panel = btn ? [self _viewControllerOfView:btn] : nil;
+        if (!panel) {
+            // 兜底：递归窗口 VC 层级找类名含 Comment 的 VC
+            NSMutableArray *vcs = [NSMutableArray array];
+            for (UIWindow *w in [UIApplication sharedApplication].windows) {
+                [self _collectViewControllers:w.rootViewController into:vcs];
+            }
+            for (UIViewController *v in vcs) {
+                NSString *cls = NSStringFromClass(v.class) ?: @"";
+                if ([cls containsString:@"Comment"]) { panel = v; break; }
+            }
+        }
+        if (panel) {
+            panelCls = NSStringFromClass(panel.class);
+            calledSel = [self _findCloseMethodOn:panel];
+            cands = [self _candidateCloseMethodsOn:panel];
+            if (calledSel) {
+                @try {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+                    [panel performSelector:NSSelectorFromString(calledSel)];
+#pragma clang diagnostic pop
+                } @catch (NSException *e) {
+                    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"❌ 直接调关闭方法异常: %@", e.reason]];
+                    calledSel = nil;
+                }
+            }
+        }
+    });
+    if (calledSel) {
+        [NSThread sleepForTimeInterval:1.2];
+        if (![[self detectCurrentPage] isEqualToString:@"comment"]) {
+            return @{@"status": @"success",
+                     @"message": [NSString stringWithFormat:@"评论面板已关闭(直接调%@)", calledSel]};
+        }
+    }
+
+    // 【v1.4.97 终极保底】物理移除评论面板视图——不依赖 TikTok 任何内部方法。
+    // 页面检测锚点是类名（AWECommentContainer/CommentListView 等），ui_scan 实证面板根
+    // TTKCommentPanelRootViewComponent 全屏 414x736，视图树里一定存在；找到后 removeFromSuperview，
+    // 锚点随之消失 → detectCurrentPage 不再判 comment → 导航不再困死。比"直接调关闭方法"更可靠：
+    // 不管 TikTok 内部状态机，物理层面把面板移出视图树。
+    BOOL removed = [self _physicallyRemoveCommentPanelView];
+    if (removed) {
+        [NSThread sleepForTimeInterval:1.0];
+        if (![[self detectCurrentPage] isEqualToString:@"comment"]) {
+            return @{@"status": @"success",
+                     @"message": @"评论面板已关闭(物理移除面板视图)"};
+        }
+    }
+
+    NSString *diag = [NSString stringWithFormat:@"%@ | 面板VC=%@ | 候选=[%@] | 物理移除=%@",
+                      foundBtn ? @"X按钮=找到" : @"X按钮=未找到",
+                      panelCls ?: @"未找到",
+                      cands.count ? [cands componentsJoinedByString:@" "] : @"(无)",
+                      removed ? @"已执行但未生效" : @"未找到面板视图"];
+    return @{@"status": @"failed", @"diag": diag};
+}
+
+/// v1.4.97：物理移除评论面板视图（终极保底）。
+/// 递归窗口视图树，找到类名含 CommentPanel/TikTokCommentImpl/Comment 的面板根视图，
+/// removeFromSuperview 直接移出视图树。面板根移除后其整棵子树（评论列表/输入条/X按钮）全部消失，
+/// 页面检测锚点（AWECommentContainer/CommentListView）也随之消失 → detectCurrentPage 不再判 comment。
+/// 必须在主线程调用（UIKit 约束）。
+- (BOOL)_physicallyRemoveCommentPanelView {
+    __block BOOL removed = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        for (UIWindow *w in [UIApplication sharedApplication].windows) {
+            NSMutableArray<UIView *> *stack = [NSMutableArray arrayWithArray:w.subviews];
+            while (stack.count && !removed) {
+                UIView *v = stack.lastObject;
+                [stack removeLastObject];
+                NSString *cls = NSStringFromClass(v.class) ?: @"";
+                // 面板根视图（ui_scan 实证）或评论区容器：命中即整棵移除
+                if ([cls containsString:@"CommentPanelRootView"] ||
+                    [cls containsString:@"TikTokCommentImpl"] ||
+                    [cls containsString:@"AWECommentContainer"] ||
+                    [cls isEqualToString:@"CommentListView"] ||
+                    [cls isEqualToString:@"AWEBottomComment"] ||
+                    [cls containsString:@"CommentContainerView"]) {
+                    [v removeFromSuperview];
+                    removed = YES;
+                    break;
+                }
+                [stack addObjectsFromArray:v.subviews];
+            }
+            if (removed) break;
+        }
+    });
+    return removed;
+}
+
 - (NSDictionary *)_closeCommentPanel {
     @try {
+        NSString *codeDiag = nil;
         CGSize screen = [UIScreen mainScreen].bounds.size;
         // 0. 【v1.4.92】先收键盘：直接 resignFirstResponder（不走点击——键盘关闭是 UITapGestureRecognizer，
         //    合成触摸绕过手势管理器触发不了）。键盘不关，"Close comment section" X 按钮不显示 → 主方案必然找不到。
@@ -3706,6 +3896,12 @@ static NSArray *XN_NurtureComments(void) {
                                                       to:nil from:nil forEvent:nil];
         });
         [NSThread sleepForTimeInterval:0.6];
+
+        // 0.5. 【v1.4.95/96】直接调评论面板 VC 的关闭方法（不模拟触摸——真实点击最终也是调内部方法，
+        //    直接调最可靠，且能拿到真实方法名）。失败返回带 diag 诊断，落触摸兜底，diag 透传到最终 message。
+        NSDictionary *byCode = [self _closeCommentPanelByCode];
+        if (byCode && [byCode[@"status"] isEqualToString:@"success"]) return byCode;
+        codeDiag = byCode[@"diag"];
 
         // 1. 主方案【v1.4.94】真实触摸 X 关闭按钮。v1.4.93 用 sendActions 对手势按钮无效
         //    （TikTok 按钮是 UITapGestureRecognizer，sendActions 不走 hitTest/手势识别，实测点了没反应）。
@@ -3759,7 +3955,10 @@ static NSArray *XN_NurtureComments(void) {
         }
 
         if ([[self detectCurrentPage] isEqualToString:@"comment"]) {
-            return @{@"status": @"failed", @"message": @"评论面板关闭失败"};
+            return @{@"status": @"failed",
+                     @"message": codeDiag
+                         ? [NSString stringWithFormat:@"评论面板关闭失败; %@", codeDiag]
+                         : @"评论面板关闭失败"};
         }
         return @{@"status": @"success", @"message": @"评论面板已关闭"};
     } @catch (NSException *e) {
