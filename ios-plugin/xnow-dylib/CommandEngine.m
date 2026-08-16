@@ -12,6 +12,7 @@
 #import "XNURLProtocol.h"
 #import "CountryEnv.h"
 #import <UIKit/UIKit.h>
+#import <AVFoundation/AVFoundation.h>
 #import <objc/runtime.h>
 
 #pragma mark - 常量
@@ -714,12 +715,30 @@ static NSArray *XN_NurtureComments(void) {
 }
 
 /// UI 结构扫描：遍历视图树，上报所有可交互控件（类型/位置/无障碍标识/状态）
+/// v1.4.100: 评论面板呈现在独立 window，XN_ActiveWindow() 只返回 keyWindow 扫不到 →
+/// 扫全部可见非 overlay 窗口，否则评论面板控件永不进 ui_scan（verify 无法识别 comment 页）。
 - (void)_performUIScan {
-    UIWindow *window = XN_ActiveWindow();
-    if (!window) return;
+    UIWindow *key = XN_ActiveWindow();
+    if (!key) return;
+    NSMutableArray *windows = [NSMutableArray arrayWithObject:key];
+    @try {
+        Class overlayCls = NSClassFromString(@"XNPassThroughWindow");
+        for (UIWindow *w in [UIApplication sharedApplication].windows) {
+            if (w.hidden) continue;
+            if (overlayCls && [w isKindOfClass:overlayCls]) continue;  // 跳过自己的浮窗层
+            BOOL dup = NO;
+            for (UIWindow *k in windows) if (k == w) { dup = YES; break; }
+            if (!dup) [windows addObject:w];
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] 窗口枚举异常: %@", e.reason);
+    }
     NSMutableArray *elements = [NSMutableArray array];
-    [self _scanInteractiveViewsInView:window depth:0 result:elements];
-    NSLog(@"[XNOWER] UI扫描: %lu 个控件", (unsigned long)elements.count);
+    for (UIWindow *w in windows) {
+        [self _scanInteractiveViewsInView:w depth:0 result:elements];
+        if (elements.count >= 400) break;
+    }
+    NSLog(@"[XNOWER] UI扫描: %lu 个控件 (窗口 %lu 个)", (unsigned long)elements.count, (unsigned long)windows.count);
 
     // 【v1.4.92 控件地图】页面上下文：当前页 + tab 索引 + 屏幕尺寸，随扫描上报，后端按页沉淀参考表
     NSDictionary *pageCtx = @{};
@@ -1126,6 +1145,8 @@ static NSArray *XN_NurtureComments(void) {
 
     // v1.4.91: 发送后自动关评论面板（点右上角 X 关闭，防 overlay 残留遮 tab bar 困死设备）
     [self _closeCommentPanel];
+    // v1.4.100: 发送后恢复视频播放（面板打开时 TikTok 暂停了视频，关闭后不恢复→无音频→锁屏假象）
+    [self _resumeFeedPlayback];
 }
 
 #pragma mark - 评论点赞（like_comment，PPT 模块4 曝光玩法核心）
@@ -1702,12 +1723,16 @@ static NSArray *XN_NurtureComments(void) {
         if ([self _isInLiveRoom]) { return @"live"; }
 
         // 2. 评论区（feed 上打开评论面板）
-        for (NSString *cls in @[@"AWECommentContainer", @"CommentListView", @"AWEBottomComment", @"TTKComment"]) {
-            if ([self _findViewByClassContaining:cls inView:window depth:0]) { return @"comment"; }
-        }
-        // 评论面板常见容器
-        for (NSString *cls in @[@"AWECommentView", @"CommentContainerView"]) {
-            if ([self _findViewByClassContaining:cls inView:window depth:0]) { return @"comment"; }
+        // ⚠️ v1.4.100: 评论面板可能呈现在独立 window（XN_ActiveWindow 只返回 keyWindow，扫不到评论层），
+        //    必须遍历所有 window。否则评论打开时 detectCurrentPage 判 feed → close_overlay 见 feed 直接返回
+        //    "无浮层面板" → 关闭逻辑永不触发 → 视频一直暂停 → 无触摸 → iOS 自动锁屏 = 祥哥看到的"黑屏"。
+        for (UIWindow *w in [UIApplication sharedApplication].windows) {
+            for (NSString *cls in @[@"AWECommentContainer", @"CommentListView", @"AWEBottomComment", @"TTKComment"]) {
+                if ([self _findViewByClassContaining:cls inView:w depth:0]) { return @"comment"; }
+            }
+            for (NSString *cls in @[@"AWECommentView", @"CommentContainerView"]) {
+                if ([self _findViewByClassContaining:cls inView:w depth:0]) { return @"comment"; }
+            }
         }
 
         // 3. 录制/创作页（底部 + 进入，recorderPage*/recordPage* 无障碍标识前缀唯一）
@@ -3683,7 +3708,11 @@ static NSArray *XN_NurtureComments(void) {
     [self _logStep:@"close_overlay"];
     @try {
         if ([[self detectCurrentPage] isEqualToString:@"comment"]) {
-            return [self _closeCommentPanel];
+            NSDictionary *r = [self _closeCommentPanel];
+            // v1.4.100: 关闭后必须恢复视频播放。物理移除面板跳过 TikTok 正常关闭逻辑 → 播放器保持
+            // 暂停 → 无音频无触摸 → iOS 自动锁屏（祥哥反馈的"评论区黑屏"就是锁屏，手动上滑切视频即恢复）。
+            [self _resumeFeedPlayback];
+            return r;
         }
     } @catch (NSException *e) {
         return @{@"status": @"failed", @"message": [NSString stringWithFormat:@"关闭面板异常: %@", e.reason]};
@@ -3900,6 +3929,18 @@ static NSArray *XN_NurtureComments(void) {
                 }
             }
         }
+        // v1.4.100: 物理移除后隐藏"空壳"评论 window（rootVC 类名含 Comment 且非主窗口）。
+        // 视图虽被移除，window 若仍挂在 windows 列表里会拦截全部触摸（swipe_up/open_search 无响应
+        // 的元凶之一）——隐藏掉，避免设备"触摸失灵"。
+        UIWindow *key = [UIApplication sharedApplication].keyWindow;
+        for (UIWindow *w in [[UIApplication sharedApplication].windows copy]) {
+            if (w == key) continue;
+            NSString *rootCls = NSStringFromClass(w.rootViewController.class) ?: @"";
+            if ([rootCls containsString:@"Comment"]) {
+                w.hidden = YES;
+                removed = YES;
+            }
+        }
     });
     return removed;
 }
@@ -3983,6 +4024,46 @@ static NSArray *XN_NurtureComments(void) {
     } @catch (NSException *e) {
         return @{@"status": @"failed", @"message": [NSString stringWithFormat:@"关闭面板异常: %@", e.reason]};
     }
+}
+
+/// v1.4.100: 评论面板关闭后恢复视频播放。
+/// 根因：物理移除评论面板跳过 TikTok 正常关闭逻辑 → 播放器保持暂停（面板打开时 TikTok 暂停了视频）→
+/// 无音频无触摸 → iOS 自动锁屏 → 祥哥看到"评论区黑屏"（手动上滑切视频即恢复）。
+/// 恢复方案：① 递归 layer 树找当前可见 AVPlayerLayer → 直接 [player play]（最通用，不依赖 TikTok 内部）；
+/// ② 找不到 AVPlayer 时对 feed 当前 cell 触发一次原地滚动，让 TikTok 走一遍"变可见"恢复逻辑。
+- (void)_resumeFeedPlayback {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        __block BOOL resumed = NO;
+        @try {
+            for (UIWindow *w in [UIApplication sharedApplication].windows) {
+                if ([self _playAVPlayerInLayerTree:w.layer]) { resumed = YES; break; }
+            }
+        } @catch (NSException *e) {
+            NSLog(@"[XNOWER] 恢复播放异常: %@", e.reason);
+        }
+        if (!resumed) {
+            NSLog(@"[XNOWER] 未找到 AVPlayer，触发 feed 原地滚动尝试恢复");
+            [self _tryPageFeed:0];
+        }
+    });
+}
+
+/// 递归 layer 树找 AVPlayerLayer 并 play（返回是否播放成功）
+- (BOOL)_playAVPlayerInLayerTree:(CALayer *)layer {
+    if (!layer) return NO;
+    if ([layer isKindOfClass:[AVPlayerLayer class]]) {
+        AVPlayer *p = [(AVPlayerLayer *)layer player];
+        if (p) {
+            @try {
+                if (p.rate == 0) [p play];
+                return YES;
+            } @catch (NSException *e) {}
+        }
+    }
+    for (CALayer *sub in layer.sublayers) {
+        if ([self _playAVPlayerInLayerTree:sub]) return YES;
+    }
+    return NO;
 }
 
 - (BOOL)_gotoHomeFeed {
