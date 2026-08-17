@@ -1,8 +1,18 @@
 {
-  "version": "",
-  "xianggeEnv": "synced",
+  "totalFiles": 1129,
   "xnow": "ready",
+  "checkCount": 3,
+  "handoverCount": 0,
+  "xnowPath": "C:\\Users\\Administrator\\bin\\xnow",
+  "xianggeEnv": "synced",
   "credentialsVault": "synced",
+  "lessonCount": 0,
+  "projectTier": "L1",
+  "srcFiles": 246,
   "project": "XNOW-Flow",
-  "xnowPath": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python311\\Scripts\\xnow.exe"
+  "handoverHasIndex": "yes",
+  "projectTierLabel": "原型",
+  "version": "",
+  "platform": "Windows",
+  "recentLessons": ""
 }

@@ -2587,36 +2587,78 @@ static NSArray *XN_NurtureComments(void) {
     } @catch (NSException *e) {}
 }
 
-/// 互动养号专用安全点赞：找屏幕内可见 feedLikeButton + sendActions + 成功验证(状态变化)
+/// 互动养号专用安全点赞：多级定位 + 点击 + 真验收(红心点亮) + 失败重试一次
+/// v1.4.103: ① 加 PlayInteractionLikeView 容器兜底（feedLikeButton acc_id 漂移就"点赞按钮未找到"）
+/// ② 真验收：点击后 0.6s 检查红心点亮(isSelected / label→Unlike)，验收通过才算成功——不假成功
 - (BOOL)_performLikeSafe {
-    __block BOOL ok = NO;
+    __block UIView *likeView = nil;
+    __block BOOL beforeSel = NO;
+    __block NSString *beforeLabel = @"";
     dispatch_sync(dispatch_get_main_queue(), ^{
         @try {
             UIWindow *window = XN_ActiveWindow();
             CGSize screen = [UIScreen mainScreen].bounds.size;
-            __strong UIView *likeView = nil;
-            [self _findVisibleViewWithAccId:kAccLike inView:window screen:screen depth:0 result:&likeView];
-            if (likeView && [likeView isKindOfClass:[UIControl class]]) {
-                UIControl *c = (UIControl *)likeView;
-                BOOL beforeSel = c.isSelected;
-                NSString *beforeLabel = c.accessibilityLabel ?: @"";
-                [c sendActionsForControlEvents:UIControlEventTouchUpInside];
-                // 成功验证：选中态变化 或 label 从"Like video"变"Unlike" 或已选中
-                BOOL afterSel = c.isSelected;
-                NSString *afterLabel = c.accessibilityLabel ?: @"";
-                if (afterSel || (!beforeSel && afterSel) ||
-                    ([afterLabel rangeOfString:@"Unlike" options:NSCaseInsensitiveSearch].location != NSNotFound) ||
-                    (![afterLabel isEqualToString:beforeLabel] && afterLabel.length > 0)) {
-                    ok = YES;
-                } else {
-                    ok = YES;  // sendActions 已触发（部分版本 label 异步更新），视为成功
+            __strong UIView *lv = nil;
+            // 1. acc_id 定位（feed 多个 feedLikeButton，命中屏幕内的）
+            [self _findVisibleViewWithAccId:kAccLike inView:window screen:screen depth:0 result:&lv];
+            // 2. 容器兜底：PlayInteractionLikeView 内第一个可交互控件（点赞按钮是 UIControl）
+            if (!lv) {
+                UIView *c = [self _findViewByClassContaining:@"PlayInteractionLikeView" inView:window depth:0];
+                if (c) lv = [self _findFirstControlInView:c depth:0] ?: c;
+            }
+            if (!lv) return;
+            likeView = lv;
+            beforeSel = [lv isKindOfClass:[UIControl class]] ? ((UIControl *)lv).isSelected : NO;
+            beforeLabel = lv.accessibilityLabel ?: @"";
+            // 3. 点击
+            if ([lv isKindOfClass:[UIControl class]]) {
+                [(UIControl *)lv sendActionsForControlEvents:UIControlEventTouchUpInside];
+            } else {
+                CGPoint center = [lv.superview convertPoint:lv.center toView:nil];
+                if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
+                    [self _safeTapAtPoint:center];
                 }
             }
         } @catch (NSException *e) {
             NSLog(@"[XNOWER] likeSafe error: %@", e.reason);
         }
     });
-    return ok;
+    if (!likeView) return NO;
+    // 真验收：当前线程(后台)安全等待主线程异步检查红心，失败重试一次
+    return [self _waitLikeVerified:likeView beforeSel:beforeSel beforeLabel:beforeLabel retried:NO];
+}
+
+/// 点赞验收：点击后 0.6s 检查红心点亮(isSelected/label→Unlike)，通过才 YES；未通过补点一次再验
+- (BOOL)_waitLikeVerified:(UIView *)likeView beforeSel:(BOOL)beforeSel
+             beforeLabel:(NSString *)beforeLabel retried:(BOOL)retried {
+    __weak UIView *weakLV = likeView;
+    __block BOOL verified = NO;
+    dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.6 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        UIView *lv = weakLV;
+        @try {
+            BOOL afterSel = [lv isKindOfClass:[UIControl class]] ? ((UIControl *)lv).isSelected : NO;
+            NSString *afterLabel = lv.accessibilityLabel ?: @"";
+            if (afterSel || [afterLabel rangeOfString:@"Unlike" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+                (![afterLabel isEqualToString:beforeLabel] && afterLabel.length > 0)) {
+                verified = YES;
+            }
+        } @catch (NSException *e) {}
+        dispatch_semaphore_signal(sema);
+    });
+    dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 1.5 * NSEC_PER_SEC));
+    if (!verified && !retried) {
+        // 未验收：补点一次再验
+        __weak UIView *w2 = likeView;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            UIView *lv = w2;
+            if (lv && [lv isKindOfClass:[UIControl class]]) {
+                [(UIControl *)lv sendActionsForControlEvents:UIControlEventTouchUpInside];
+            }
+        });
+        return [self _waitLikeVerified:likeView beforeSel:beforeSel beforeLabel:beforeLabel retried:YES];
+    }
+    return verified;
 }
 
 /// 递归找 label 包含关键词且屏幕内可见的视图（feed 有多个 Follow 按钮，命中当前屏幕内 + 排除顶部 Following 标签）
@@ -4151,11 +4193,11 @@ static NSArray *XN_NurtureComments(void) {
                     [[XNOWER sharedInstance] addLog:@"⏭ 互动时不在 feed，跳过本次互动"];
                     [weakSelf _logStep:@"interact_skip_no_feed"];
                 } else if (arc4random_uniform(100) < 50) {
-                    // 安全点赞：accId定位+sendActions，不深度遍历不合成触摸（防预加载cell信号崩）
+                    // 安全点赞：多级定位+真验收（v1.4.103：红心点亮才算成功，不假成功）
                     BOOL liked = [weakSelf _performLikeSafe];
                     if (liked) { likes++; [weakSelf _logStep:@"interact_like"]; }
                     else { [weakSelf _logStep:@"interact_like_fail"]; }
-                    [[XNOWER sharedInstance] addLog:liked ? @"❤️ 随机点赞" : @"⚠️ 点赞按钮未找到"];
+                    [[XNOWER sharedInstance] addLog:liked ? @"❤️ 随机点赞（红心已验收）" : @"⚠️ 点赞未验收（红心未亮）"];
                 } else {
                     BOOL followed = [weakSelf _performFollowSafe];
                     if (followed) { follows++; [weakSelf _logStep:@"interact_follow"]; }
@@ -4163,7 +4205,8 @@ static NSArray *XN_NurtureComments(void) {
                     [[XNOWER sharedInstance] addLog:followed ? @"👤 随机关注" : @"⚠️ 关注按钮未找到"];
                 }
             }
-            // 上滑到下一个视频（互动在浏览稳定期做完了，再滑动换视频）
+            // 上滑到下一个视频（互动已完成验收，稳定后再滑动换视频；v1.4.103 顺序：点红心→验收→下滑）
+            [NSThread sleepForTimeInterval:0.3];
             dispatch_sync(dispatch_get_main_queue(), ^{
                 [weakSelf _performSwipeUp];
             });

@@ -540,7 +540,18 @@ async function registerAccount() {
 
 function log(msg) {
   const el = document.getElementById('result');
-  el.textContent = new Date().toLocaleTimeString() + ' ' + msg + '\n' + el.textContent;
+  // 商业化格式：剥离行首 emoji + 推断级别 → "[HH:mm:ss] [LEVEL] 消息"
+  let level = 'INFO';
+  let clean = String(msg);
+  const m = clean.match(/^(✅|❌|⚠️|⚠|⏳|🚀|▶️|⏹|⏸|⏱|📤|📋|📸|📥|⬇️|🗑|🔌|🌐|💾|🔁|⚙️|🔑|📦|🧹|🌱|🔄|👥|🎬|❤️|➕|🔴|👍|🈯|🔒|📊|👤|📲|🚪|🌍|📱|📩|✈️|📺|🏠)\s*/);
+  if (m) {
+    const p = m[0];
+    if (p.startsWith('❌')) level = 'ERROR';
+    else if (p.startsWith('⚠')) level = 'WARN';
+    else if (p.startsWith('✅')) level = 'SUCCESS';
+    clean = clean.slice(m[0].length);
+  }
+  el.textContent = '[' + new Date().toLocaleTimeString() + '] [' + level + '] ' + clean + '\n' + el.textContent;
   if (el.textContent.length > 3000) el.textContent = el.textContent.slice(0, 3000);
 }
 

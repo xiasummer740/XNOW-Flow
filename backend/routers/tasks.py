@@ -124,7 +124,7 @@ def create_task(
         total=total or 0,
         done=0,
         fail_count=0,
-        last_log="任务已创建，待启动",
+        last_log="[INFO] 任务已创建，待启动",
     )
     if current_user.role != "admin":
         task.api_id = current_user.api_id or ""
@@ -207,7 +207,7 @@ def start_task(
     task.status = "running"
     task.started_at = datetime.utcnow()
     task.next_dispatch_at = datetime.utcnow()  # 立即下发第一单元
-    task.last_log = f"🚀 任务启动，共 {total} 单元"
+    task.last_log = f"[INFO] 任务启动，共 {total} 单元"
     task.error = ""
     db.commit()
     return MessageResponse(message=f"任务已启动（{total} 单元，目标组 {req.target_group or '自定义'}）")
@@ -225,7 +225,7 @@ def stop_task(
     ensure_owned(task, current_user)
     task.status = "stopped"
     task.finished_at = datetime.utcnow()
-    task.last_log = f"⏹ 已停止（完成 {task.done}/{task.total}）"
+    task.last_log = f"[WARN] 已停止（完成 {task.done}/{task.total}）"
     db.commit()
     return MessageResponse(message=f"任务已停止（已下发 {task.done}/{task.total}）")
 
@@ -242,7 +242,7 @@ def pause_task(
     ensure_owned(task, current_user)
     if task.status == "running":
         task.status = "paused"
-        task.last_log = "⏸ 已暂停"
+        task.last_log = "[WARN] 已暂停"
         db.commit()
         return MessageResponse(message="任务已暂停")
     return MessageResponse(message=f"任务当前状态 {task.status}，无需暂停")
@@ -261,7 +261,7 @@ def resume_task(
     if task.status == "paused" or task.status == "stopped":
         task.status = "running"
         task.next_dispatch_at = datetime.utcnow()
-        task.last_log = "▶️ 已恢复"
+        task.last_log = "[INFO] 已恢复"
         db.commit()
         return MessageResponse(message="任务已恢复")
     return MessageResponse(message=f"任务当前状态 {task.status}，无法恢复")

@@ -1368,11 +1368,36 @@ static NSArray *kCountries;
 
 - (void)addLog:(NSString *)message {
     dispatch_async(dispatch_get_main_queue(), ^{
-        NSString *ts = @"";
+        // ===== 商业化日志格式：剥离行首 emoji + 推断级别 → "[HH:mm:ss] [LEVEL] 消息" =====
+        // 级别映射：❌→ERROR / ⚠️→WARN / ✅→SUCCESS / 其余（⏳🚀📤等）→INFO
+        NSString *level = @"INFO";
+        NSMutableString *clean = [message mutableCopy];
+        static NSArray<NSString *> *emojiPrefixes = nil;
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{
+            // 行首 emoji 前缀表（与调用点常用集合一致）；⚠ 带 FE0F 变体选择符需先匹配长串
+            emojiPrefixes = @[@"✅", @"❌", @"⚠️", @"⚠", @"⏳", @"🚀", @"▶️", @"⏹", @"⏸", @"⏱", @"📤",
+                              @"🔍", @"📋", @"📸", @"📥", @"⬇️", @"🗑", @"🔌", @"🌐", @"💾", @"🔁",
+                              @"⚙️", @"🔑", @"📦", @"🧹", @"🌱", @"🔄", @"👥", @"🎬", @"❤️", @"➕",
+                              @"🔴", @"👍", @"🈯", @"🔒", @"📊", @"👤", @"📲", @"🚪", @"🌍", @"📱",
+                              @"📩", @"✈️", @"📺", @"🏠", @"⏫", @"⏬"];
+        });
+        for (NSString *p in emojiPrefixes) {
+            if ([clean hasPrefix:p]) {
+                [clean deleteCharactersInRange:NSMakeRange(0, p.length)];
+                while (clean.length > 0 && [clean characterAtIndex:0] == ' ') {
+                    [clean deleteCharactersInRange:NSMakeRange(0, 1)];
+                }
+                if ([p isEqualToString:@"❌"]) level = @"ERROR";
+                else if ([p isEqualToString:@"⚠️"] || [p isEqualToString:@"⚠"]) level = @"WARN";
+                else if ([p isEqualToString:@"✅"]) level = @"SUCCESS";
+                break;
+            }
+        }
         NSDateFormatter *df = [[NSDateFormatter alloc] init];
         df.dateFormat = @"HH:mm:ss";
-        ts = [df stringFromDate:[NSDate date]];
-        NSString *line = [NSString stringWithFormat:@"[%@] %@", ts, message];
+        NSString *ts = [df stringFromDate:[NSDate date]];
+        NSString *line = [NSString stringWithFormat:@"[%@] [%@] %@", ts, level, clean];
         [self.logLines addObject:line];
         if (self.logLines.count > 40) {
             [self.logLines removeObjectAtIndex:0];

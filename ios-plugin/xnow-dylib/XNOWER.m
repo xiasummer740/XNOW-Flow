@@ -242,6 +242,12 @@ __attribute__((destructor)) static void XNOWERUnload() {
 - (void)start {
     NSLog(@"[XNOWER] 🚀 start() 已执行 — dylib 加载成功");
 
+    // v1.4.100: 禁用自动锁屏。自动化设备绝不能锁屏——评论面板关闭后视频未恢复播放 → 无音频无触摸 →
+    // iOS 自动锁屏 → 祥哥看到的"评论区黑屏"（手动上滑切视频即恢复）。idleTimerDisabled 根治。
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [UIApplication sharedApplication].idleTimerDisabled = YES;
+    });
+
     // 崩溃诊断：捕获未处理异常 + 段错误，写文件下次启动上报
     XN_InitCrashWriteDir();  // 先缓存沙盒路径，信号处理器才能写到上报端能枚举到的地方
     NSSetUncaughtExceptionHandler(&XN_UncaughtExceptionHandler);

@@ -69,6 +69,25 @@ def main():
         else:
             print("  ⚠️ 未找到 Config.plist")
 
+        # 修改主 Info.plist 构建版本号（v1.4.102 根治"原版本号安装不了"）
+        # ⚠️ iOS 安装器靠 CFBundleVersion 判断是否覆盖升级。此前所有版本恒为 437030
+        #    （基础 IPA 的构建号），iOS 视为同一 App → 覆盖安装报错。每次发版必须递增。
+        # ⚠️ v1.4.105 修复：CFBundleShortVersionString 必须保持 TikTok 原始版本号(43.7.0)！
+        #    此前把它改成我们的版本号(1.4.104)，TikTok 判定"旧版本需更新"→ 每次启动弹升级提示。
+        info_path = os.path.join(app_dir, "Info.plist")
+        try:
+            with open(info_path, 'rb') as f:
+                info = plistlib.load(f)
+            old_cf = info.get("CFBundleVersion", "?")
+            old_short = info.get("CFBundleShortVersionString", "?")
+            info["CFBundleVersion"] = f"437{version.split('.')[-1].zfill(3)}"   # 1.4.105→437105 > 437030，patch 递增且位数对齐
+            # 不动 CFBundleShortVersionString，保持 TikTok 原始版本号，避免触发升级提示
+            with open(info_path, 'wb') as f:
+                plistlib.dump(info, f)
+            print(f"  ✅ 主 Info.plist 版本: CFBundleVersion {old_cf} → {info['CFBundleVersion']}, ShortVersion 保持 {old_short}（不动）")
+        except Exception as e:
+            print(f"  ⚠️ 主 Info.plist 修改失败: {e}")
+
         # 打包 — deflate 压缩（与其他构建脚本一致），体积减半且 code signature 不受影响
         print("\n[4/4] 打包 IPA（deflate模式，compresslevel=5）...")
         if os.path.exists(output):

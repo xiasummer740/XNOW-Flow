@@ -105,7 +105,7 @@ class TaskEngine:
                     self._dispatch_one(db, task, now)
                 except Exception as e:
                     task.error = f"dispatch error: {e}"
-                    task.last_log = f"❌ 下发异常: {e}"
+                    task.last_log = f"[ERROR] 下发异常: {e}"
                     logger.error(f"[task-engine] task {task.id} dispatch error: {e}")
             db.commit()
         finally:
@@ -126,7 +126,7 @@ class TaskEngine:
                 return
             task.status = "failed"
             task.error = "无有效目标单元"
-            task.last_log = "❌ 无有效目标，任务失败"
+            task.last_log = "[ERROR] 无有效目标，任务失败"
             task.finished_at = now
             return
 
@@ -135,7 +135,7 @@ class TaskEngine:
             task.status = "done"
             task.progress = 100
             task.finished_at = now
-            task.last_log = "✅ 任务完成"
+            task.last_log = "[SUCCESS] 任务完成"
             return
 
         # 取当前单元（targets 循环复用）
@@ -146,7 +146,7 @@ class TaskEngine:
         if not device_ids:
             task.status = "failed"
             task.error = "未指定设备"
-            task.last_log = "❌ 未指定设备，任务失败"
+            task.last_log = "[ERROR] 未指定设备，任务失败"
             task.finished_at = now
             return
         device = device_ids[task.done % len(device_ids)]
@@ -176,7 +176,7 @@ class TaskEngine:
         task.progress = int(task.done / total * 100)
         interval = self._rand_interval(config)
         task.next_dispatch_at = now + timedelta(seconds=interval)
-        task.last_log = f"📤 {task.done}/{total} {action}→{unit} (设备{device})"
+        task.last_log = f"[INFO] 进度 {task.done}/{total} {action}→{unit} (设备{device})"
         task.account = task.account or device
 
         # 写执行记录（审计）
@@ -199,7 +199,7 @@ class TaskEngine:
             task.status = "done"
             task.progress = 100
             task.finished_at = now
-            task.last_log = "✅ 任务完成"
+            task.last_log = "[SUCCESS] 任务完成"
 
     @staticmethod
     def _rand_interval(config) -> int:

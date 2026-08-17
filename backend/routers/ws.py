@@ -155,7 +155,7 @@ def _mark_task_from_result(device_id: str, data: dict):
             task.status = "done" if ok else "failed"
             task.progress = 100
             task.finished_at = datetime.utcnow()
-            task.last_log = ("✅ " if ok else "❌ ") + str(data.get("message", ""))
+            task.last_log = ("[SUCCESS] " if ok else "[ERROR] ") + str(data.get("message", ""))
             if not ok and data.get("message"):
                 task.error = str(data.get("message", ""))
             db.commit()
