@@ -36,6 +36,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// 轮询指令（GET /ws/{deviceId}/poll）
 + (void)pollCommands:(NSString *)deviceId;
 
+/// v1.4.108 F6：上传无水印视频到后台落库（multipart，先下载 URL 再 POST /api/biz/v2/videos/save/）
++ (void)uploadVideoToBackend:(NSString *)url
+                    metadata:(NSDictionary *)metadata
+                    deviceId:(NSString *)deviceId
+                  completion:(void (^)(BOOL ok, NSString *message))completion;
+
+/// v1.4.108 F14：私信实时翻译（POST /api/biz/v2/translate/，设备 secret 走 header）
++ (void)translateText:(NSString *)text
+           targetLang:(NSString *)targetLang
+             deviceId:(NSString *)deviceId
+           completion:(void (^)(NSString *translated, NSError *error))completion;
+
 /// 激活卡密（POST /api/biz/v2/licenses/activate/）
 + (void)activateLicense:(NSString *)key deviceId:(NSString *)deviceId udid:(NSString *)udid
              completion:(void (^)(NSDictionary *result, NSError *error))completion;

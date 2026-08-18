@@ -380,18 +380,18 @@ static NSArray *kCountries;
         ];
         if ([page isEqualToString:@"live"]) {
             // 直播间：直播采集 + 点赞采集（点赞本就是直播间功能）+ 系统
+            // v1.4.108 F13：删除重复的「开始采集」（与「采集直播间粉丝」重复），留「采集直播间粉丝」
             return [@[
                 @{@"icon": @"person.3.fill", @"label": @"采集直播间粉丝", @"action": @"collect_live"},
                 @{@"icon": @"heart.fill", @"label": @"采集点赞", @"action": @"collect_likes"},
-                @{@"icon": @"play.rectangle.fill", @"label": @"开始采集", @"action": @"start_live_collect"},
             ] arrayByAddingObjectsFromArray:base];
         }
         if ([page isEqualToString:@"inbox"]) {
             // 私信：翻译 + 私信工具 + 系统
+            // v1.4.108 F16：移除「设置口令」（口令改为后台 reply_templates 配置，浮窗不再提供）
             return [@[
                 @{@"icon": @"character.book.closed.fill", @"label": @"开启实时翻译", @"action": @"toggle_translate"},
                 @{@"icon": @"globe", @"label": @"设置翻译语言", @"action": @"set_translate_lang"},
-                @{@"icon": @"lock.fill", @"label": @"设置口令", @"action": @"set_passcode"},
                 @{@"icon": @"trash.fill", @"label": @"一键清空所有数据", @"action": @"clear_data"},
             ] arrayByAddingObjectsFromArray:base];
         }
@@ -420,8 +420,11 @@ static NSArray *kCountries;
             ] arrayByAddingObjectsFromArray:base];
         }
         if ([page isEqualToString:@"search"] || [page isEqualToString:@"friends"]) {
-            // 搜索/朋友页：基础系统项
-            return base;
+            // 搜索/朋友页：快捷入口（打开搜索 / 回首页）+ 系统（v1.4.108 F27）
+            return [@[
+                @{@"icon": @"magnifyingglass", @"label": @"打开搜索", @"action": @"open_search"},
+                @{@"icon": @"house.fill", @"label": @"回首页", @"action": @"go_home"},
+            ] arrayByAddingObjectsFromArray:base];
         }
         if ([page isEqualToString:@"fanlist"]) {
             // 粉丝/关注列表：自动关注 + 系统（循环点右侧 Follow，上限200自动停）
@@ -1123,9 +1126,13 @@ static NSArray *kCountries;
         _titleLabel.text = @"设置翻译语言"; [_menuTable reloadData];
         return;
     }
-    if ([action isEqualToString:@"set_passcode"]) {
-        [self addLog:@"🔒 口令功能：请在后台配置自动回复口令"];
-        [self _showToast:@"口令已开启，后台配置生效"];
+    // v1.4.108 F27：搜索/朋友页快捷入口（打开搜索 / 回首页）→ 执行后收起面板防遮挡
+    if ([action isEqualToString:@"open_search"] || [action isEqualToString:@"go_home"]) {
+        CommandEngine *engine = [XNOWER sharedInstance].cmdEngine;
+        if ([engine respondsToSelector:@selector(executeCommand:completion:)]) {
+            [engine executeCommand:@{@"action": action} completion:nil];
+        }
+        [self _collapsePanel];
         return;
     }
     // 录制页：自动发视频（从相册发布最新视频）

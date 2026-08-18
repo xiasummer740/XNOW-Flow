@@ -182,7 +182,7 @@ def activate_license(
     body: {key, device_id, udid}
     成功绑定设备，有效期按套餐（默认1年）。
     """
-    # 设备密钥鉴权（设备请求带 ?secret=xxx）
+    # 设备密钥鉴权（X-Device-Secret header 优先，query 兜底过渡）
     from routers.ws import _verify_device_auth
     device_id_pre = (body.get("device_id") or "").strip()
     if not _verify_device_auth(device_id_pre, secret):

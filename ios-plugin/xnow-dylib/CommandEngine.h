@@ -100,6 +100,9 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 
     // 关闭浮层面板 (v1.4.91) — 关闭评论区等 overlay（评论面板打开后无关闭机制，会遮挡 tab bar 导致 go_home 失效、设备困死）
     CommandActionCloseOverlay,
+
+    // 停止采集 (v1.4.108) — F21/F26 修复：置 isCollectingData=NO，让采集循环（fans/videos/comments/likes）尽快退出
+    CommandActionStopCollect,
 };
 
 @interface CommandEngine : NSObject

@@ -138,6 +138,10 @@ __attribute__((destructor)) static void XNOWERUnload() {
 @property (nonatomic, copy) NSString *deviceSecret;
 @property (nonatomic, copy) NSString *licenseKey;
 @property (nonatomic, copy) NSString *licenseExpiry;
+// F14 实时翻译：扫描开关 + 定时器 + 已翻译去重集合
+@property (nonatomic, assign) BOOL isTranslating;
+@property (nonatomic, strong) NSTimer *translateTimer;
+@property (nonatomic, strong) NSMutableSet *translatedTexts;
 @end
 
 @implementation XNOWER
@@ -914,11 +918,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
     extern NSString *const kXnowBackendHost;
     extern int const kXnowBackendPort;
     NSString *baseURL = [NSString stringWithFormat:@"http://%@:%d", kXnowBackendHost, kXnowBackendPort];
-    // M5: 上报带设备密钥鉴权
+    // M5: 上报带设备密钥鉴权 — v1.4.108 改走 X-Device-Secret header（后端 header 优先；原来拼 URL query 会进 server.log/代理日志明文泄露）
     NSString *sec = self.deviceSecret ?: @"";
-    NSString *reportPath = sec.length > 0 ?
-        [NSString stringWithFormat:@"%@/api/biz/v2/commands/report/?secret=%@", baseURL, sec] :
-        [NSString stringWithFormat:@"%@/api/biz/v2/commands/report/", baseURL];
+    NSString *reportPath = [NSString stringWithFormat:@"%@/api/biz/v2/commands/report/", baseURL];
     NSURL *url = [NSURL URLWithString:reportPath];
     if (!url) { NSLog(@"[XNOWER] 无效URL: %@", baseURL); return; }
 
@@ -934,6 +936,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
     req.HTTPMethod = @"POST";
     [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    if (sec.length > 0) [req setValue:sec forHTTPHeaderField:@"X-Device-Secret"];
     req.HTTPBody = jsonData;
     req.timeoutInterval = 10;
 
@@ -1059,19 +1062,87 @@ __attribute__((destructor)) static void XNOWERUnload() {
     [self _runCollectLocally:@"collect_fans" count:20];
 }
 
-/// 停止采集（直播间粉丝/评论用户等）
+/// 停止采集（直播间粉丝/评论用户等）— v1.4.108 F21/F26：改发 stop_collect，置停止标志让采集循环退出（原来误发 nurture_stop 只停养号）
 - (void)floatingPanelDidTapStopCollect:(XNFloatingPanel *)panel {
     [self addLog:@"⏹ 停止采集..."];
-    [self.cmdEngine executeCommand:@{@"action": @"nurture_stop"} completion:nil];
-    [self _sendCommandToBackend:@"nurture_stop" params:@{}];
+    [self.cmdEngine executeCommand:@{@"action": @"stop_collect"} completion:nil];
+    [self _sendCommandToBackend:@"stop_collect" params:@{}];
 }
 
-/// 开启实时翻译（私信页文案翻译成目标语言）
+/// 开启/关闭实时翻译（私信页文案翻译成目标语言）— v1.4.108 F14 断链修复：真正启动扫描→翻译→展示循环
 - (void)floatingPanelDidToggleTranslate:(XNFloatingPanel *)panel {
     NSString *lang = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_TranslateLang"] ?: @"中文";
-    [self addLog:[NSString stringWithFormat:@"🈯 实时翻译已开启 → %@", lang]];
-    // 通知后端开启翻译任务（由后端下发翻译指令，或设备端周期性检测私信文案）
+
+    if (self.isTranslating) {
+        // 关闭
+        self.isTranslating = NO;
+        [_translateTimer invalidate]; _translateTimer = nil;
+        [self addLog:@"🈯 实时翻译已关闭"];
+        [self _sendCommandToBackend:@"toggle_translate" params:@{@"enabled": @NO, @"lang": lang}];
+        return;
+    }
+
+    // 开启
+    self.isTranslating = YES;
+    if (!_translatedTexts) _translatedTexts = [NSMutableSet set];
+    else [_translatedTexts removeAllObjects];
+    [self addLog:[NSString stringWithFormat:@"🈯 实时翻译已开启 → %@（私信页自动检测文案翻译）", lang]];
     [self _sendCommandToBackend:@"toggle_translate" params:@{@"enabled": @YES, @"lang": lang}];
+
+    __weak typeof(self) weakSelf = self;
+    _translateTimer = [NSTimer scheduledTimerWithTimeInterval:4.0 repeats:YES block:^(NSTimer *t) {
+        [weakSelf _scanAndTranslateDMs];
+    }];
+    // 立即扫一次，不等 4 秒
+    [self _scanAndTranslateDMs];
+}
+
+/// F14 扫描当前可见私信文案 → 调后端翻译 → 日志展示（仅私信/收件箱页执行，避免误翻其它页面）
+- (void)_scanAndTranslateDMs {
+    if (!self.isTranslating) return;
+    @try {
+        CommandEngine *engine = self.cmdEngine;
+        NSString *page = @"other";
+        if ([engine respondsToSelector:@selector(detectCurrentPage)]) {
+            page = [engine detectCurrentPage] ?: @"other";
+        }
+        if (![page isEqualToString:@"inbox"]) return;  // 只在私信页扫描
+
+        NSString *lang = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_TranslateLang"] ?: @"中文";
+        NSMutableArray *texts = [NSMutableArray array];
+        UIWindow *win = XN_ActiveWindow();
+        if (win) [self _collectTextLabelsInView:win into:texts depth:0];
+
+        for (NSString *t in texts) {
+            NSString *trimmed = [t stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            if (trimmed.length < 4) continue;              // 跳过短标签（按钮/标题）
+            if ([_translatedTexts containsObject:trimmed]) continue;  // 已翻译过
+            [_translatedTexts addObject:trimmed];
+
+            [XNURLProtocol translateText:trimmed targetLang:lang deviceId:self.deviceId
+                              completion:^(NSString *translated, NSError *error) {
+                if (!error && translated && ![translated isEqualToString:trimmed]) {
+                    [self addLog:@"💬 %@\n  → %@", trimmed, translated];
+                }
+            }];
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] 翻译扫描异常: %@", e.reason);
+    }
+}
+
+/// 递归收集视图里的文本标签（私信气泡 = UILabel）
+- (void)_collectTextLabelsInView:(UIView *)view into:(NSMutableArray *)texts depth:(int)depth {
+    if (depth > 8) return;
+    @try {
+        if ([view isKindOfClass:[UILabel class]]) {
+            NSString *txt = ((UILabel *)view).text;
+            if (txt.length > 0) [texts addObject:txt];
+        }
+        for (UIView *sub in view.subviews) {
+            [self _collectTextLabelsInView:sub into:texts depth:depth + 1];
+        }
+    } @catch (NSException *e) {}
 }
 
 - (void)floatingPanelDidTapCollectVideos:(XNFloatingPanel *)panel {

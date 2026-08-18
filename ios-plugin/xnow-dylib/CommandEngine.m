@@ -5,6 +5,7 @@
 #import "CommandEngine.h"
 #import "AccountManager.h"
 #import "AccountSwitcher.h"
+#import "AccountPool.h"
 #import <Photos/Photos.h>
 #import "XNWindowHelper.h"
 #import "XNTouchSimulator.h"
@@ -160,6 +161,11 @@ static NSArray *XN_NurtureComments(void) {
             @"follow_user":       @(CommandActionFollowUser),
             // 粉丝列表自动关注（点右侧 Follow→上滑→循环，上限200自动停）
             @"auto_follow_list":  @(CommandActionAutoFollowList),
+            // 停止采集（v1.4.108 F21/F26：stop_collect_fans/comments/likes → 置停止标志让采集循环退出）
+            @"stop_collect":      @(CommandActionStopCollect),
+            @"stop_collect_fans": @(CommandActionStopCollect),
+            @"stop_collect_comments": @(CommandActionStopCollect),
+            @"stop_collect_likes": @(CommandActionStopCollect),
             // 关闭浮层面板（评论区等 overlay，v1.4.91）
             @"close_overlay":     @(CommandActionCloseOverlay),
             // 指定视频评论
@@ -392,35 +398,45 @@ static NSArray *XN_NurtureComments(void) {
 
             case CommandActionCollectFans: {
                 int count = [params[@"count"] intValue] ?: 20;
+                self.isCollectingData = YES;   // v1.4.108 F21：采集前开停止标志（stop_collect 置 NO 让循环退出）
                 result = [self _performCollectFans:count];
+                self.isCollectingData = NO;
                 hasResult = YES;
                 break;
             }
 
             case CommandActionCollectVideos: {
                 int count = [params[@"count"] intValue] ?: 10;
+                self.isCollectingData = YES;
                 result = [self _performCollectVideos:count];
+                self.isCollectingData = NO;
                 hasResult = YES;
                 break;
             }
 
             case CommandActionCollectComments: {
                 int count = [params[@"count"] intValue] ?: 20;
+                self.isCollectingData = YES;
                 result = [self _performCollectComments:count];
+                self.isCollectingData = NO;
                 hasResult = YES;
                 break;
             }
 
             case CommandActionCollectLiveUsers: {
                 int count = [params[@"count"] intValue] ?: 20;
+                self.isCollectingData = YES;
                 result = [self _performCollectLiveUsers:count];
+                self.isCollectingData = NO;
                 hasResult = YES;
                 break;
             }
 
             case CommandActionCollectLikes: {
                 int count = [params[@"count"] intValue] ?: 20;
+                self.isCollectingData = YES;
                 result = [self _performCollectLikes:count];
+                self.isCollectingData = NO;
                 hasResult = YES;
                 break;
             }
@@ -557,6 +573,14 @@ static NSArray *XN_NurtureComments(void) {
             }
             case CommandActionNurtureStop: {
                 result = [self _performNurtureStop];
+                hasResult = YES;
+                break;
+            }
+            case CommandActionStopCollect: {
+                // v1.4.108 F21/F26：置采集停止标志，采集循环尽快退出（不调 nurture_stop！）
+                self.isCollectingData = NO;
+                [[XNOWER sharedInstance] addLog:@"⏹ 已收到停止采集指令，采集循环将尽快停止"];
+                result = @{@"status": @"success", @"message": @"已请求停止采集"};
                 hasResult = YES;
                 break;
             }
@@ -1487,7 +1511,7 @@ static NSArray *XN_NurtureComments(void) {
     // 用 _scrollTopListUp 程序化 setContentOffset（同 auto_follow，已验证列表页可滚）。
     int collected = 0;
     int emptyScrolls = 0;
-    while (collected < count && emptyScrolls < 5) {
+    while (collected < count && emptyScrolls < 5 && !self.isCollectingData) {   // v1.4.108 F21 停止标志
         // 通过 accessibility 采集当前可见的粉丝条目
         [self _collectVisibleFans:fans limit:count];
         int before = (int)fans.count;
@@ -1539,7 +1563,7 @@ static NSArray *XN_NurtureComments(void) {
     // 滚动采集
     int collected = 0;
     int emptyScrolls = 0;
-    while (collected < count && emptyScrolls < 5) {
+    while (collected < count && emptyScrolls < 5 && !self.isCollectingData) {   // v1.4.108 F21 停止标志
         [self _collectVisibleVideos:videos limit:count];
         int before = (int)videos.count;
 
@@ -1621,7 +1645,7 @@ static NSArray *XN_NurtureComments(void) {
     // 2. 滚动采集评论作者用户名
     int collected = 0;
     int emptyScrolls = 0;
-    while (collected < count && emptyScrolls < 5) {
+    while (collected < count && emptyScrolls < 5 && !self.isCollectingData) {
         [self _collectVisibleUsers:users limit:count];
         int before = (int)users.count;
 
@@ -1874,7 +1898,7 @@ static NSArray *XN_NurtureComments(void) {
 
     int collected = 0;
     int emptyScrolls = 0;
-    while (collected < count && emptyScrolls < 5) {
+    while (collected < count && emptyScrolls < 5 && !self.isCollectingData) {
         [self _collectVisibleUsers:users limit:count];
         int before = (int)users.count;
 
@@ -1994,6 +2018,7 @@ static NSArray *XN_NurtureComments(void) {
     [self _logStep:@"auto_follow_list"];
     [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"👥 自动关注开始：单次上限 %d 人", limit]];
     __block int followed = 0;
+    __block int skippedFollowed = 0;   // v1.4.107 误点已关注被取消的次数（绝不取关，只跳过）
     int emptyRounds = 0;
     int failStreak = 0;
     for (int i = 0; i < 2000; i++) {   // 总轮次保险上限，防死循环
@@ -2034,6 +2059,19 @@ static NSArray *XN_NurtureComments(void) {
             continue;
         }
         [NSThread sleepForTimeInterval:0.8];   // 等关注动画
+        // 2.5 v1.4.107 取关防线：若误点已关注用户触发了"取消关注？"确认框 → 自动点取消，绝不取关
+        __block BOOL unfollowCancelled = NO;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            unfollowCancelled = [self _cancelUnfollowDialogIfPresent];
+        });
+        if (unfollowCancelled) {
+            skippedFollowed++;
+            failStreak = 0;
+            [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"跳过已关注[%@]（已自动取消确认框，未取关）", label]];
+            [self _scrollTopListUp];
+            [NSThread sleepForTimeInterval:0.8];
+            continue;
+        }
         // 3. 验证结果（主线程重读按钮状态）
         __block BOOL success = NO;
         dispatch_sync(dispatch_get_main_queue(), ^{
@@ -2069,11 +2107,13 @@ static NSArray *XN_NurtureComments(void) {
         [self _scrollTopListUp];
         [NSThread sleepForTimeInterval:0.8];
     }
-    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏹ 自动关注结束：共关注 %d 人", followed]];
+    NSString *skipSuffix = skippedFollowed > 0 ? [NSString stringWithFormat:@"，跳过已关注 %d 人", skippedFollowed] : @"";
+    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏹ 自动关注结束：共关注 %d 人%@", followed, skipSuffix]];
     return @{
         @"status": @"success",
-        @"message": [NSString stringWithFormat:@"自动关注结束：共关注 %d 人", followed],
+        @"message": [NSString stringWithFormat:@"自动关注结束：共关注 %d 人%@", followed, skipSuffix],
         @"followed": @(followed),
+        @"skipped_followed": @(skippedFollowed),
     };
 }
 
@@ -2141,6 +2181,34 @@ static NSArray *XN_NurtureComments(void) {
     });
     for (NSString *k in keys) {
         if ([txt rangeOfString:k options:NSCaseInsensitiveSearch].location != NSNotFound) return YES;
+    }
+    return NO;
+}
+
+/// v1.4.107 取关防线：若误点已关注用户触发了 TikTok"取消关注？"确认框，自动点取消按钮，绝不取关。
+/// 返回 YES=已检测并取消（该行按"跳过已关注"处理）；NO=无确认框。
+- (BOOL)_cancelUnfollowDialogIfPresent {
+    UIWindow *window = XN_ActiveWindow();
+    if (!window) return NO;
+    CGSize screen = [UIScreen mainScreen].bounds.size;
+    @try {
+        // 1) 确认框主按钮："取消关注/Unfollow"（仅在确认框出现，列表行按钮不含此文案，不会误中）
+        UIButton *unfollow = [self _findButtonWithAnyLabel:@[@"取消关注", @"Unfollow"] inView:window];
+        if (!unfollow) return NO;
+        // 2) 找取消按钮（不取消/Cancel/再想想/Keep/保留），排除主按钮本身，绝不误触"取消关注"
+        for (NSString *key in @[@"不取消", @"Cancel", @"再想想", @"Keep", @"保留"]) {
+            UIButton *cancel = [self _findButtonWithAnyLabel:@[key] inView:window];
+            if (!cancel || cancel == unfollow) continue;
+            CGRect f = [cancel.superview convertRect:cancel.frame toView:window];
+            // 确认框按钮在屏幕中央区域（避开顶部状态栏/底部 tab bar 的误判）
+            if (CGRectIntersectsRect(f, CGRectMake(0, screen.height * 0.15, screen.width, screen.height * 0.7))) {
+                [self _safeTapAtPoint:CGPointMake(CGRectGetMidX(f), CGRectGetMidY(f))];
+                NSLog(@"[XNOWER] 取关确认框已自动取消，未取关");
+                return YES;
+            }
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] 取关防线异常: %@", e.reason);
     }
     return NO;
 }
@@ -2353,65 +2421,44 @@ static NSArray *XN_NurtureComments(void) {
 
 #pragma mark - 账号管理
 
-/// 切换账号: 导航到设置 → 退出 → 登录页
+/// 切换账号（v1.4.108 B41 A+B）：后台传目标 aweme_id → 在本地账号池按 aweme_id/aweme_number 查找 →
+/// 交 AccountSwitcher 真切换（快照恢复→Token注入→Cookies注入→UI登录）。不再裸退出登录。
 - (void)_performSwitchAccount:(NSString *)targetAwemeId {
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        CGSize screen = [UIScreen mainScreen].bounds.size;
+    if (targetAwemeId.length == 0) {
+        [[XNOWER sharedInstance] addLog:@"❌ 切换账号缺少目标 aweme_id"];
+        NSLog(@"[XNOWER] 切换账号失败：params 缺 aweme_id");
+        return;
+    }
 
-        // Step 1: 进入个人主页（点右下角 "我" 或 点头像）
-        [self _navigateToProfile];
-    });
-    [NSThread sleepForTimeInterval:2.0];
-
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        // Step 2: 打开设置（右上角三个点或设置图标）
-        [self _tapTopRightCorner];
-    });
-    [NSThread sleepForTimeInterval:1.5];
-
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        // Step 3: 找 "设置" 按钮
-        UIButton *settingsBtn = [self _findButtonWithAnyLabel:@[@"Settings", @"设置", @"settings"]
-                                                       inView:XN_ActiveWindow()];
-        if (settingsBtn) {
-            [self _safeTapAtPoint:[settingsBtn.superview convertPoint:settingsBtn.center toView:nil]];
+    // 在本地账号池查找目标账号（aweme_id 抖音ID 优先，aweme_number/TK号 兜底）
+    NSDictionary *target = nil;
+    for (NSDictionary *acc in [[AccountPool sharedPool] allAccounts]) {
+        if ([acc[@"aweme_id"] isEqualToString:targetAwemeId] ||
+            [acc[@"aweme_number"] isEqualToString:targetAwemeId]) {
+            target = acc;
+            break;
         }
-    });
-    [NSThread sleepForTimeInterval:1.5];
+    }
+    if (!target) {
+        [[XNOWER sharedInstance] addLog:@"❌ 目标账号不在本地账号池（先在浮窗「备份当前账号」存入凭证）"];
+        NSLog(@"[XNOWER] 切换账号失败：账号池无 %@", targetAwemeId);
+        return;
+    }
 
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        // Step 4: 滑动到底部找 "退出登录"
-        // 需要滑到设置页底部
-        CGSize screen = [UIScreen mainScreen].bounds.size;
-        for (int i = 0; i < 5; i++) {
-            [self _safeScrollBy:-screen.height * 0.4];
-            [NSThread sleepForTimeInterval:0.3];
-        }
-    });
-    [NSThread sleepForTimeInterval:0.5];
-
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        // Step 5: 找 "退出登录" / "Log out" 按钮
-        UIButton *logoutBtn = [self _findButtonWithAnyLabel:@[@"Log out", @"退出登录", @"log out", @"Log Out"]
-                                                     inView:XN_ActiveWindow()];
-        if (logoutBtn) {
-            [self _safeTapAtPoint:[logoutBtn.superview convertPoint:logoutBtn.center toView:nil]];
-        }
-    });
-    [NSThread sleepForTimeInterval:1.0];
-
-    // Step 6: 确认退出
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        UIButton *confirmBtn = [self _findButtonWithAnyLabel:@[@"Log out", @"退出", @"Confirm", @"确认"]
-                                                     inView:XN_ActiveWindow()];
-        if (confirmBtn) {
-            [self _safeTapAtPoint:[confirmBtn.superview convertPoint:confirmBtn.center toView:nil]];
-        }
-    });
-    [NSThread sleepForTimeInterval:2.0];
-
-    // 清除当前账号缓存
-    [[AccountManager sharedManager] clearAccount];
+    NSInteger accountId = [target[@"id"] integerValue];
+    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"🔄 真切换账号 %@…",
+                                     target[@"nickname"] ?: targetAwemeId]];
+    [[AccountSwitcher sharedSwitcher] switchToAccount:accountId completion:^(BOOL success, NSDictionary *result) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (success) {
+                [[XNOWER sharedInstance] addLog:@"✅ 切换账号成功"];
+            } else {
+                [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"❌ 切换账号失败: %@",
+                                                 result[@"message"] ?: @"未知错误"]];
+            }
+            NSLog(@"[XNOWER] switch_account result: %@", result ?: @{});
+        });
+    }];
 }
 
 /// 导航到个人主页
@@ -3067,7 +3114,9 @@ static NSArray *XN_NurtureComments(void) {
 }
 
 /// 保存视频（安全版）：从拦截的 feed 响应取当前视频无水印 URL 上报后端
-/// 不做分享面板 UI 自动化（v1.4.37 实测会崩溃），改为直接拿 play_addr 链接
+/// v1.4.108 F6：真下载无水印视频 → ①存手机相册 ②上传后台落库（祥哥 2026-08-18 拍板）
+/// 复用 _downloadAndSaveVideoToAlbum:（下载→写 tmp→PHPhotoLibrary 存相册，F29 发视频选片同款）
+/// 后台落库：multipart 上传 /api/biz/v2/videos/save/ → 后端存 data/uploads/ + Media 表
 - (void)_performSaveVideo {
     NSDictionary *video = [XNURLProtocol lastFeedVideo];
     NSString *url = video[@"url"] ?: @"";
@@ -3076,25 +3125,26 @@ static NSArray *XN_NurtureComments(void) {
         return;
     }
     NSLog(@"[XNOWER] 保存视频 URL: %@", url);
-    [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"✅ 已获取无水印视频链接，上报后台"]];
-    @try {
-        NSString *devId = [XNOWER sharedInstance].deviceId;
-        if (devId.length > 0) {
-            [XNURLProtocol sendMessage:@{
-                @"type": @"result",
-                @"data": @{
-                    @"action": @"save_video",
-                    @"status": @"success",
-                    @"message": @"已获取无水印视频链接",
-                    @"video_url": url,
-                    @"author": video[@"author"] ?: @"",
-                    @"desc": video[@"desc"] ?: @"",
-                    @"aweme_id": video[@"aweme_id"] ?: @"",
-                }
-            } deviceId:devId];
-        }
-    } @catch (NSException *e) {
-        NSLog(@"[XNOWER] 保存视频上报异常: %@", e.reason);
+
+    // ① 下载 + 存相册（60s 超时，成功才继续上报）
+    BOOL savedToAlbum = [self _downloadAndSaveVideoToAlbum:url];
+    [[XNOWER sharedInstance] addLog:savedToAlbum ? @"📥 已下载无水印视频 → 保存到手机相册" : @"⚠️ 视频下载/存相册失败"];
+
+    // ② 上传后台落库（multipart，60s 超时）
+    NSString *devId = [XNOWER sharedInstance].deviceId;
+    if (devId.length > 0) {
+        [XNURLProtocol uploadVideoToBackend:url
+                                   metadata:@{
+                                       @"author": video[@"author"] ?: @"",
+                                       @"desc": video[@"desc"] ?: @"",
+                                       @"aweme_id": video[@"aweme_id"] ?: @"",
+                                   }
+                                   deviceId:devId
+                                 completion:^(BOOL ok, NSString *msg) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[XNOWER sharedInstance] addLog:ok ? [NSString stringWithFormat:@"✅ 视频已存后台%@", msg.length ? [@"：" stringByAppendingString:msg] : @""] : [NSString stringWithFormat:@"❌ 视频存后台失败%@", msg.length ? [@"：" stringByAppendingString:msg] : @""]];
+            });
+        }];
     }
 }
 

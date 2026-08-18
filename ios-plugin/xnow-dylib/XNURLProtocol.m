@@ -115,6 +115,31 @@ static volatile CFAbsoluteTime sLastPing = 0;
     }] resume];
 }
 
+/// v1.4.108 F14 私信实时翻译：调后端 /api/biz/v2/translate/（设备 secret 已由 _sendRequest 带 header）
++ (void)translateText:(NSString *)text
+           targetLang:(NSString *)targetLang
+             deviceId:(NSString *)deviceId
+           completion:(void (^)(NSString *translated, NSError *error))completion {
+    if (!text.length || !deviceId.length) {
+        if (completion) completion(nil, [NSError errorWithDomain:@"XN" code:9 userInfo:nil]);
+        return;
+    }
+    NSDictionary *payload = @{
+        @"text": text,
+        @"target_lang": targetLang ?: @"中文",
+        @"device_id": deviceId,
+    };
+    NSData *json = [NSJSONSerialization dataWithJSONObject:payload options:0 error:nil];
+    if (!json) { if (completion) completion(nil, [NSError errorWithDomain:@"XN" code:9 userInfo:nil]); return; }
+    [self _sendRequest:@"POST" path:@"/api/biz/v2/translate/" body:json
+            completion:^(NSData *data, NSError *error) {
+        if (error || !data) { if (completion) completion(nil, error); return; }
+        NSDictionary *j = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        NSString *translated = j[@"translated"];
+        if (completion) completion([translated isKindOfClass:[NSString class]] ? translated : text, nil);
+    }];
+}
+
 /// 上报设备状态
 + (void)reportOnline:(NSString *)deviceId {
     if (!deviceId) return;
@@ -169,6 +194,79 @@ static volatile CFAbsoluteTime sLastPing = 0;
     [self _sendRequest:@"GET" path:path body:nil completion:^(NSData *data, NSError *error) {
         if (!error && data) [self _handleResponseData:data];
     }];
+}
+
+/// v1.4.108 F6：上传视频到后台落库（multipart/form-data，60s 超时）
+/// 先下载 URL → 再 multipart POST /api/biz/v2/videos/save/ → 后端存 data/uploads/ + Media 表
+/// 不复用 _sendRequest（强制 application/json + 10s 超时），单独走 NSURLSession multipart
++ (void)uploadVideoToBackend:(NSString *)url
+                    metadata:(NSDictionary *)metadata
+                    deviceId:(NSString *)deviceId
+                  completion:(void (^)(BOOL ok, NSString *message))completion {
+    if (!url.length || !deviceId.length) {
+        if (completion) completion(NO, @"参数缺失");
+        return;
+    }
+    // Step 1: 下载视频（TikTok CDN 有重定向，用可重定向 NSURLSession）
+    __block NSData *videoData = nil;
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    NSURLSession *dlSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
+    [[dlSession dataTaskWithURL:[NSURL URLWithString:url]
+              completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+        videoData = d;
+        dispatch_semaphore_signal(sem);
+    }] resume];
+    dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 60 * NSEC_PER_SEC));
+    [dlSession finishTasksAndInvalidate];
+    if (!videoData || videoData.length == 0) {
+        if (completion) completion(NO, @"下载视频失败");
+        return;
+    }
+    NSLog(@"[XNURLProtocol] 视频下载完成 %lu bytes，上传后台...", (unsigned long)videoData.length);
+
+    // Step 2: multipart/form-data 构造（boundary 随机；顺序：先文本字段 → file → 结束标记）
+    NSString *boundary = [NSString stringWithFormat:@"XNOW-Boundary-%d", arc4random()];
+    NSMutableData *body = [NSMutableData data];
+    void (^addField)(NSString *, NSString *) = ^(NSString *name, NSString *value) {
+        [body appendData:[[NSString stringWithFormat:@"--%@\r\nContent-Disposition: form-data; name=\"%@\"\r\n\r\n%@\r\n", boundary, name, value ?: @""] dataUsingEncoding:NSUTF8StringEncoding]];
+    };
+    addField(@"device_id", deviceId);
+    addField(@"author", metadata[@"author"] ?: @"");
+    addField(@"desc", metadata[@"desc"] ?: @"");
+    addField(@"aweme_id", metadata[@"aweme_id"] ?: @"");
+    [body appendData:[[NSString stringWithFormat:@"--%@\r\nContent-Disposition: form-data; name=\"file\"; filename=\"video.mp4\"\r\nContent-Type: video/mp4\r\n\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:videoData];
+    [body appendData:[[NSString stringWithFormat:@"\r\n--%@--\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+
+    // Step 3: POST 上传（设备 secret 走 header，同 _sendRequest 安全模式）
+    NSString *urlStr = [NSString stringWithFormat:@"http://%@:%d/api/biz/v2/videos/save/",
+                        XN_BACKEND_HOST, XN_BACKEND_PORT];
+    NSURL *uploadURL = [NSURL URLWithString:urlStr];
+    if (!uploadURL) { if (completion) completion(NO, @"URL 非法"); return; }
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:uploadURL];
+    req.HTTPMethod = @"POST";
+    req.HTTPBody = body;
+    [req setValue:[NSString stringWithFormat:@"multipart/form-data; boundary=%@", boundary]
+ forHTTPHeaderField:@"Content-Type"];
+    NSString *secret = [self _deviceSecret];
+    if (secret.length > 0) [req setValue:secret forHTTPHeaderField:@"X-Device-Secret"];
+    req.timeoutInterval = 60;
+
+    NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    cfg.timeoutIntervalForRequest = 60;
+    NSURLSession *upSession = [NSURLSession sessionWithConfiguration:cfg];
+    [[upSession dataTaskWithRequest:req
+                  completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
+        BOOL ok = (!error && data);
+        NSString *msg = @"";
+        if (data) {
+            NSDictionary *j = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+            if (j[@"message"]) msg = j[@"message"];
+        }
+        if (error) NSLog(@"[XNURLProtocol] 视频上传失败: %@", error.localizedDescription);
+        [upSession finishTasksAndInvalidate];
+        if (completion) completion(ok, msg);
+    }] resume];
 }
 
 /// 激活卡密（POST /api/biz/v2/licenses/activate/）

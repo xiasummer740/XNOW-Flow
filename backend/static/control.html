@@ -45,7 +45,6 @@ button:disabled { opacity:.4; cursor:not-allowed; }
     <button onclick="cmd('smart_browse',{min_scrolls:5,max_scrolls:12})">🌐 智能浏览</button>
     <button onclick="cmd('go_back')">↩️ 返回</button>
     <button onclick="cmd('go_home')">🏠 首页</button>
-    <button onclick="cmd('open_tab',{tab:'discover'})">🔍 发现页</button>
     <button onclick="cmd('open_tab',{tab:'inbox'})">✉️ 消息页</button>
     <button onclick="cmd('open_tab',{tab:'profile'})">👤 我的页</button>
     <button onclick="cmd('open_search')">🔎 打开搜索</button>
@@ -194,8 +193,11 @@ button:disabled { opacity:.4; cursor:not-allowed; }
 
 <div class="card">
   <h2>👤 账号操作</h2>
+  <label>目标账号（B41 切换账号：选账号 → 真切换，后台传其 aweme_id）</label>
+  <select id="accountSelect" style="width:100%;padding:6px;"><option value="">选择目标账号…</option></select>
   <div class="btns">
-    <button onclick="cmd('switch_account',{aweme_id:''})">🔄 切换账号</button>
+    <button class="btn-primary" onclick="cmd('switch_account',{aweme_id:document.getElementById('accountSelect').value})">🔄 切换账号</button>
+    <button onclick="loadAccountSelector()">🔃 刷新账号</button>
     <button onclick="cmd('logout')">🚪 退出登录</button>
     <button onclick="cmd('report_account')">📮 上报账号</button>
   </div>
@@ -349,6 +351,32 @@ async function viewCollectedData() {
     });
     log(out);
   } catch(e) { log('❌ 查看采集数据失败: ' + e.message); }
+}
+
+// B41 加载所选设备账号列表（后端 Account 表，按设备名过滤）→ 填充切换账号下拉
+async function loadAccountSelector() {
+  const sel = document.getElementById('deviceSelect');
+  const opt = sel.options[sel.selectedIndex];
+  const devName = opt ? (opt.dataset.name || '') : '';
+  if (!devName) { log('⚠️ 请先选择设备'); return; }
+  const acctSel = document.getElementById('accountSelect');
+  acctSel.innerHTML = '<option value="">加载账号…</option>';
+  try {
+    const d = await api('/api/biz/v2/accounts/?device_id=' + encodeURIComponent(devName) + '&limit=100');
+    const rows = (d.results||[]);
+    acctSel.innerHTML = '';
+    if (!rows.length) {
+      acctSel.innerHTML = '<option value="">（该设备暂无账号，先在手机浮窗「备份当前账号」）</option>';
+      return;
+    }
+    rows.forEach(a => {
+      const o = document.createElement('option');
+      o.value = a.aweme_id || '';
+      o.textContent = (a.nickname || '未知') + ' | TK:' + (a.aweme_number || '—') + (a.status === 'active' ? ' ✅' : '');
+      acctSel.appendChild(o);
+    });
+    log('📋 加载 ' + rows.length + ' 个账号，选一个点「切换账号」');
+  } catch(e) { log('❌ 加载账号失败: ' + e.message); }
 }
 
 function selectedDeviceCode() {
@@ -558,6 +586,7 @@ function log(msg) {
 document.getElementById('deviceSelect').addEventListener('change', () => {
   deviceId = selectedDevice();
   updateStatus();
+  loadAccountSelector();
 });
 
 // ========== UDID 签名管理 ==========

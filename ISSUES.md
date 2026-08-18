@@ -12,7 +12,7 @@
 | 已验证 | 任务/定时任务非 admin 校验设备归属（防跨租户下发） | 2026-08-11 全面审查 | 2026-08-11 |
 | 已验证 | 设备鉴权收紧：UUID 校验 + 恒定时间比较 + 关迁移期放行 | 2026-08-11 全面审查 | 2026-08-11 |
 | 待修 | 无 TLS 明文传输（uvicorn:8000 公网明文）→ 需 nginx 443 + 设备改 https（第二批） | 2026-08-11 全面审查 | 2026-08-11 |
-| 待修 | 设备 secret 走 URL 明文进日志 → 改 header 传输（第二批，需设备端改造+装机） | 2026-08-11 全面审查 | 2026-08-11 |
+| 已修待验 | 设备 secret 走 URL 明文进日志 → 已改 header 传输（v1.4.108：XNOWER `_sendCommandToBackend:` 改走 X-Device-Secret header；XNURLProtocol 早已走 header） | 2026-08-11 全面审查 | 2026-08-18 |
 | 待修 | batch_login 把解密后账号凭证明文下发 → 明文传输风险归并「无 TLS」项（已做限权 ensure_owned，凭证仅发往用户自有设备；TLS 443 上线后消除） | 2026-08-11 全面审查 | 2026-08-16 |
 | 已验证 | get_online_devices 无租户过滤 → 已加 tenant_scope 过滤（device_commands.py:135-140），已部署 VPS 验证存在 | 2026-08-11 全面审查 | 2026-08-16 |
 
@@ -38,8 +38,8 @@
 | 部分验证 | 我的/别人主页区分+菜单重配：**代码/配置已验证正确**（离线复刻：feed=home 无采集三件套；mine=账号管理；other=自动关注/采集/视频），真机不可达（导航坏） | 2026-08-15 真机 | 2026-08-15 |
 | 部分验证 | 三个按钮绑定修复：代码已确认 auto_follow→follow、auto_comment_like→like_comment、collect_live→collect_live_users，真机不可达（导航坏） | 2026-08-15 真机 | 2026-08-15 |
 | 已验证 | 设备激活失配：卡7YDYWY绑旧UUID与当前device_id不符→403未激活。已SQL更新license绑定，本次会话 license poll 返回 200 = 激活恢复 | 2026-08-15 排查 | 2026-08-15 |
-| 待修 | 翻译功能真机验证：私信页 toggle_translate 是否调后端千问翻译生效 | 2026-08-11 开发 | 2026-08-12 |
-| 待修 | 口令自动回复真机验证：reply_templates 关键词匹配是否触发回复 | 2026-08-11 开发 | 2026-08-12 |
+| 已修待验 | **F14 实时翻译断链已修**（v1.4.108）：后端 `toggle_translate` 处理器（device_commands.py 记录设备翻译偏好 `_device_translate_prefs` + `GET /devices/{id}/translate-pref/` 查询）+ `/api/biz/v2/translate/` 双鉴权（user JWT / 设备 secret header）+ 设备端扫描循环（XNOWER `_scanAndTranslateDMs` 私信页检测文案→XNURLProtocol `translateText:` 调后端→日志展示；F15 翻译语言存储已被扫描循环消费）。待装机验证 | 2026-08-11 开发 | 2026-08-18 |
+| 已修待验 | **F16 口令入口已移除**（v1.4.108，祥哥拍板「去掉」）：XNFloatingPanel 私信页菜单删除「设置口令」+ 删除孤儿 handler（XNFloatingPanel.m），口令走后台 reply_templates 配置。待装机验证 | 2026-08-11 开发 | 2026-08-18 |
 | 待修 | 回关自动私信真机验证：关注成功后自动私信(取话术) | 2026-08-12 开发 | 2026-08-12 |
 | 待修 | 统一素材库/视频管理/广告管理页真机验证（后端已上线） | 2026-08-12 开发 | 2026-08-12 |
 | 待修 | 设备端 poll 静默失败无重连 → 掉线后永不恢复（昨晚 go_home 后掉线根因，需装机新版） | 2026-08-10 真机 | 2026-08-11 |
@@ -49,6 +49,13 @@
 | 待修 | 硬件 UDID(IOPlatformUUID) 能否拿到 + 激活是否稳定 | 2026-08-10 接力 | 2026-08-11 |
 | 待修 | 其他设备命令真机验证：发视频选片/like_comment/open_live/follow_user/comment_video | 2026-08-10 接力 | 2026-08-11 |
 | 待修 | 硬件UDID若拿不到 → 备选：爱思UDID手动绑定 / 放宽卡绑定 | 2026-08-10 接力 | 2026-08-11 |
+| 已修待验 | **F21/F26 停止采集错配已修**（v1.4.108）：CommandEngine 新增 `CommandActionStopCollect`（stop_collect 系列→置 `isCollectingData=NO`）；5 个采集 case（fans/videos/comments/live_users/likes）前置 YES/后置 NO；4 处 while 循环加 `!isCollectingData` 停止检查；浮窗停止按钮改发 `stop_collect`（不再误发 `nurture_stop`）；顺带修复 `_sendCommandToBackend:` 设备 secret 改走 X-Device-Secret header。待装机验证 | 2026-08-18 产品对齐 | 2026-08-18 |
+| 已修待验 | **F6/B16 保存视频已修**（v1.4.108，祥哥拍板「双做」）：`_performSaveVideo` ①下载无水印视频存相册 ②XNURLProtocol `uploadVideoToBackend:` 上传后台 ③后端 `/videos/save/` 落 Media 表（设备 secret 鉴权、200MB 上限、multipart 文本字段在前修复）。待装机验证 | 2026-08-18 产品对齐 | 2026-08-18 |
+| 已修待验 | **B10 发现页按钮已删**（v1.4.108，祥哥确认发现页=For You 首页与 B9 重复）：control.html 移除「🔍 发现页」按钮；open_tab discover 坐标兜底保留防旧指令。待装机验证 | 2026-08-18 产品对齐 | 2026-08-18 |
+| 已修待验 | **F13 直播间重复入口已删**（v1.4.108，祥哥拍板合并删一个）：XNFloatingPanel 直播页菜单删除「开始采集」，留「采集直播间粉丝」（collect_live）。待装机验证 | 2026-08-18 产品对齐 | 2026-08-18 |
+| 已修待验 | **F27 快捷入口已加**（v1.4.108，祥哥拍板加「打开搜索/回首页」）：XNFloatingPanel `_buildPageMenu` 的 search/friends 分支加「打开搜索」「回首页」（执行后自动收起面板防遮挡）。待装机验证 | 2026-08-18 产品对齐 | 2026-08-18 |
+| 已修待验 | **B41 切换账号已改真切换**（v1.4.108，祥哥拍板 A+B）：A=`_performSwitchAccount:` 按 aweme_id/aweme_number 在 AccountPool 查目标账号→交 `AccountSwitcher switchToAccount:` 真切换（快照恢复→Token/Cookies 注入→UI 登录）；备份时账号存 aweme_id；B=control.html 账号操作卡加「目标账号」下拉（后台 `/accounts/` 接口按设备加载）选账号传 aweme_id。待装机验证 | 2026-08-18 产品对齐 | 2026-08-18 |
+| 待修 | **F12 采集点赞名不副实**（产品对齐坐实）：`_performCollectLikes` 与 F11 采集直播间粉丝**同一套 `_collectLiveRoomUsers` 逻辑**，仅 sourceType 标签不同，没真采"点赞用户" → 待拍板：真做（开点赞列表采）or 删按钮 | 2026-08-18 产品对齐 | 2026-08-18 |
 
 > 待办策略：攒批 3-5 项一次装机测，不单点发版。
 > 未列问题但新发现的 → 加一行状态「待修」。

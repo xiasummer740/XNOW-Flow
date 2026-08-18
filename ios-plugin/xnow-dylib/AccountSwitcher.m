@@ -152,6 +152,8 @@ static AccountSwitcher *gShared = nil;
     NSDictionary *detected = [[AccountManager sharedManager] currentAccount];
     if (detected.count > 0) {
         profile = @{
+            // v1.4.108 B41：存 aweme_id（抖音数字ID），后台 switch_account 用 aweme_id 匹配
+            @"aweme_id": detected[@"aweme_id"] ?: profile[@"aweme_id"] ?: @"",
             @"nickname": detected[@"nickname"] ?: profile[@"nickname"] ?: @"",
             @"unique_id": detected[@"unique_id"] ?: profile[@"unique_id"] ?: @"",
             @"followers": detected[@"followers"] ?: profile[@"followers"] ?: @(0),
@@ -170,6 +172,7 @@ static AccountSwitcher *gShared = nil;
             activeId = [existing[@"id"] integerValue];
             [[AccountPool sharedPool] upsertAccount:@{
                 @"id": @(activeId),
+                @"aweme_id": profile[@"aweme_id"] ?: @"",
                 @"nickname": profile[@"nickname"] ?: @"账号",
                 @"aweme_number": awemeNum,
                 @"followers": profile[@"followers"] ?: @(0),
@@ -183,6 +186,7 @@ static AccountSwitcher *gShared = nil;
     }
     if (activeId <= 0) {
         activeId = [[AccountPool sharedPool] addLocalAccount:@{
+            @"aweme_id": profile[@"aweme_id"] ?: @"",
             @"nickname": profile[@"nickname"] ?: @"账号",
             @"aweme_number": awemeNum,
             @"followers": profile[@"followers"] ?: @(0),
