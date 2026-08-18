@@ -383,14 +383,18 @@ static volatile CFAbsoluteTime sLastPing = 0;
 
     NSString *url = request.URL.absoluteString;
 
-    // 轻量拦截 — feed/recommend（piggyback）只拦 tiktok.com/byteoversea.com（tiktokv.com 全量拦截曾导致不稳定，已撤）
+    // 轻量拦截 — feed/recommend（piggyback）拦 tiktok.com/byteoversea.com + tiktokv.com（仅路径级，v1.4.39 全量拦 tiktokv.com 曾闪退已撤）
+    // tiktokv.com 是 TikTok iOS 实际 API 域名（feed 请求走这里），不加它 F6 保存视频永远抓不到无水印 URL（v1.4.108 装机实证）
     // /user/ 额外拦 tiktokv.com（低频，仅用于当前用户资料捕获，供备份/账号检测）
     BOOL onTikHost = [url containsString:@"tiktok.com"] || [url containsString:@"byteoversea.com"];
     BOOL onTikVHost = [url containsString:@"tiktokv.com"];
-    if ([url containsString:@"/user/"]) {
+    BOOL isFeedReq = [url containsString:@"/feed"] || [url containsString:@"/recommend"];
+    BOOL isUserReq = [url containsString:@"/user/"];
+    if (isUserReq) {
         if (onTikHost || onTikVHost) return YES;
-    } else if (onTikHost) {
-        if ([url containsString:@"/feed"] || [url containsString:@"/recommend"]) return YES;
+    } else if (isFeedReq) {
+        // v1.4.109 F6：tiktokv.com 只按 /feed /recommend 路径匹配（非全量），维持 piggyback 转发开销不变
+        if (onTikHost || onTikVHost) return YES;
     }
 
     return NO;
