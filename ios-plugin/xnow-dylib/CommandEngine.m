@@ -73,6 +73,8 @@ static NSArray *XN_NurtureComments(void) {
 @property (nonatomic, assign) BOOL isCollectingData;
 @property (nonatomic, assign) BOOL nurtureRunning;   // 连续养号运行标志（后台循环检查）
 @property (nonatomic, assign) int nurtureMode;       // 当前养号模式 1/2
+- (NSDictionary *)_tapTab:(NSString *)tab;          // v1.4.106 返回诊断 dict（含 home 深链兜底）
+- (void)_openDeepLink:(NSString *)urlString;         // 打开 TikTok 深链（snssdk1233://）
 @end
 
 @implementation CommandEngine
@@ -477,7 +479,10 @@ static NSArray *XN_NurtureComments(void) {
                 break;
             case CommandActionOpenTab: {
                 NSString *tab = params[@"tab"] ?: @"home";
-                [self _tapTab:tab];
+                // v1.4.106: _tapTab 返回诊断 dict，随 result 回传后端（server.log 可见，定位 setSelectedIndex:0 失效根因）
+                NSDictionary *diag = [self _tapTab:tab];
+                result = @{@"status": @"success", @"tab": tab, @"diag": diag ?: @{}};
+                hasResult = YES;
                 break;
             }
             case CommandActionOpenSearch:
@@ -2786,16 +2791,32 @@ static NSArray *XN_NurtureComments(void) {
     return NO;
 }
 
-- (void)_tapTab:(NSString *)tab {
+/// 打开 TikTok 深链（v1.4.106 home 兜底用；openURL 异步，主队列调度）
+- (void)_openDeepLink:(NSString *)urlString {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSURL *url = [NSURL URLWithString:urlString];
+        if (url) {
+            [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+        }
+    });
+}
+
+/// 切 tab。返回诊断 dict（含实际采用的方法 + selectedIndex before/after），随 open_tab result 回传后端便于排查。
+/// v1.4.106 修复：TikTok 首页 tab 实测 setSelectedIndex:0 不落位（friends→home 卡在原 tab，vc_chain 证实
+///   AWEFeedRootViewController 类名正确但回读 selectedIndex 仍非 0）→ home 落位验证 + 深链 snssdk1233://feed 兜底
+///   （go_home 实测深链可靠回 feed）+ 1.2s 异步复验防 TikTok 稍后回退。
+- (NSDictionary *)_tapTab:(NSString *)tab {
+    __block NSDictionary *diag = nil;
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIWindow *window = XN_ActiveWindow();
-        if (!window) return;
+        if (!window) { diag = @{@"method": @"no_window"}; return; }
         CGSize screen = [UIScreen mainScreen].bounds.size;
 
         // 0. 【v1.4.92】直接运行时切 tab：TTKTabBarButton 纯手势(UITapGestureRecognizer)，
         //    合成触摸绕过手势管理器永远触发不了(实测 isSelected 恒 False / touch_diag target_actions 空)。
         //    用类名找索引 → setSelectedIndex 直达，不依赖触摸。
         UITabBarController *tabC = [self _findTabBarControllerInWindow:window];
+        NSInteger beforeSel = (tabC) ? tabC.selectedIndex : -1;
         if (tabC) {
             NSString *targetClass = nil;
             if ([tab isEqualToString:@"home"])          targetClass = @"AWEFeedRootViewController";
@@ -2803,10 +2824,37 @@ static NSArray *XN_NurtureComments(void) {
             else if ([tab isEqualToString:@"profile"])  targetClass = @"TTKProfileHomeViewController";
             else if ([tab isEqualToString:@"friends"])  targetClass = @"TTKFriendsRootViewController";
             if (targetClass && [self _selectTabByViewControllerClass:tabC classString:targetClass]) {
-                NSLog(@"[XNOWER] tapTab:%@ → setSelectedIndex:%ld (直接运行时切换)", tab, (long)tabC.selectedIndex);
+                NSInteger afterSel = tabC.selectedIndex;
+                if ([tab isEqualToString:@"home"] && afterSel != 0) {
+                    // v1.4.106: home 落位失败（setSelectedIndex:0 被 TikTok 拒绝）→ 深链兜底
+                    [self _openDeepLink:@"snssdk1233://feed"];
+                    NSLog(@"[XNOWER] tapTab:home setSelectedIndex 未落位(before=%ld after=%ld) → 深链 snssdk1233://feed", (long)beforeSel, (long)afterSel);
+                    diag = @{@"method": @"home_syncReject_deeplink", @"before": @(beforeSel), @"after": @(afterSel)};
+                    self->_currentPage = @"home";
+                    return;
+                }
+                if ([tab isEqualToString:@"home"]) {
+                    // 立即落位成功 → 异步复验，防 TikTok 稍后回退 selectedIndex（1.2s 后仍非 0 则深链补拉）
+                    __weak typeof(self) weakSelf = self;
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        UITabBarController *tc2 = [weakSelf _findTabBarControllerInWindow:XN_ActiveWindow()];
+                        if (tc2 && tc2.selectedIndex != 0) {
+                            NSLog(@"[XNOWER] tapTab:home 异步回退 sel=%ld → 深链补拉", (long)tc2.selectedIndex);
+                            [weakSelf _openDeepLink:@"snssdk1233://feed"];
+                        }
+                    });
+                    diag = @{@"method": @"home_setIndex", @"before": @(beforeSel), @"after": @(afterSel)};
+                    self->_currentPage = @"home";
+                    return;
+                }
+                NSLog(@"[XNOWER] tapTab:%@ → setSelectedIndex:%ld (直接运行时切换)", tab, (long)afterSel);
+                diag = @{@"method": @"setSelectedIndex", @"tab": tab, @"before": @(beforeSel), @"after": @(afterSel)};
                 self->_currentPage = tab;
                 return;
             }
+            diag = @{@"method": @"class_no_match", @"tab": tab, @"before": @(beforeSel)};
+        } else {
+            diag = @{@"method": @"no_tabC", @"tab": tab};
         }
 
         // 1. 官方 accessibility identifier 精确定位 tab（ui_scan 实测: a11y_vo_home / a11y_vo_inbox / a11y_vo_profile）
@@ -2823,6 +2871,7 @@ static NSArray *XN_NurtureComments(void) {
                 CGPoint center = [tabView.superview convertPoint:tabView.center toView:nil];
                 [self _safeTapAtPoint:center];
                 NSLog(@"[XNOWER] tapTab:%@ 命中 %@ center=(%.0f,%.0f)", tab, NSStringFromClass(tabView.class), center.x, center.y);
+                diag = @{@"method": @"acc_id_tap", @"tab": tab};
                 self->_currentPage = tab;
                 return;
             }
@@ -2836,6 +2885,7 @@ static NSArray *XN_NurtureComments(void) {
                 CGRect f = [homeBtn.superview convertRect:homeBtn.frame toView:nil];
                 if (f.origin.y > screen.height * 0.7) {  // 只在底部区域（tab bar）
                     [self _safeTapAtPoint:[homeBtn.superview convertPoint:homeBtn.center toView:nil]];
+                    diag = @{@"method": @"label_tap", @"tab": tab};
                     self->_currentPage = tab;
                     return;
                 }
@@ -2849,8 +2899,10 @@ static NSArray *XN_NurtureComments(void) {
         else ratioX = 0.12;  // home 默认
         CGFloat tabY = screen.height - 132;  // 实测 tab 中心 y≈712 (h=844): h-132=712; 适配不同屏幕比例
         [self _safeTapAtPoint:CGPointMake(screen.width * ratioX, tabY)];
+        diag = @{@"method": @"coord_fallback", @"tab": tab};
         self->_currentPage = tab;
     });
+    return diag;
 }
 
 /// 打开搜索（点右上角搜索图标，或 URL scheme）
