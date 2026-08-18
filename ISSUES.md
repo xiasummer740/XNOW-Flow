@@ -46,7 +46,7 @@
 | 待修 | 共享 forward session 被 finishTasksAndInvalidate 销毁（copy-paste 错误，潜在崩/卡雷）→ **已修**：XNURLProtocol.m:429 改独立 session 不复用共享，待装机验证 | 2026-08-11 全面审查 | 2026-08-16 |
 | 待修 | 授权检查把网络瞬时失败当未激活 → 清激活停轮询（潜在雷） | 2026-08-11 全面审查 | 2026-08-11 |
 | 待修 | v1.4.76 follow 验证：state_diag 应显示 "Following X"（上次设备掉线未完成） | 2026-08-10 真机 | 2026-08-11 |
-| 待修 | 硬件 UDID(IOPlatformUUID) 能否拿到 + 激活是否稳定 | 2026-08-10 接力 | 2026-08-11 |
+| 已修待验 | **硬件 UDID(IOPlatformUUID) 已实现**（v1.4.115，祥哥 2026-08-17 抱怨「又要输卡密」）：根因=每次 i4Tools 装机=全新安装，NSUserDefaults/Keychain/IDFV 全清→device_id 漂移→卡密绑定失配→又要输卡密。**v1.4.115 根治**：XNOWER.m `XN_HardwareUDID()` 用 IOKit 读 IOPlatformUUID（硬件级标识，重装/重签不变）取前8位做 `iphone_<hw>`，IOKit 失败回落 IDFV（零风险）；编译链接已加 `-framework IOKit`。待装机验证（= 115 装后自动激活不再输卡密） | 2026-08-17 真机 | 2026-08-18 |
 | 待修 | 其他设备命令真机验证：发视频选片/like_comment/open_live/follow_user/comment_video | 2026-08-10 接力 | 2026-08-11 |
 | 待修 | 硬件UDID若拿不到 → 备选：爱思UDID手动绑定 / 放宽卡绑定 | 2026-08-10 接力 | 2026-08-11 |
 | 已修待验 | **F21/F26 停止采集错配已修**（v1.4.108）：CommandEngine 新增 `CommandActionStopCollect`（stop_collect 系列→置 `isCollectingData=NO`）；5 个采集 case（fans/videos/comments/live_users/likes）前置 YES/后置 NO；4 处 while 循环加 `!isCollectingData` 停止检查；浮窗停止按钮改发 `stop_collect`（不再误发 `nurture_stop`）；顺带修复 `_sendCommandToBackend:` 设备 secret 改走 X-Device-Secret header。待装机验证 | 2026-08-18 产品对齐 | 2026-08-18 |

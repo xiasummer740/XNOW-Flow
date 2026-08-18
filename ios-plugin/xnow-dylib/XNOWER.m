@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <execinfo.h>
+#import <IOKit/IOKitLib.h>
 
 // ======== 崩溃诊断 ========
 // 未捕获 ObjC 异常 → 写文件；SIGSEGV/SIGABRT → 写标记文件。下次启动上报后端。
@@ -60,6 +61,26 @@ static void XN_WriteCrashFile(NSString *name, NSString *content) {
         [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
         [content writeToFile:[dir stringByAppendingPathComponent:name] atomically:YES encoding:NSUTF8StringEncoding error:nil];
     } @catch (id e) {}
+}
+
+// ======== 硬件 UDID（稳定设备身份，卡密绑定用）========
+// i4Tools 每次装机 = 全新安装，NSUserDefaults/Keychain/IDFV 全变 → device_id 漂移 →
+// 卡密绑定失配 → 又要输卡密。IOPlatformUUID 是硬件级标识，重装/重签都不变。
+// 失败回落 nil（调用方继续用 IDFV），零风险。
+static NSString *XN_HardwareUDID(void) {
+    NSString *udid = nil;
+    io_service_t expert = IOServiceGetMatchingService(kIOMainPortDefault,
+                                                      IOServiceMatching("IOPlatformExpertDevice"));
+    if (expert) {
+        CFTypeRef uuid = IORegistryEntryCreateCFProperty(expert, CFSTR("IOPlatformUUID"),
+                                                         kCFAllocatorDefault, 0);
+        if (uuid) {
+            udid = [NSString stringWithFormat:@"%@", (__bridge id)uuid];
+            CFRelease(uuid);
+        }
+        IOObjectRelease(expert);
+    }
+    return udid;
 }
 
 static void XN_UncaughtExceptionHandler(NSException *exception) {
@@ -203,6 +224,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
 
         // 生成或恢复设备 ID —— 必须稳定（激活卡、授权检查、绑定后台用同一个 ID）。
         // 序号(device_code)不进入 deviceId，否则绑定前后 ID 变化导致激活的卡对不上。
+        // v1.4.115 根治：装机（i4Tools 重装=全新安装）会清掉 NSUserDefaults/Keychain/IDFV，
+        // 旧方案每次重装 device_id 漂移 → 卡密绑定失配 → 又要输卡密。
+        // 改为硬件 UDID（IOPlatformUUID）优先，装机不变；IOKit 失败才回落 IDFV。
         NSString *savedId = [[NSUserDefaults standardUserDefaults]
                               stringForKey:kXnowDeviceIdKey];
         if (savedId.length > 0) {
@@ -215,9 +239,17 @@ __attribute__((destructor)) static void XNOWERUnload() {
                 _deviceId = savedId;
             }
         } else {
-            NSString *vendorID = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
-            NSString *shortID = vendorID.length >= 8 ? [vendorID substringToIndex:8] :
+            NSString *hwUDID = XN_HardwareUDID();
+            NSString *shortID = @"";
+            if (hwUDID.length >= 8) {
+                // IOPlatformUUID 格式："XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"，取前8位
+                shortID = [hwUDID substringToIndex:8];
+            } else {
+                // 硬件 UDID 不可用（极老设备/IOKit 异常）→ 回落 IDFV（现状，装机仍会漂移）
+                NSString *vendorID = [[[UIDevice currentDevice] identifierForVendor] UUIDString];
+                shortID = vendorID.length >= 8 ? [vendorID substringToIndex:8] :
                                  [NSUUID UUID].UUIDString;
+            }
             _deviceId = [NSString stringWithFormat:@"iphone_%@", shortID];
             [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
         }
