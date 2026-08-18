@@ -355,7 +355,9 @@ static NSArray *kCountries;
 
 - (void)_showMainMenu {
     _viewMode = 1; _backBtn.hidden = YES; _closeBtn.hidden = NO;
-    _titleLabel.text = @"快捷菜单";
+    // 主菜单标题带构建版本号（如 "快捷菜单 v1.4.111"），方便确认当前装的哪个版本
+    NSString *bv = [XNOWER sharedInstance].buildVersion ?: @"dev";
+    _titleLabel.text = [NSString stringWithFormat:@"快捷菜单 v%@", bv];
     _menuTable.hidden = NO;
     [self _removeInputViews];
     // 页面感知：检测当前 TikTok 页面，动态生成菜单
