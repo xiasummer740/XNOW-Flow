@@ -163,6 +163,25 @@ static AccountSwitcher *gShared = nil;
         };
     }
 
+    // 2b. 资料仍空（用户没进过个人页 → AccountManager 无捕获；NSUserDefaults 也无缓存）
+    //     → 导航个人页触发 /user/ 网络捕获（同 get_account_info），拿全昵称/头像/ID。
+    //     backup 命令与面板按钮都走 _execQueue 后台线程，此处 dispatch_sync(main) 安全。
+    if (![profile[@"aweme_id"] length]) {
+        SW_LOG(@"账号资料为空，导航个人页触发网络捕获...");
+        NSDictionary *captured = [self.cmdEngine detectCurrentAccountFlow];
+        if (captured.count > 0) {
+            profile = @{
+                @"aweme_id": captured[@"aweme_id"] ?: @"",
+                @"nickname": captured[@"nickname"] ?: @"",
+                @"unique_id": captured[@"unique_id"] ?: @"",
+                @"followers": captured[@"followers"] ?: @(0),
+                @"following_count": captured[@"following_count"] ?: @(0),
+                @"country": captured[@"region"] ?: @"",
+                @"avatar_url": captured[@"avatar_url"] ?: @"",
+            };
+        }
+    }
+
     // 3. 获取或新建账号记录（去重：同 aweme_number 已存在则更新，不新建）
     NSInteger activeId = [login[@"accountId"] integerValue];
     NSString *awemeNum = profile[@"unique_id"] ?: @"";

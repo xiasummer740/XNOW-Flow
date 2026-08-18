@@ -119,6 +119,10 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 /// 检测当前页面类型，返回: home(推荐feed) / comment(评论区) / profile(个人主页) / live(直播间) / inbox(私信) / other
 - (NSString *)detectCurrentPage;
 
+/// 主动检测当前账号：导航个人页→等 /user/ 网络捕获→UI扫描兜底，返回账号资料字典（aweme_id/nickname/unique_id/头像等）
+/// 供 get_account_info 与 backup_account（备份前资料为空时）共用
+- (NSDictionary *)detectCurrentAccountFlow;
+
 // ===== 连续养号（默认24小时，直到停止）=====
 /// 启动养号：随机浏览10-20秒；browseOnly=YES 只上滑浏览，NO 随机点赞/关注；totalSeconds>0 自定义时长，0=24小时
 - (void)startNurtureWithDuration:(int)totalSeconds browseOnly:(BOOL)browseOnly;

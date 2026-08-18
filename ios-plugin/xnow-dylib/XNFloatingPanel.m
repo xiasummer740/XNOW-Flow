@@ -5,7 +5,6 @@
 #import "XNFloatingPanel.h"
 #import "XNOWER.h"
 #import "XNWindowHelper.h"
-#import "DeviceIdentity.h"
 #import "AccountPool.h"
 #import "AccountManager.h"
 #import "CountryEnv.h"
@@ -284,11 +283,11 @@ static NSArray *kCountries;
     CGFloat w = kExpandedWidth - 2 * m;
     CGFloat y = 16;
 
-    // UUID 卡片（统一显示 Keychain deviceUID，与激活/授权/复制机器码一致；不能用 IDFV 否则和日志不一致）
-    NSString *uuid = [DeviceIdentity deviceUID] ?: @"UNKNOWN";
+    // 设备 ID 卡片（显示 _panelDeviceId = deviceId iphone_xxx，与激活/授权/复制机器码一致；Keychain UID 重装会变，不用）
+    NSString *uuid = _panelDeviceId ?: @"UNKNOWN";
     UIView *uuidCard = [self _makeCardViewWithFrame:CGRectMake(m, y, w, 66)];
     UILabel *uuidTitle = [[UILabel alloc] initWithFrame:CGRectMake(14, 10, w - 28, 14)];
-    uuidTitle.text = @"设备 UUID";
+    uuidTitle.text = @"设备 ID";
     uuidTitle.font = [UIFont systemFontOfSize:11 weight:UIFontWeightSemibold];
     uuidTitle.textColor = [UIColor secondaryLabelColor];
     [uuidCard addSubview:uuidTitle];
@@ -570,9 +569,6 @@ static NSArray *kCountries;
 /// 复制机器码（人工激活路径：发客服代绑）
 - (void)_copyDeviceCodeTapped {
     NSString *code = _panelDeviceId ?: @"";
-    if (code.length == 0) {
-        code = [DeviceIdentity deviceUID] ?: @"";
-    }
     if (code.length > 0) {
         [UIPasteboard generalPasteboard].string = code;
         [self _showToast:@"已复制机器码，请发给客服"];
@@ -887,11 +883,10 @@ static NSArray *kCountries;
         // 退回 AccountPool 活跃账号
         current = [[AccountPool sharedPool] activeAccount];
     }
-    if (!current) {
-        [self _showToast:@"未检测到当前登录账号"];
-        [self addLog:@"❌ 备份失败：未检测到当前账号"];
-        return;
-    }
+    // v1.4.113: 不再因缓存无账号就拦截。真实登录态检测（session/cookie）与资料抓取兜底
+    // （导航个人页→/user/ 捕获）都在 backupCurrentAccount 里做——旧逻辑在此 return
+    // 「未检测到当前账号」，备份永远走不到资料抓取，明明登录了也被误报。
+    // 此处 current 为 nil 时确认框显示「未知」，由备份流程实际判定。
     UIAlertController *alert = [UIAlertController
         alertControllerWithTitle:@"备份当前账号"
         message:[NSString stringWithFormat:@"将记录当前账号：%@ 的登录态，用于后续一键切换。", current[@"nickname"] ?: @"未知"]

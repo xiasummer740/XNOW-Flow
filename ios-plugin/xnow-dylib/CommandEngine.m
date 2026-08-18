@@ -454,7 +454,7 @@ static NSArray *XN_NurtureComments(void) {
             // === 账号管理 ===
             case CommandActionGetAccountInfo: {
                 // 主动检测：导航个人页 → 等网络捕获当前用户 → 返回
-                result = [self _detectCurrentAccountFlow];
+                result = [self detectCurrentAccountFlow];
                 hasResult = YES;
                 break;
             }
@@ -711,7 +711,7 @@ static NSArray *XN_NurtureComments(void) {
 
 /// 主动检测当前账号：导航个人页 → 等网络捕获 → 兜底 UI 扫描 → 返回账号
 /// 供 get_account_info / backup_account 使用（账号信息只在个人页可见）
-- (NSDictionary *)_detectCurrentAccountFlow {
+- (NSDictionary *)detectCurrentAccountFlow {
     // 1. 导航到个人页（触发个人页 API → XNURLProtocol 捕获当前用户）
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIView *profileTab = [self _findViewWithAccessibilityIdentifier:@"a11y_vo_profile"

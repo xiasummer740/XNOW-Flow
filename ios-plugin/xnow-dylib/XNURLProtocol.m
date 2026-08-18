@@ -331,7 +331,7 @@ static volatile CFAbsoluteTime sLastPing = 0;
         if (completion) completion(NO, nil);
         return;
     }
-    // 用稳定 UID 查授权（后端同时匹配 udid 和 device_id）
+    // 用稳定 deviceId(iphone_xxx) 查授权（后端同时匹配 udid 和 device_id；Keychain UID 重装会变，已弃用）
     NSString *path = [NSString stringWithFormat:@"/api/biz/v2/licenses/device/%@/", uid];
     [self _sendRequest:@"GET" path:path body:nil completion:^(NSData *data, NSError *error) {
         BOOL licensed = NO;

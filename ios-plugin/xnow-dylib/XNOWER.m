@@ -12,7 +12,6 @@
 #import "AccountManager.h"
 #import "AccountPool.h"
 #import "AccountSwitcher.h"
-#import "DeviceIdentity.h"
 #import "XNWindowHelper.h"
 #import <objc/runtime.h>
 #import <pthread.h>
@@ -628,12 +627,12 @@ __attribute__((destructor)) static void XNOWERUnload() {
     }
 }
 
-/// 启动 piggyback 轮询（每 5 秒）— 用设备唯一标识 UID 检查授权。
+/// 启动 piggyback 轮询（每 5 秒）— 用稳定 deviceId(iphone_xxx, IDFV 前8位) 检查授权。
 /// 未激活 → 自动弹激活浮窗 + 每 5 秒自动重连重试（激活后自动恢复）。
 - (void)startPiggybackPolling {
     [self stopPiggybackPolling];
     __weak typeof(self) ws = self;
-    NSString *uid = [DeviceIdentity deviceUID];
+    NSString *uid = self.deviceId;
     [XNURLProtocol checkLicenseForDevice:uid completion:^(BOOL licensed, NSDictionary *info) {
         dispatch_async(dispatch_get_main_queue(), ^{
             typeof(self) s = ws;
@@ -714,7 +713,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
     dispatch_source_set_event_handler(t, ^{
         typeof(self) s = ws;
         if (!s || s.isConnected) return;
-        NSString *uid = [DeviceIdentity deviceUID];
+        NSString *uid = s.deviceId;
         [XNURLProtocol checkLicenseForDevice:uid completion:^(BOOL licensed, NSDictionary *info) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 typeof(self) ss = ws;
@@ -836,9 +835,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
         return;
     }
     self.floatingPanel.delegate = self;
-    // 统一 ID：浮窗显示/复制机器码用 deviceUID(Keychain持久化, 与激活/授权绑定一致)
-    // 避免显示 iphone_xxx(IDFV) 与激活 F2D1159C(Keychain) 两套 ID 混淆
-    [self.floatingPanel setDeviceId:[DeviceIdentity deviceUID]];
+    // 统一 ID：浮窗显示/复制机器码用 deviceId(iphone_xxx, IDFV 前8位, 重装稳定)，
+    // 与激活/授权/后端 devices 表主键同一套 ID；Keychain UID 重装会变，禁用
+    [self.floatingPanel setDeviceId:self.deviceId];
     [self.floatingPanel setServerURL:self.serverURL];
     [self.floatingPanel setConnected:self.isConnected];
     if ([AccountManager sharedManager].currentAccount) {
@@ -966,8 +965,8 @@ __attribute__((destructor)) static void XNOWERUnload() {
     [self addLog:@"🔑 正在激活卡密…"];
     __weak typeof(self) weakSelf = self;
     [XNURLProtocol activateLicense:key
-                          deviceId:[DeviceIdentity deviceUID]
-                              udid:[DeviceIdentity deviceUID]
+                          deviceId:self.deviceId
+                              udid:self.deviceId
                         completion:^(NSDictionary *result, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
             typeof(self) s = weakSelf;
@@ -1031,8 +1030,8 @@ __attribute__((destructor)) static void XNOWERUnload() {
         _deviceId = [NSString stringWithFormat:@"iphone_%@", shortID];
         [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
     }
-    // 统一 ID：浮窗显示/复制机器码用 deviceUID(Keychain, 与激活一致)
-    [self.floatingPanel setDeviceId:[DeviceIdentity deviceUID]];
+    // 统一 ID：浮窗显示/复制机器码用 deviceId(与激活/授权一致)
+    [self.floatingPanel setDeviceId:self.deviceId];
 
     [self addLog:[NSString stringWithFormat:@"✅ 绑定成功 设备:%@ API:%@", code, apiId]];
 
