@@ -56,6 +56,7 @@
 | 已修待验 | **F27 快捷入口已加**（v1.4.108，祥哥拍板加「打开搜索/回首页」）：XNFloatingPanel `_buildPageMenu` 的 search/friends 分支加「打开搜索」「回首页」（执行后自动收起面板防遮挡）。待装机验证 | 2026-08-18 产品对齐 | 2026-08-18 |
 | 已修待验 | **B41 切换账号已改真切换**（v1.4.108，祥哥拍板 A+B）：A=`_performSwitchAccount:` 按 aweme_id/aweme_number 在 AccountPool 查目标账号→交 `AccountSwitcher switchToAccount:` 真切换（快照恢复→Token/Cookies 注入→UI 登录）；备份时账号存 aweme_id；B=control.html 账号操作卡加「目标账号」下拉（后台 `/accounts/` 接口按设备加载）选账号传 aweme_id。待装机验证 | 2026-08-18 产品对齐 | 2026-08-18 |
 | 待修 | **F12 采集点赞名不副实**（产品对齐坐实）：`_performCollectLikes` 与 F11 采集直播间粉丝**同一套 `_collectLiveRoomUsers` 逻辑**，仅 sourceType 标签不同，没真采"点赞用户" → 待拍板：真做（开点赞列表采）or 删按钮 | 2026-08-18 产品对齐 | 2026-08-18 |
+| 已修待验 | **账号管理页「新增账号/备份当前账号」点了没反应**（祥哥 v1.4.108 装机实证，2026-08-18）：根因=overlay 独立窗口无 rootViewController，`_presentAlert:` 找 ws.keyWindow（点到浮窗后可能是 overlay 窗口）且 rootVC 为 nil → present 静默失败 = 点了没反应。**v1.4.110 修复**：XNOWER.m overlay 挂透明 host rootVC + 浮窗挂 hostVC.view + XNPassThroughWindow hitTest 跳过 hostVC.view 保穿透；XNFloatingPanel.m `_presentAlert:` 改从 `self.window.rootViewController` present（alert 必然显示在浮窗之上）。待装机验证。**此条是 B41 账号池验证的前置解锁** | 2026-08-18 真机 | 2026-08-18 |
 
 > 待办策略：攒批 3-5 项一次装机测，不单点发版。
 > 未列问题但新发现的 → 加一行状态「待修」。

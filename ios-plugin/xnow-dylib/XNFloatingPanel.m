@@ -4,6 +4,7 @@
 
 #import "XNFloatingPanel.h"
 #import "XNOWER.h"
+#import "XNWindowHelper.h"
 #import "DeviceIdentity.h"
 #import "AccountPool.h"
 #import "AccountManager.h"
@@ -933,22 +934,21 @@ static NSArray *kCountries;
 
 /// 统一弹 Alert（兼容多场景）
 - (void)_presentAlert:(UIAlertController *)alert {
-    UIWindow *topWin = nil;
-    if (@available(iOS 13, *)) {
-        for (UIScene *sc in UIApplication.sharedApplication.connectedScenes) {
-            if ([sc isKindOfClass:[UIWindowScene class]]) {
-                UIWindowScene *ws = (UIWindowScene *)sc;
-                if (ws.activationState == UISceneActivationStateForegroundActive) {
-                    topWin = ws.keyWindow ?: ws.windows.firstObject;
-                    break;
-                }
-            }
-        }
+    [self addLog:[NSString stringWithFormat:@"🔔 弹窗：%@", alert.title ?: @"确认"]];
+    // 优先：从浮窗自身所在 overlay 窗口的 rootVC present。
+    // overlay 的 windowLevel=1100 高于 TikTok 主窗口(0)，alert 必然显示在浮窗之上。
+    // 旧实现找 ws.keyWindow → 点到浮窗后 keyWindow 可能是 overlay 且 rootVC 为 nil → present 静默失败。
+    UIWindow *overlayWin = self.window;
+    if (overlayWin && overlayWin.rootViewController) {
+        UIViewController *topVC = overlayWin.rootViewController;
+        while (topVC.presentedViewController) topVC = topVC.presentedViewController;
+        [topVC presentViewController:alert animated:YES completion:nil];
+        return;
     }
-    if (!topWin) topWin = UIApplication.sharedApplication.windows.firstObject;
-    UIViewController *topVC = topWin.rootViewController;
-    while (topVC.presentedViewController) topVC = topVC.presentedViewController;
-    if (topVC) [topVC presentViewController:alert animated:YES completion:nil];
+    // 兜底：非 overlay 的活跃窗口（浮窗不在任何窗口时）
+    UIViewController *root = XN_RootViewController();
+    while (root.presentedViewController) root = root.presentedViewController;
+    if (root) [root presentViewController:alert animated:YES completion:nil];
 }
 
 /// 弹出账号操作菜单 — 确认切换到所选账号

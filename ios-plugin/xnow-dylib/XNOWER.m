@@ -120,6 +120,9 @@ __attribute__((destructor)) static void XNOWERUnload() {
     UIView *hit = [super hitTest:point withEvent:event];
     // 若命中点是 window 自身（即没有任何子视图接收）→ 穿透给下面的 App
     if (hit == self) return nil;
+    // 浮窗宿主 rootVC.view 是透明全屏层（承载浮窗 + 提供弹窗 present 入口），
+    // 面板外的触摸不应被它拦截 → 同样穿透给 TikTok
+    if (self.rootViewController && hit == self.rootViewController.view) return nil;
     return hit;
 }
 @end
@@ -818,6 +821,14 @@ __attribute__((destructor)) static void XNOWERUnload() {
     overlayWindow.backgroundColor = [UIColor clearColor];
     overlayWindow.userInteractionEnabled = YES;  // 需 YES 让浮窗可点；穿透由 hitTest 处理
 
+    // 浮窗宿主 rootVC：overlay 窗口必须有 rootViewController，否则浮窗内弹 UIAlertController 时
+    // _presentAlert 找到的 keyWindow 若是 overlay 且 rootVC 为 nil → present 静默失败 = 点了没反应
+    // （账号管理页「新增账号/备份当前账号」的根因）。浮窗挂到 hostVC.view，面板外触摸由
+    // XNPassThroughWindow hitTest 跳过透明 hostVC.view 穿透给 TikTok。
+    UIViewController *hostVC = [[UIViewController alloc] init];
+    hostVC.view.backgroundColor = [UIColor clearColor];
+    overlayWindow.rootViewController = hostVC;
+
     // 创建浮窗
     self.floatingPanel = [[XNFloatingPanel alloc] init];
     if (!self.floatingPanel) {
@@ -834,7 +845,7 @@ __attribute__((destructor)) static void XNOWERUnload() {
         [self.floatingPanel setAccountInfo:[AccountManager sharedManager].currentAccount];
     }
 
-    [overlayWindow addSubview:self.floatingPanel];
+    [hostVC.view addSubview:self.floatingPanel];
     overlayWindow.hidden = NO;  // 显示窗口
     self.overlayWindow = overlayWindow;
     self.floatingPanelVisible = YES;
