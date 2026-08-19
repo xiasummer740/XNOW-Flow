@@ -140,49 +140,71 @@ static AccountManager *gShared = nil;
             return;
         }
 
+        // v1.4.115：个人页异步加载，多扫几次（最多 5 秒），扫到 @用户名/昵称即停
         __block NSMutableDictionary *result = [NSMutableDictionary dictionary];
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            UIWindow *window = XN_ActiveWindow();
-            if (!window) return;
+        for (int i = 0; i < 10; i++) {
+            __block NSMutableDictionary *scanResult = [NSMutableDictionary dictionary];
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                UIWindow *window = XN_ActiveWindow();
+                if (!window) return;
+                [self _findAccountLabelsInView:window result:scanResult];
+            });
+            if (scanResult.count > 0) { result = scanResult; break; }
+            [NSThread sleepForTimeInterval:0.5];
+        }
 
-            // 尝试找昵称: accessibilityLabel 含 "@" 的视图
-            [self _findAccountLabelsInView:window result:result];
-        });
-
-        if (result[@"nickname"] && [result[@"nickname"] length] > 0) {
+        // v1.4.115 修复：原判断 result[@"nickname"] 但提取函数从不写 nickname → __currentAccount 永不更新。
+        // 改为任一路径命中（unique_id/@用户名 / nickname / aweme_id）即算检测到。
+        if (result[@"nickname"] || result[@"unique_id"] || result[@"aweme_id"]) {
             __currentAccount = [result copy];
-            ACC_LOG(@"UI检测到账号: %@", result[@"nickname"]);
+            ACC_LOG(@"UI检测到账号: %@", result[@"unique_id"] ?: result[@"nickname"]);
         }
 
         if (completion) completion(result.count > 0 ? result : nil);
     });
 }
 
-/// 遍历视图找账号相关的标签
+/// 遍历视图找账号相关的标签（个人页 UI 实测：@用户名在 AWEUserNameLabel，昵称在头像 accessibilityLabel "昵称, Profile photo,"）
+/// v1.4.115：补 nickname/关注数的提取 + 支持 accessibilityLabel 的 @ 用户名（纯 UILabel.text 扫不到所有情况）
 - (void)_findAccountLabelsInView:(UIView *)view result:(NSMutableDictionary *)result {
-    if (result[@"nickname"]) return; // 已找到
+    if (result[@"unique_id"] && result[@"nickname"]) return; // 关键信息已齐
 
-    // UILabel 文本
-    if ([view isKindOfClass:[UILabel class]]) {
-        UILabel *label = (UILabel *)view;
-        NSString *text = label.text;
-        if (text.length > 0 && !label.hidden && label.alpha > 0.1) {
-            // 以 @ 开头 → 可能是用户名
-            if ([text hasPrefix:@"@"]) {
-                result[@"unique_id"] = text;
-            }
-            // 纯数字且长度 6-20 → 可能是抖音号
-            if ([self _isNumeric:text] && text.length >= 6 && text.length <= 20) {
-                result[@"aweme_number"] = text;
-                result[@"aweme_id"] = text;
-            }
-        }
+    NSString *accLabel = view.accessibilityLabel;
+    NSString *labelText = ([view isKindOfClass:[UILabel class]]) ? ((UILabel *)view).text : nil;
+    if (labelText.length == 0) labelText = nil;
+
+    // 1. @用户名：UILabel.text 或 accessibilityLabel 以 @ 开头
+    if (!result[@"unique_id"]) {
+        NSString *at = nil;
+        if (labelText.length > 0 && [labelText hasPrefix:@"@"]) at = labelText;
+        else if (accLabel.length > 0 && [accLabel hasPrefix:@"@"]) at = accLabel;
+        if (at.length > 0) result[@"unique_id"] = at;
     }
 
-    // accessibilityLabel
-    NSString *accLabel = view.accessibilityLabel;
+    // 2. 昵称：头像视图 accessibilityLabel "昵称, Profile photo," → 取逗号前首段
+    if (!result[@"nickname"] && accLabel.length > 0 && [accLabel containsString:@"Profile photo"]) {
+        NSString *first = [[accLabel componentsSeparatedByString:@","] firstObject];
+        first = [first stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (first.length > 0) result[@"nickname"] = first;
+    }
+
+    // 3. 纯数字且长度 6-20 → 可能是抖音号/aweme_id
+    if (labelText.length >= 6 && labelText.length <= 20 && [self _isNumeric:labelText]) {
+        result[@"aweme_number"] = labelText;
+        result[@"aweme_id"] = labelText;
+    }
+
+    // 4. 关注/粉丝数："0, Following," 形式（UIStackView accessibilityLabel）
     if (accLabel.length > 0) {
-        // 代理检测是否可点（登录按钮）
+        NSArray *parts = [accLabel componentsSeparatedByString:@","];
+        if (parts.count >= 2) {
+            NSString *num = [parts[0] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            NSString *cat = [[parts[1] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]] lowercaseString];
+            if (cat.length && [num integerValue] >= 0 && [num integerValue] <= 99999999) {
+                if ([cat hasPrefix:@"follower"]) result[@"followers"] = @([num integerValue]);
+                else if ([cat hasPrefix:@"following"]) result[@"following_count"] = @([num integerValue]);
+            }
+        }
     }
 
     for (UIView *subview in view.subviews) {

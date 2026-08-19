@@ -38,6 +38,9 @@ typedef void(^SwitchCompletion)(BOOL success, NSDictionary *_Nullable result);
 /// @return 备份成功的账号 ID；无当前账号返回 0
 - (NSInteger)backupCurrentAccount;
 
+/// 登录态诊断：NSUserDefaults key 名 + cookies name/domain（仅名字不含值，隐私安全）
+- (NSDictionary *)dumpLoginState;
+
 /// 新增账号：清空当前登录态（无痕），让用户登录全新账号
 - (void)prepareNewAccount;
 

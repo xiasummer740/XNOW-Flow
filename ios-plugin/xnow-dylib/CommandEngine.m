@@ -174,6 +174,8 @@ static NSArray *XN_NurtureComments(void) {
             @"env_diag":          @(CommandActionEnvDiag),
             // VC 诊断
             @"vc_scan":           @(CommandActionVCScan),
+            // 登录态诊断（v1.4.116）：NSUserDefaults key 名 + cookies 域名（不含值）
+            @"dump_login":        @(CommandActionDumpLogin),
         };
     });
     NSNumber *val = map[actionString.lowercaseString];
@@ -277,12 +279,18 @@ static NSArray *XN_NurtureComments(void) {
             case CommandActionBackupAccount: {
                 // 直接读 TikTok 原生登录数据（session/cookies/Keychain），任意页面可备份，不跳个人页
                 NSInteger savedId = [[AccountSwitcher sharedSwitcher] backupCurrentAccount];
-                result = @{
+                NSMutableDictionary *r = [@{
                     @"status": savedId > 0 ? @"success" : @"failed",
                     @"message": savedId > 0 ? [NSString stringWithFormat:@"已备份账号 #%ld 登录态", (long)savedId]
                                              : @"未检测到登录态（请确认已登录 TikTok）",
                     @"account_id": @(savedId),
-                };
+                } mutableCopy];
+                // v1.4.116 失败自诊断：带上 NSUserDefaults key 名 + cookies 域名（不含值），
+                // server.log 可见真实登录态结构 → 据此写精准提取，不盲猜 key
+                if (savedId <= 0) {
+                    r[@"diagnostic"] = [[AccountSwitcher sharedSwitcher] dumpLoginState] ?: @{};
+                }
+                result = r;
                 hasResult = YES;
                 break;
             }
@@ -368,6 +376,16 @@ static NSArray *XN_NurtureComments(void) {
 
             case CommandActionVCScan: {
                 result = [self _performVCScan];
+                hasResult = YES;
+                break;
+            }
+
+            case CommandActionDumpLogin: {
+                result = @{
+                    @"status": @"success",
+                    @"message": @"登录态 key 结构已上报（仅 key 名，不含值）",
+                    @"diagnostic": [[AccountSwitcher sharedSwitcher] dumpLoginState] ?: @{},
+                };
                 hasResult = YES;
                 break;
             }
@@ -712,32 +730,50 @@ static NSArray *XN_NurtureComments(void) {
 /// 主动检测当前账号：导航个人页 → 等网络捕获 → 兜底 UI 扫描 → 返回账号
 /// 供 get_account_info / backup_account 使用（账号信息只在个人页可见）
 - (NSDictionary *)detectCurrentAccountFlow {
-    // 1. 导航到个人页（触发个人页 API → XNURLProtocol 捕获当前用户）
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        UIView *profileTab = [self _findViewWithAccessibilityIdentifier:@"a11y_vo_profile"
-                                                                 inView:XN_ActiveWindow()];
-        if (profileTab) {
-            CGPoint center = [profileTab.superview convertPoint:profileTab.center toView:nil];
-            [XNTouchSimulator tapAtPoint:center];
-        }
-    });
+    // 1. 切到个人页（可靠：运行时 setSelectedIndex 直达 + 返回诊断 dict；不用裸点 tab）
+    //    v1.4.116 修复：裸点 a11y_vo_profile 不验证切换结果，视频流页的 @作者 会被 UI 扫描误抓成"当前账号"
+    //    （祥哥实测备份抓成正在浏览的视频作者）。改用 _tapTab: 后必须确认页面切到"我的主页"才扫描。
+    [self _tapTab:@"profile"];
 
-    // 2. 轮询等待网络捕获的当前账号（个人页 API 响应解析，最多 10 秒）
+    // 2. 轮询等待网络捕获的当前账号 + 确认页面 = 我的主页（最多 10 秒）
+    //    页面未确认在 profile_mine（视频流/别人主页/未加载）→ 继续等，期间不扫描，防止误抓。
     NSDictionary *account = nil;
+    BOOL onMyProfile = NO;
     for (int i = 0; i < 20; i++) {
         [NSThread sleepForTimeInterval:0.5];
+        if (!onMyProfile) {
+            NSString *page = [self detectCurrentPage];
+            onMyProfile = [page isEqualToString:@"profile_mine"];
+            if (!onMyProfile && [page isEqualToString:@"profile_other"]) {
+                // 落在别人主页（切页后展示的是他人资料）→ 不可能拿到自己账号，直接失败
+                NSLog(@"[XNOWER] detectAccount: 落在他人主页(profile_other)，放弃");
+                return @{};
+            }
+        }
         account = [[AccountManager sharedManager] currentAccount];
-        if (account.count > 0) break;
+        if (onMyProfile && account.count > 0) break;
     }
 
-    // 3. 兜底：UI 扫描检测（个人页昵称/ID）
+    // 3. 兜底：UI 扫描检测（仅限确认在"我的主页"后执行，视频流里的 @作者 永不误抓）
+    //    v1.4.115：用扫描返回值，别读 currentAccount 缓存——UI 扫描结果未写入缓存时读到 nil 会误判空
     if (!account || account.count == 0) {
+        if (!onMyProfile) {
+            NSLog(@"[XNOWER] detectAccount: 未确认在我的主页(最后页面=%@)，不扫描避免误抓视频作者",
+                  [self detectCurrentPage]);
+            return @{};
+        }
         dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+        __block NSDictionary *scanned = nil;
         [[AccountManager sharedManager] detectCurrentAccountWithCompletion:^(NSDictionary *a) {
+            scanned = a;
             dispatch_semaphore_signal(sema);
         }];
-        dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-        account = [[AccountManager sharedManager] currentAccount];
+        dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 6 * NSEC_PER_SEC));
+        if (scanned && scanned.count > 0) {
+            account = scanned;
+        } else {
+            account = [[AccountManager sharedManager] currentAccount];
+        }
     }
 
     return account ?: @{};

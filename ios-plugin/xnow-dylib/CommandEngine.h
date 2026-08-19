@@ -95,6 +95,9 @@ typedef NS_ENUM(NSInteger, CommandAction) {
     // VC 诊断 (v1.4.61) — 上报 ViewController 链 + tab 控制器类名（定位 TikTok 首页切换入口）
     CommandActionVCScan,
 
+    // 登录态诊断 (v1.4.116) — 上报 NSUserDefaults key 名 + cookies name/domain（不含值，隐私安全）
+    CommandActionDumpLogin,
+
     // 粉丝列表自动关注 (v1.4.85) — 在粉丝/关注列表循环点右侧 Follow 按钮 → 上滑 → 再点，单次上限200自动停
     CommandActionAutoFollowList,
 

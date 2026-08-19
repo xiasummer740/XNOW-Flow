@@ -140,14 +140,8 @@ static AccountSwitcher *gShared = nil;
 /// 直接读 TikTok 原生登录数据（NSUserDefaults session / cookies / Keychain），任意页面可备份，不依赖个人页检测
 /// @return 备份成功的账号 ID；未检测到登录态返回 0
 - (NSInteger)backupCurrentAccount {
-    // 1. 检查是否已登录（原生登录态：session_token 或 tiktok cookies）
-    NSDictionary *login = [self verifyCurrentLogin];
-    if (![login[@"isLoggedIn"] boolValue]) {
-        SW_LOG(@"备份失败：未检测到登录态（session/cookies 为空）");
-        return 0;
-    }
-
-    // 2. 提取账号资料：优先用 AccountManager（/user/ 捕获），兜底 NSUserDefaults 启发式
+    // 1. 提取账号资料：v1.4.116 底层直读优先（NSUserDefaults 深度递归 + uid_tt 消歧，任意页面可备份），
+    //    再叠 AccountManager（/user/ 网络捕获）补充头像/粉丝数
     NSDictionary *profile = [self _extractProfileFromDefaults];
     NSDictionary *detected = [[AccountManager sharedManager] currentAccount];
     if (detected.count > 0) {
@@ -163,29 +157,36 @@ static AccountSwitcher *gShared = nil;
         };
     }
 
-    // 2b. 资料仍空（用户没进过个人页 → AccountManager 无捕获；NSUserDefaults 也无缓存）
-    //     → 导航个人页触发 /user/ 网络捕获（同 get_account_info），拿全昵称/头像/ID。
-    //     backup 命令与面板按钮都走 _execQueue 后台线程，此处 dispatch_sync(main) 安全。
-    if (![profile[@"aweme_id"] length]) {
-        SW_LOG(@"账号资料为空，导航个人页触发网络捕获...");
+    // 1b. 底层直读仍空（TikTok 未在 NSUserDefaults 缓存当前账号，结构未知）→ 最后兜底：
+    //     导航个人页触发 UI/网络捕获（v1.4.115 起已确认在"我的主页"才扫描，不会误抓视频作者）。
+    //     v1.4.116 起此兜底仅在前两层（defaults / detected）都失败时触发。
+    if (![profile[@"aweme_id"] length] && ![profile[@"unique_id"] length]) {
+        SW_LOG(@"账号资料为空，导航个人页触发捕获...");
         NSDictionary *captured = [self.cmdEngine detectCurrentAccountFlow];
         if (captured.count > 0) {
             profile = @{
-                @"aweme_id": captured[@"aweme_id"] ?: @"",
-                @"nickname": captured[@"nickname"] ?: @"",
-                @"unique_id": captured[@"unique_id"] ?: @"",
-                @"followers": captured[@"followers"] ?: @(0),
-                @"following_count": captured[@"following_count"] ?: @(0),
-                @"country": captured[@"region"] ?: @"",
-                @"avatar_url": captured[@"avatar_url"] ?: @"",
+                @"aweme_id": captured[@"aweme_id"] ?: profile[@"aweme_id"] ?: @"",
+                @"nickname": captured[@"nickname"] ?: profile[@"nickname"] ?: @"",
+                @"unique_id": captured[@"unique_id"] ?: profile[@"unique_id"] ?: @"",
+                @"followers": captured[@"followers"] ?: profile[@"followers"] ?: @(0),
+                @"following_count": captured[@"following_count"] ?: profile[@"following_count"] ?: @(0),
+                @"country": captured[@"region"] ?: profile[@"country"] ?: @"",
+                @"avatar_url": captured[@"avatar_url"] ?: profile[@"avatar_url"] ?: @"",
             };
         }
     }
 
-    // 3. 获取或新建账号记录（去重：同 aweme_number 已存在则更新，不新建）
-    NSInteger activeId = [login[@"accountId"] integerValue];
+    // 2. 登录证明 = 拿到真实账号标识（@用户名 unique_id 或数字 aweme_id）。拿不到 → 明确失败，不落演示号
     NSString *awemeNum = profile[@"unique_id"] ?: @"";
-    if (activeId <= 0 && awemeNum.length > 0) {
+    if ([awemeNum hasPrefix:@"@"]) awemeNum = [awemeNum substringFromIndex:1];  // 去 @ 前缀，统一存储
+    if (!awemeNum.length && ![profile[@"aweme_id"] length]) {
+        SW_LOG(@"备份失败：未检测到 TikTok 登录（捕获均无账号资料）");
+        return 0;
+    }
+
+    // 3. 去重或新建账号记录（按 unique_id 匹配，绝不沿用 pool 演示 id）
+    NSInteger activeId = 0;
+    if (awemeNum.length) {
         NSDictionary *existing = [[AccountPool sharedPool] accountWithAwemeNumber:awemeNum];
         if (existing) {
             activeId = [existing[@"id"] integerValue];
@@ -206,7 +207,7 @@ static AccountSwitcher *gShared = nil;
     if (activeId <= 0) {
         activeId = [[AccountPool sharedPool] addLocalAccount:@{
             @"aweme_id": profile[@"aweme_id"] ?: @"",
-            @"nickname": profile[@"nickname"] ?: @"账号",
+            @"nickname": profile[@"nickname"] ?: (awemeNum.length ? awemeNum : @"账号"),
             @"aweme_number": awemeNum,
             @"followers": profile[@"followers"] ?: @(0),
             @"following_count": profile[@"following_count"] ?: @(0),
@@ -217,42 +218,161 @@ static AccountSwitcher *gShared = nil;
 
     // 4. 保存快照（快照引擎会捕获 NSUserDefaults 全量 + Keychain + cookies）
     BOOL ok = [[AccountSnapshotter sharedSnapshotter] saveSnapshotForAccount:activeId];
-    SW_LOG(@"备份账号 %ld 登录态%@ 资料:%@", (long)activeId, ok ? @"成功" : @"失败", profile[@"nickname"] ?: @"-");
+    SW_LOG(@"备份账号 %ld 登录态%@ 资料:%@", (long)activeId, ok ? @"成功" : @"失败", profile[@"nickname"] ?: awemeNum);
     return ok ? activeId : 0;
 }
 
 /// 从 NSUserDefaults 全量数据里提取当前账号资料（TikTok 缓存了用户信息）
+/// v1.4.116 重写：深度递归扫所有嵌套 dict/JSON，找含账号标识的 dict；
+/// 再用 cookie uid_tt（登录用户数字ID）消歧，只认"我"，不再误抓视频作者。
 - (NSDictionary *)_extractProfileFromDefaults {
     @try {
         NSDictionary *dump = [[NSUserDefaults standardUserDefaults] dictionaryRepresentation];
+        NSMutableArray *cands = [NSMutableArray array];
+        [self _collectAccountCandidates:dump depth:0 candidates:cands];
+        if (!cands.count) return @{};
 
-        // 1) 优先找包含昵称的字典/JSON（递归一层，避免太深）
-        for (NSString *key in dump) {
-            id val = dump[key];
-            NSDictionary *d = nil;
-            if ([val isKindOfClass:[NSDictionary class]]) d = val;
-            else if ([val isKindOfClass:[NSData class]]) {
-                id obj = [NSJSONSerialization JSONObjectWithData:val options:0 error:nil];
-                if ([obj isKindOfClass:[NSDictionary class]]) d = obj;
-            } else if ([val isKindOfClass:[NSString class]] && [val hasPrefix:@"{"]) {
-                id obj = [NSJSONSerialization JSONObjectWithData:[val dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
-                if ([obj isKindOfClass:[NSDictionary class]]) d = obj;
+        // 登录用户数字ID（cookie uid_tt）→ 只认它匹配的候选，杜绝抓成视频作者
+        NSString *selfUid = [self _selfUidFromCookies];
+        NSDictionary *best = nil;
+        if (selfUid.length > 0) {
+            for (NSDictionary *c in cands) {
+                id uid = c[@"uid"] ?: c[@"aweme_id"] ?: c[@"user_id"];
+                NSString *uidStr = [uid isKindOfClass:[NSNumber class]] ? [uid stringValue]
+                                 : ([uid isKindOfClass:[NSString class]] ? uid : @"");
+                if (uidStr.length && [uidStr isEqualToString:selfUid]) { best = c; break; }
             }
-            if (!d || ![d[@"nickname"] isKindOfClass:[NSString class]]) continue;
-            if (!d[@"followerCount"] && !d[@"followers"] && !d[@"uid"] && !d[@"id"] && !d[@"aweme_id"]) continue; // 要像账号而非普通dict
-
-            NSDictionary *stats = d[@"stats"] ?: d[@"stat"] ?: @{};
-            return @{
-                @"nickname": d[@"nickname"] ?: @"",
-                @"unique_id": d[@"uniqueId"] ?: d[@"unique_id"] ?: @"",
-                @"followers": d[@"followerCount"] ?: d[@"followers"] ?: stats[@"followerCount"] ?: stats[@"followers"] ?: @(0),
-                @"following_count": d[@"followingCount"] ?: d[@"following_count"] ?: stats[@"followingCount"] ?: @(0),
-                @"country": d[@"region"] ?: d[@"country"] ?: @"",
-                @"avatar_url": d[@"avatarLarger"] ?: d[@"avatar"] ?: d[@"avatar_url"] ?: @"",
-            };
         }
+        // 无 uid_tt 或没匹配到 → 取资料最全者（此时才可能不准，但比瞎猜好）
+        if (!best) {
+            for (NSDictionary *c in cands) {
+                if (!best || [self _profileCompleteness:c] > [self _profileCompleteness:best]) best = c;
+            }
+        }
+        if (!best) return @{};
+
+        NSDictionary *stats = [best[@"stats"] isKindOfClass:[NSDictionary class]] ? best[@"stats"]
+                            : ([best[@"stat"] isKindOfClass:[NSDictionary class]] ? best[@"stat"] : @{});
+        // NSNull 防护：统一把非字符串/非数字值归一为空，防止 profile 字典带 NSNull 传给下游崩溃
+        return @{
+            @"aweme_id": [best[@"aweme_id"] isKindOfClass:[NSString class]] ? best[@"aweme_id"]
+                       : ([best[@"uid"] isKindOfClass:[NSString class]] ? best[@"uid"] : @""),
+            @"nickname": [best[@"nickname"] isKindOfClass:[NSString class]] ? best[@"nickname"] : @"",
+            @"unique_id": [best[@"uniqueId"] isKindOfClass:[NSString class]] ? best[@"uniqueId"]
+                        : ([best[@"unique_id"] isKindOfClass:[NSString class]] ? best[@"unique_id"] : @""),
+            @"followers": [best[@"followerCount"] isKindOfClass:[NSNumber class]] ? best[@"followerCount"]
+                        : (best[@"followers"] ?: @(0)),
+            @"following_count": [best[@"followingCount"] isKindOfClass:[NSNumber class]] ? best[@"followingCount"]
+                              : ([best[@"following_count"] isKindOfClass:[NSNumber class]] ? best[@"following_count"] : @(0)),
+            @"country": [best[@"region"] isKindOfClass:[NSString class]] ? best[@"region"]
+                      : ([best[@"country"] isKindOfClass:[NSString class]] ? best[@"country"] : @""),
+            @"avatar_url": [best[@"avatarLarger"] isKindOfClass:[NSString class]] ? best[@"avatarLarger"]
+                         : ([best[@"avatar_larger"] isKindOfClass:[NSString class]] ? best[@"avatar_larger"]
+                           : ([best[@"avatar"] isKindOfClass:[NSString class]] ? best[@"avatar"]
+                             : ([best[@"avatar_url"] isKindOfClass:[NSString class]] ? best[@"avatar_url"] : @""))),
+        };
     } @catch (id e) {}
     return @{};
+}
+
+/// 递归收集所有"账号形状"的字典（含 unique_id/uid/aweme_id/sec_uid 任一 + 资料字段）
+- (void)_collectAccountCandidates:(id)value depth:(int)depth candidates:(NSMutableArray<NSDictionary *> *)candidates {
+    if (depth > 5 || candidates.count >= 10) return;
+    if ([value isKindOfClass:[NSDictionary class]]) {
+        NSDictionary *d = (NSDictionary *)value;
+        // TikTok JSON 反序列化常带 NSNull，取值统一判 class，防 nil/NSNull 崩溃
+        NSString *uniq = [d[@"unique_id"] isKindOfClass:[NSString class]] ? d[@"unique_id"]
+                       : ([d[@"uniqueId"] isKindOfClass:[NSString class]] ? d[@"uniqueId"] : @"");
+        id uid = d[@"uid"] ?: d[@"aweme_id"] ?: d[@"user_id"];
+        NSString *sec = [d[@"sec_uid"] isKindOfClass:[NSString class]] ? d[@"sec_uid"]
+                      : ([d[@"secUid"] isKindOfClass:[NSString class]] ? d[@"secUid"] : @"");
+        BOOL hasProfile = [d[@"nickname"] isKindOfClass:[NSString class]]
+                       || [d[@"avatar_larger"] isKindOfClass:[NSString class]]
+                       || [d[@"avatarLarger"] isKindOfClass:[NSString class]]
+                       || d[@"followers"] != nil || d[@"follower_count"] != nil || d[@"followerCount"] != nil;
+        if (hasProfile && (uniq.length > 0 || uid != nil || sec.length > 0)) {
+            [candidates addObject:d];
+        }
+        for (id k in d) [self _collectAccountCandidates:d[k] depth:depth + 1 candidates:candidates];
+    } else if ([value isKindOfClass:[NSArray class]]) {
+        for (id item in (NSArray *)value) [self _collectAccountCandidates:item depth:depth + 1 candidates:candidates];
+    } else if ([value isKindOfClass:[NSData class]]) {
+        NSData *data = (NSData *)value;
+        if (data.length > 0 && data.length < 2 * 1024 * 1024) {   // 只解析 <2MB 的（防大缓存拖慢）
+            id obj = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+            if ([obj isKindOfClass:[NSDictionary class]] || [obj isKindOfClass:[NSArray class]]) {
+                [self _collectAccountCandidates:obj depth:depth + 1 candidates:candidates];
+            }
+        }
+    } else if ([value isKindOfClass:[NSString class]] && [value hasPrefix:@"{"]) {
+        id obj = [NSJSONSerialization JSONObjectWithData:[value dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+        if ([obj isKindOfClass:[NSDictionary class]] || [obj isKindOfClass:[NSArray class]]) {
+            [self _collectAccountCandidates:obj depth:depth + 1 candidates:candidates];
+        }
+    }
+}
+
+/// 账号 dict 资料完整度评分（无 uid_tt 匹配时取最高分）
+- (int)_profileCompleteness:(NSDictionary *)d {
+    int s = 0;
+    if ([d[@"nickname"] isKindOfClass:[NSString class]] && [d[@"nickname"] length]) s += 3;
+    if (([d[@"unique_id"] isKindOfClass:[NSString class]] && [d[@"unique_id"] length])
+     || ([d[@"uniqueId"] isKindOfClass:[NSString class]] && [d[@"uniqueId"] length])) s += 3;
+    if (d[@"followerCount"] || d[@"follower_count"] || d[@"followers"]) s += 1;
+    if ([d[@"avatarLarger"] isKindOfClass:[NSString class]] || [d[@"avatar_larger"] isKindOfClass:[NSString class]]) s += 1;
+    return s;
+}
+
+/// cookie 里的登录用户数字ID（TikTok 设置 uid_tt）——消歧：认"我"不认视频作者
+- (NSString *)_selfUidFromCookies {
+    @try {
+        NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+        for (NSHTTPCookie *cookie in storage.cookies) {
+            NSString *name = cookie.name.lowercaseString;
+            if ([name isEqualToString:@"uid_tt"] || [name isEqualToString:@"uid_tt_ss"]) {
+                return cookie.value ?: @"";
+            }
+        }
+    } @catch (id e) {}
+    return @"";
+}
+
+/// 登录态诊断：NSUserDefaults key 名 + cookies name/domain（仅名字不含值，隐私安全）
+- (NSDictionary *)dumpLoginState {
+    @try {
+        NSDictionary *dump = [[NSUserDefaults standardUserDefaults] dictionaryRepresentation];
+        NSArray *sorted = [[dump allKeys] sortedArrayUsingSelector:@selector(compare:)];
+        NSMutableArray *keysOut = [NSMutableArray array];
+        NSUInteger cap = 120;
+        for (NSString *k in sorted) {
+            if (keysOut.count >= cap) break;
+            id v = dump[k];
+            NSString *t = @"?";
+            if ([v isKindOfClass:[NSString class]]) t = @"str";
+            else if ([v isKindOfClass:[NSNumber class]]) t = @"num";
+            else if ([v isKindOfClass:[NSDictionary class]]) t = @"dict";
+            else if ([v isKindOfClass:[NSArray class]]) t = @"arr";
+            else if ([v isKindOfClass:[NSData class]]) t = @"data";
+            [keysOut addObject:[NSString stringWithFormat:@"%@:%@", k, t]];
+        }
+        NSMutableArray *cookiesOut = [NSMutableArray array];
+        NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+        for (NSHTTPCookie *c in storage.cookies) {
+            NSString *d = c.domain.lowercaseString;
+            if ([d containsString:@"tiktok"] || [d containsString:@"byteoversea"]) {
+                [cookiesOut addObject:[NSString stringWithFormat:@"%@@%@", c.name ?: @"", c.domain ?: @""]];
+            }
+        }
+        return @{
+            @"userdefaults_keys": keysOut ?: @[],
+            @"cookies": cookiesOut ?: @[],
+            @"uid_tt": [self _selfUidFromCookies] ?: @"",
+            @"login": [self verifyCurrentLogin] ?: @{},
+            @"total_keys": @(dump.count),
+        };
+    } @catch (id e) {
+        return @{@"error": [NSString stringWithFormat:@"%@", e]};
+    }
 }
 
 /// 新增账号：清空当前登录态（无痕），让用户登录全新账号

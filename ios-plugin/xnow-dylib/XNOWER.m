@@ -1384,9 +1384,17 @@ __attribute__((destructor)) static void XNOWERUnload() {
             BOOL ok = [result[@"status"] isEqualToString:@"success"];
             NSString *msg = result[@"message"] ?: (ok ? @"备份成功" : @"备份失败");
             [self addLog:@"%@ %@", ok ? @"✅" : @"❌", msg];
+            // v1.4.116：失败也上报（带 key 结构诊断，不含值）→ server.log 可见真实登录态结构
+            NSMutableDictionary *params = [@{@"account_id": result[@"account_id"] ?: @(0),
+                                             @"status": ok ? @"success" : @"failed",
+                                             @"message": msg ?: @""} mutableCopy];
+            NSDictionary *diag = result[@"diagnostic"];
+            if ([diag isKindOfClass:[NSDictionary class]] && diag.count > 0) {
+                params[@"diagnostic"] = diag;
+            }
+            [self _sendCommandToBackend:@"account_backed_up" params:params];
             if (ok) {
                 [self.floatingPanel setAccountList:[[AccountPool sharedPool] allAccounts]];
-                [self _sendCommandToBackend:@"account_backed_up" params:@{@"account_id": result[@"account_id"] ?: @(0)}];
             }
         }];
     } @catch (id e) {
