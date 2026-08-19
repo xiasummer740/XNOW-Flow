@@ -41,6 +41,11 @@ typedef void(^SwitchCompletion)(BOOL success, NSDictionary *_Nullable result);
 /// 登录态诊断：NSUserDefaults key 名 + cookies name/domain（仅名字不含值，隐私安全）
 - (NSDictionary *)dumpLoginState;
 
+/// 上次备份命中的账号 dict 顶层 key 名（仅名字不含值，供定位真实国家字段，隐私安全）
+@property (nonatomic, strong, readonly) NSArray<NSString *> *lastMatchedProfileKeys;
+/// 上次备份从账号 dict 提取到的国家（code 或名称，可能为空）
+@property (nonatomic, copy, readonly) NSString *lastMatchedCountry;
+
 /// 新增账号：清空当前登录态（无痕），让用户登录全新账号
 - (void)prepareNewAccount;
 

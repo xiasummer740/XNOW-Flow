@@ -744,7 +744,8 @@ static NSArray *kCountries;
             cell.textLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
             cell.detailTextLabel.text = [NSString stringWithFormat:@"粉丝:%@  关注:%@  国家:%@  TK:%@",
                                          acc[@"followers"]?:@"0", acc[@"following_count"]?:@"0",
-                                         acc[@"act_country"]?:@"—", acc[@"aweme_number"]?:@"—"];
+                                         [self _countryDisplayName:acc[@"act_country"] ?: @""],
+                                         acc[@"aweme_number"]?:@"—"];
             cell.detailTextLabel.numberOfLines = 1;
         }
     }
@@ -874,6 +875,23 @@ static NSArray *kCountries;
                           @"FR": @"🇫🇷", @"ES": @"🇪🇸", @"NL": @"🇳🇱", @"CH": @"🇨🇭", @"SE": @"🇸🇪",
                           @"NO": @"🇳🇴", @"FI": @"🇫🇮", @"IN": @"🇮🇳", @"CA": @"🇨🇦", @"RU": @"🇷🇺"};
     return en[[country uppercaseString]] ?: @"";
+}
+
+/// 国家 code → 中文名（未知 code 原样显示）
+- (NSString *)_countryDisplayName:(NSString *)code {
+    if (code.length == 0) return @"—";
+    NSDictionary *map = @{
+        @"US": @"美国", @"JP": @"日本", @"GB": @"英国", @"KR": @"韩国", @"VN": @"越南",
+        @"TH": @"泰国", @"SG": @"新加坡", @"AE": @"阿联酋", @"MY": @"马来西亚", @"BR": @"巴西",
+        @"ID": @"印尼", @"AU": @"澳大利亚", @"IT": @"意大利", @"MX": @"墨西哥", @"DE": @"德国",
+        @"FR": @"法国", @"ES": @"西班牙", @"NL": @"荷兰", @"CH": @"瑞士", @"SE": @"瑞典",
+        @"NO": @"挪威", @"FI": @"芬兰", @"IN": @"印度", @"CA": @"加拿大", @"RU": @"俄罗斯",
+        @"TW": @"台湾", @"HK": @"香港", @"MO": @"澳门", @"CN": @"中国", @"SA": @"沙特",
+        @"TR": @"土耳其", @"EG": @"埃及", @"AR": @"阿根廷", @"CL": @"智利", @"CO": @"哥伦比亚",
+        @"PH": @"菲律宾", @"PL": @"波兰", @"CZ": @"捷克", @"UA": @"乌克兰", @"NZ": @"新西兰",
+    };
+    NSString *name = map[[code uppercaseString]];
+    return name ?: code;
 }
 
 /// 备份当前登录账号的登录态快照

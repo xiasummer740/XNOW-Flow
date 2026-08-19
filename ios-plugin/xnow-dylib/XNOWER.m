@@ -1392,6 +1392,13 @@ __attribute__((destructor)) static void XNOWERUnload() {
             if ([diag isKindOfClass:[NSDictionary class]] && diag.count > 0) {
                 params[@"diagnostic"] = diag;
             }
+            // v1.4.117：成功也上报命中 dict key 名 + 国家（不含值），server.log 可核实国家提取
+            if ([result[@"profile_keys"] isKindOfClass:[NSArray class]]) {
+                params[@"profile_keys"] = result[@"profile_keys"];
+            }
+            if ([result[@"country"] isKindOfClass:[NSString class]] && [result[@"country"] length]) {
+                params[@"country"] = result[@"country"];
+            }
             [self _sendCommandToBackend:@"account_backed_up" params:params];
             if (ok) {
                 [self.floatingPanel setAccountList:[[AccountPool sharedPool] allAccounts]];

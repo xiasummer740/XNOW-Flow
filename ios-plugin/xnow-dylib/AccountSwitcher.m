@@ -28,6 +28,8 @@ static NSString *const kTKKeychainService = @"com.zhiliaoapp.musically";
 @property (nonatomic, strong) CommandEngine *cmdEngine;
 @property (nonatomic, assign) BOOL isSwitching;  // 防止并发切换
 @property (nonatomic, strong) dispatch_queue_t switchQueue;
+@property (nonatomic, strong, readwrite) NSArray<NSString *> *lastMatchedProfileKeys;
+@property (nonatomic, copy, readwrite) NSString *lastMatchedCountry;
 @end
 
 @implementation AccountSwitcher
@@ -176,6 +178,9 @@ static AccountSwitcher *gShared = nil;
         }
     }
 
+    // 1c. 诊断字段始终反映最终存储的国家（detected/captured 可能覆盖 defaults 提取值）
+    self.lastMatchedCountry = profile[@"country"] ?: @"";
+
     // 2. 登录证明 = 拿到真实账号标识（@用户名 unique_id 或数字 aweme_id）。拿不到 → 明确失败，不落演示号
     NSString *awemeNum = profile[@"unique_id"] ?: @"";
     if ([awemeNum hasPrefix:@"@"]) awemeNum = [awemeNum substringFromIndex:1];  // 去 @ 前缀，统一存储
@@ -236,11 +241,12 @@ static AccountSwitcher *gShared = nil;
         NSString *selfUid = [self _selfUidFromCookies];
         NSDictionary *best = nil;
         if (selfUid.length > 0) {
+            // 同 uid 可能缓存精简版+完整版多份 → 优先带国家字段/资料更全者（同账号，安全）
             for (NSDictionary *c in cands) {
                 id uid = c[@"uid"] ?: c[@"aweme_id"] ?: c[@"user_id"];
                 NSString *uidStr = [uid isKindOfClass:[NSNumber class]] ? [uid stringValue]
                                  : ([uid isKindOfClass:[NSString class]] ? uid : @"");
-                if (uidStr.length && [uidStr isEqualToString:selfUid]) { best = c; break; }
+                if (uidStr.length && [uidStr isEqualToString:selfUid] && [self _betterCandidate:c vs:best]) best = c;
             }
         }
         // 无 uid_tt 或没匹配到 → 取资料最全者（此时才可能不准，但比瞎猜好）
@@ -250,6 +256,10 @@ static AccountSwitcher *gShared = nil;
             }
         }
         if (!best) return @{};
+
+        // 诊断：记录命中 dict 的 key 名 + 国家（仅名字不含值，上报供定位真实国家字段）
+        self.lastMatchedProfileKeys = [best allKeys];
+        self.lastMatchedCountry = [self _extractCountryFromDict:best];
 
         NSDictionary *stats = [best[@"stats"] isKindOfClass:[NSDictionary class]] ? best[@"stats"]
                             : ([best[@"stat"] isKindOfClass:[NSDictionary class]] ? best[@"stat"] : @{});
@@ -264,8 +274,7 @@ static AccountSwitcher *gShared = nil;
                         : (best[@"followers"] ?: @(0)),
             @"following_count": [best[@"followingCount"] isKindOfClass:[NSNumber class]] ? best[@"followingCount"]
                               : ([best[@"following_count"] isKindOfClass:[NSNumber class]] ? best[@"following_count"] : @(0)),
-            @"country": [best[@"region"] isKindOfClass:[NSString class]] ? best[@"region"]
-                      : ([best[@"country"] isKindOfClass:[NSString class]] ? best[@"country"] : @""),
+            @"country": [self _extractCountryFromDict:best],
             @"avatar_url": [best[@"avatarLarger"] isKindOfClass:[NSString class]] ? best[@"avatarLarger"]
                          : ([best[@"avatar_larger"] isKindOfClass:[NSString class]] ? best[@"avatar_larger"]
                            : ([best[@"avatar"] isKindOfClass:[NSString class]] ? best[@"avatar"]
@@ -321,6 +330,34 @@ static AccountSwitcher *gShared = nil;
     if (d[@"followerCount"] || d[@"follower_count"] || d[@"followers"]) s += 1;
     if ([d[@"avatarLarger"] isKindOfClass:[NSString class]] || [d[@"avatar_larger"] isKindOfClass:[NSString class]]) s += 1;
     return s;
+}
+
+/// 从账号 dict 提取国家：TikTok 不同版本/缓存字段名不同，多键位尝试 + 类型安全（NSNull 跳过）
+- (NSString *)_extractCountryFromDict:(NSDictionary *)d {
+    if (![d isKindOfClass:[NSDictionary class]]) return @"";
+    NSArray *keys = @[@"region", @"country", @"display_region", @"country_code",
+                      @"region_code", @"ip_location", @"location", @"area"];
+    for (NSString *k in keys) {
+        id v = d[k];
+        if ([v isKindOfClass:[NSString class]]) {
+            NSString *s = [v stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            if (s.length) return s;
+        } else if ([v isKindOfClass:[NSNumber class]]) {
+            NSString *s = [v stringValue];
+            if (s.length) return s;
+        }
+        // NSNull / 其他类型 → 试下一个键
+    }
+    return @"";
+}
+
+/// 同 uid 多缓存择优：带国家的 > 资料分高的（仅用于 uid 已匹配的同账号候选，杜绝误选他人）
+- (BOOL)_betterCandidate:(NSDictionary *)c vs:(NSDictionary *)best {
+    if (!best) return YES;
+    BOOL cCountry = [self _extractCountryFromDict:c].length > 0;
+    BOOL bCountry = [self _extractCountryFromDict:best].length > 0;
+    if (cCountry != bCountry) return cCountry;
+    return [self _profileCompleteness:c] > [self _profileCompleteness:best];
 }
 
 /// cookie 里的登录用户数字ID（TikTok 设置 uid_tt）——消歧：认"我"不认视频作者

@@ -289,6 +289,11 @@ static NSArray *XN_NurtureComments(void) {
                 // server.log 可见真实登录态结构 → 据此写精准提取，不盲猜 key
                 if (savedId <= 0) {
                     r[@"diagnostic"] = [[AccountSwitcher sharedSwitcher] dumpLoginState] ?: @{};
+                } else {
+                    // v1.4.117 成功也带证据：命中 dict 的 key 名 + 国家（不含值）→ server.log 可核实国家是否提取到
+                    AccountSwitcher *sw = [AccountSwitcher sharedSwitcher];
+                    if (sw.lastMatchedProfileKeys.count > 0) r[@"profile_keys"] = sw.lastMatchedProfileKeys;
+                    if (sw.lastMatchedCountry.length > 0) r[@"country"] = sw.lastMatchedCountry;
                 }
                 result = r;
                 hasResult = YES;
