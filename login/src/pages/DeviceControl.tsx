@@ -22,6 +22,28 @@ const baseHeaders = (token: string) => ({
   'Content-Type': 'application/json',
 })
 
+// ⚠️ 组件必须定义在模块顶层：定义在组件函数体内会每次渲染创建新函数引用，
+// React 视为组件类型变化 → 卸载重挂全部 input/button → 输入框只留一个字符、点按钮页面跳动
+const Btn = ({ children, onClick, primary, danger }: { children: ReactNode; onClick?: () => void; primary?: boolean; danger?: boolean }) => (
+  <button
+    onClick={onClick}
+    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${danger ? 'bg-red-600 hover:bg-red-500 text-white' : primary ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-100'}`}
+  >{children}</button>
+)
+const Card = ({ title, children }: { title: string; children: ReactNode }) => (
+  <div className="bg-gray-800/60 rounded-lg p-4 mb-4">
+    <h3 className="text-sm font-semibold text-gray-300 mb-3">{title}</h3>
+    {children}
+  </div>
+)
+const Label = ({ children }: { children: ReactNode }) => <label className="block text-xs text-gray-400 mb-1">{children}</label>
+const Input = (props: InputHTMLAttributes<HTMLInputElement>) => (
+  <input {...props} className="w-full px-3 py-2 mb-2 rounded-md bg-gray-700 border border-gray-600 text-sm text-gray-100 focus:outline-none focus:border-blue-500" />
+)
+const Select = (props: SelectHTMLAttributes<HTMLSelectElement>) => (
+  <select {...props} className="w-full px-3 py-2 mb-2 rounded-md bg-gray-700 border border-gray-600 text-sm" />
+)
+
 export default function DeviceControl({ token, user }: Props) {
   const [devices, setDevices] = useState<Device[]>([])
   const [deviceId, setDeviceId] = useState<string>('')
@@ -264,26 +286,6 @@ export default function DeviceControl({ token, user }: Props) {
       setUdidList(rows.map((r: any) => `• ${r.udid} [${r.device_name || ''}] 状态:${r.status}`).join('\n'))
     } catch (e: any) { pushLog('❌ 加载UDID失败: ' + e.message) }
   }
-
-  const Btn = ({ children, onClick, primary, danger }: { children: ReactNode; onClick?: () => void; primary?: boolean; danger?: boolean }) => (
-    <button
-      onClick={onClick}
-      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${danger ? 'bg-red-600 hover:bg-red-500 text-white' : primary ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-100'}`}
-    >{children}</button>
-  )
-  const Card = ({ title, children }: { title: string; children: ReactNode }) => (
-    <div className="bg-gray-800/60 rounded-lg p-4 mb-4">
-      <h3 className="text-sm font-semibold text-gray-300 mb-3">{title}</h3>
-      {children}
-    </div>
-  )
-  const Label = ({ children }: { children: ReactNode }) => <label className="block text-xs text-gray-400 mb-1">{children}</label>
-  const Input = (props: InputHTMLAttributes<HTMLInputElement>) => (
-    <input {...props} className="w-full px-3 py-2 mb-2 rounded-md bg-gray-700 border border-gray-600 text-sm text-gray-100 focus:outline-none focus:border-blue-500" />
-  )
-  const Select = (props: SelectHTMLAttributes<HTMLSelectElement>) => (
-    <select {...props} className="w-full px-3 py-2 mb-2 rounded-md bg-gray-700 border border-gray-600 text-sm" />
-  )
 
   const dev = selectedDevice()
 
