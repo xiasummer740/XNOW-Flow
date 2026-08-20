@@ -205,6 +205,12 @@ export default function DeviceControl({ token, user }: Props) {
     } catch (e: any) { pushLog('❌ 暂停失败: ' + e.message) }
   }
 
+  // 停止当前设备养号：直接对选中设备下发 nurture_stop（手机浮窗起的连续养号也能停，无需后端计划）
+  async function stopCurrentDeviceNurture() {
+    if (!deviceId) { pushLog('⚠️ 请先选择设备'); return }
+    await cmd('nurture_stop', {})
+  }
+
   async function saveQuickCommand() {
     if (!qcAction) { pushLog('⚠️ 请输入 Action'); return }
     let params: any = {}
@@ -390,6 +396,7 @@ export default function DeviceControl({ token, user }: Props) {
           <Btn primary onClick={createNurturePlan}>📝 创建养号计划</Btn>
           <Btn primary onClick={startNurturePlan}>▶️ 开始养号</Btn>
           <Btn danger onClick={pauseNurturePlan}>⏸ 暂停养号</Btn>
+          <Btn danger onClick={stopCurrentDeviceNurture}>⏹ 停止当前设备养号</Btn>
         </div>
         <div className="text-xs text-gray-500 mt-2">{nurtureStatus}</div>
       </Card>
