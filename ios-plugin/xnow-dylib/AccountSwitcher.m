@@ -178,8 +178,10 @@ static AccountSwitcher *gShared = nil;
         }
     }
 
-    // 1c. 诊断字段始终反映最终存储的国家（detected/captured 可能覆盖 defaults 提取值）
-    self.lastMatchedCountry = profile[@"country"] ?: @"";
+    // 1c. 诊断字段始终反映最终存储的国家（detected/captured 可能覆盖 defaults 提取值）。
+    //     v1.4.118：优先多键位提取组装 profile（region/country/act_country 等），
+    //     组装 profile 提取为空时保留 _findBestMatch 从原始缓存 dict 提取的值（不再用固定 country 键覆盖成空）
+    self.lastMatchedCountry = [self _extractCountryFromDict:profile] ?: self.lastMatchedCountry ?: @"";
 
     // 2. 登录证明 = 拿到真实账号标识（@用户名 unique_id 或数字 aweme_id）。拿不到 → 明确失败，不落演示号
     NSString *awemeNum = profile[@"unique_id"] ?: @"";
@@ -335,7 +337,7 @@ static AccountSwitcher *gShared = nil;
 /// 从账号 dict 提取国家：TikTok 不同版本/缓存字段名不同，多键位尝试 + 类型安全（NSNull 跳过）
 - (NSString *)_extractCountryFromDict:(NSDictionary *)d {
     if (![d isKindOfClass:[NSDictionary class]]) return @"";
-    NSArray *keys = @[@"region", @"country", @"display_region", @"country_code",
+    NSArray *keys = @[@"act_country", @"region", @"country", @"display_region", @"country_code",
                       @"region_code", @"ip_location", @"location", @"area"];
     for (NSString *k in keys) {
         id v = d[k];

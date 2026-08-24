@@ -1058,17 +1058,36 @@ static NSArray *XN_NurtureComments(void) {
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIWindow *window = XN_ActiveWindow();
         CGSize screen = [UIScreen mainScreen].bounds.size;
-        // 屏幕内 label 含 Follow 的视图（FollowPromptView，非 UIButton；排除顶部 Following 标签 y≈42）
+        // ⚠️ v1.4.119 修复"关注点不上"：优先 accId 按钮（个人页 follow），
+        // 再按 label 找（feed FollowPromptView）；命中后向上找最近的 UIControl 按钮本体，
+        // 点 label 文本本身常因非交互控件而无效（实锤：before/after label 相同）
         __strong UIView *followView = nil;
-        [self _findVisibleViewWithLabel:@"Follow" inView:window screen:screen depth:0 result:&followView];
+        [self _findVisibleViewWithAccId:kAccFollow inView:window screen:screen depth:0 result:&followView];
+        if (!followView) {
+            [self _findVisibleViewWithLabel:@"Follow" inView:window screen:screen depth:0 result:&followView];
+        }
         if (!followView) {
             [self _findVisibleViewWithLabel:@"关注" inView:window screen:screen depth:0 result:&followView];
         }
         if (followView) {
-            CGPoint center = [followView.superview convertPoint:followView.center toView:nil];
+            // 向上找最近的可交互按钮（UIControl），否则用 label 所在容器
+            __strong UIView *btnView = followView;
+            UIView *cur = followView.superview;
+            while (cur && cur != window) {
+                if ([cur isKindOfClass:[UIControl class]] && !cur.hidden && cur.alpha > 0.02) {
+                    btnView = cur;
+                    break;
+                }
+                cur = cur.superview;
+            }
+            CGPoint center = [btnView.superview convertPoint:btnView.center toView:nil];
             NSString *beforeLabel = followView.accessibilityLabel ?: @"";
-            NSLog(@"[XNOWER] follow命中: %@ center=(%.0f,%.0f) before=%@", NSStringFromClass(followView.class),
+            NSLog(@"[XNOWER] follow命中: %@(label:%@) btn=%@ center=(%.0f,%.0f) before=%@", NSStringFromClass(followView.class),
+                  NSStringFromClass(btnView.class), NSStringFromClass(btnView.class),
                   center.x, center.y, beforeLabel);
+            if ([btnView isKindOfClass:[UIControl class]]) {
+                [(UIControl *)btnView sendActionsForControlEvents:UIControlEventTouchUpInside];
+            }
             [self _safeTapAtPoint:center];
             // 关注成功验证：点击后异步读 label，从 "Follow X" 变 "Following X" 或按钮消失 = 成功
             __weak UIView *weakFV = followView;
@@ -2531,27 +2550,29 @@ static NSArray *XN_NurtureComments(void) {
         int watchTime = minDelay + arc4random_uniform(maxDelay - minDelay + 1);
         [NSThread sleepForTimeInterval:watchTime];
 
+        // 20% 概率点赞（_performLike 内部自带 dispatch_sync(main)，直接调用即可——
+        // 不能再外套 dispatch_sync(main)，否则主线程嵌套同步自锁 → 闪退）
+        if (arc4random_uniform(100) < 20) {
+            [self _performLike];
+            likes++;
+            // 互动后长延时，等 UI 重建完再上滑（防点到重建中的 cell 崩溃）
+            [NSThread sleepForTimeInterval:1.0];
+        }
+
+        // 8% 概率关注
+        if (arc4random_uniform(100) < 8) {
+            [self _performFollow];
+            follows++;
+            [NSThread sleepForTimeInterval:1.0];
+        }
+
+        // 上滑到下一个视频（_performSwipeUp 内部不切主线程，需显式 dispatch_sync(main) 操作 UI）
         dispatch_sync(dispatch_get_main_queue(), ^{
-            // 20% 概率点赞
-            if (arc4random_uniform(100) < 20) {
-                [self _performLike];
-                likes++;
-                [NSThread sleepForTimeInterval:0.5];
-            }
-
-            // 8% 概率关注
-            if (arc4random_uniform(100) < 8) {
-                [self _performFollow];
-                follows++;
-                [NSThread sleepForTimeInterval:0.5];
-            }
-
-            // 上滑到下一个视频
             [self _performSwipeUp];
         });
 
-        // 滑动后短延迟
-        [NSThread sleepForTimeInterval:0.3];
+        // 上滑后长延时，视频 cell 重建完才进下一轮互动
+        [NSThread sleepForTimeInterval:1.5];
     }
 
     int totalDuration = scrollCount * (minDelay + maxDelay) / 2;
@@ -3258,31 +3279,15 @@ static NSArray *XN_NurtureComments(void) {
         [self _applyAvatarToProfile:avatar];
     }
 
-    // 改昵称
+    // 改昵称（v1.4.119：_setEditableFieldText 兼容 UITextField/UITextView + 先点焦点再赋值）
     if (nickname.length > 0) {
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            UITextField *nameField = [self _findTextFieldWithPlaceholderInView:XN_ActiveWindow()
-                                                                     keywords:@[@"name", @"Name", @"昵称", @"name", @"username"]];
-            if (nameField) {
-                nameField.text = nickname;
-                [nameField becomeFirstResponder];
-                [[NSNotificationCenter defaultCenter] postNotificationName:UITextFieldTextDidChangeNotification object:nameField];
-            }
-        });
+        [self _setEditableFieldText:nickname keywords:@[@"name", @"Name", @"昵称", @"name", @"username"]];
         [NSThread sleepForTimeInterval:0.5];
     }
 
     // 改签名
     if (signature.length > 0) {
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            UITextField *bioField = [self _findTextFieldWithPlaceholderInView:XN_ActiveWindow()
-                                                                     keywords:@[@"bio", @"Bio", @"签名", @"简介", @"introduce"]];
-            if (bioField) {
-                bioField.text = signature;
-                [bioField becomeFirstResponder];
-                [[NSNotificationCenter defaultCenter] postNotificationName:UITextFieldTextDidChangeNotification object:bioField];
-            }
-        });
+        [self _setEditableFieldText:signature keywords:@[@"bio", @"Bio", @"签名", @"简介", @"introduce"]];
         [NSThread sleepForTimeInterval:0.5];
     }
 
@@ -3311,6 +3316,52 @@ static NSArray *XN_NurtureComments(void) {
         if (tf) return tf;
     }
     return nil;
+}
+
+/// 按 placeholder 关键词查找 UITextView 输入框（编辑资料页昵称/签名框可能是 UITextView）
+- (UITextView *)_findTextViewWithPlaceholderInView:(UIView *)view keywords:(NSArray *)keywords {
+    if ([view isKindOfClass:[UITextView class]]) {
+        UITextView *tv = (UITextView *)view;
+        NSString *ph = tv.text.length > 0 ? tv.text : (tv.accessibilityLabel ?: @"");
+        for (NSString *kw in keywords) {
+            if ([ph.lowercaseString containsString:kw.lowercaseString]) return tv;
+        }
+    }
+    for (UIView *sub in view.subviews) {
+        UITextView *tv = [self _findTextViewWithPlaceholderInView:sub keywords:keywords];
+        if (tv) return tv;
+    }
+    return nil;
+}
+
+/// 编辑资料页改字段：先点获得焦点，再赋值 + 触发编辑事件（兼容 UITextField / UITextView）
+/// ⚠️ v1.4.119 修复"输入框输不进文字"：TikTok 输入框可能是 UITextView/受控组件，
+/// 旧代码只找 UITextField 且不点焦点 → 匹配不到或赋值不生效。
+- (BOOL)_setEditableFieldText:(NSString *)text keywords:(NSArray *)keywords {
+    __block BOOL ok = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        UIView *field = [self _findTextFieldWithPlaceholderInView:window keywords:keywords];
+        BOOL isTextView = NO;
+        if (!field) {
+            field = [self _findTextViewWithPlaceholderInView:window keywords:keywords];
+            isTextView = YES;
+        }
+        if (!field) return;
+        [self _safeTapAtPoint:[field.superview convertPoint:field.center toView:nil]];
+        if (isTextView) {
+            UITextView *tv = (UITextView *)field;
+            tv.text = text;
+            [[NSNotificationCenter defaultCenter] postNotificationName:UITextViewTextDidChangeNotification object:tv];
+        } else {
+            UITextField *tf = (UITextField *)field;
+            tf.text = text;
+            [tf sendActionsForControlEvents:UIControlEventEditingChanged];
+            [[NSNotificationCenter defaultCenter] postNotificationName:UITextFieldTextDidChangeNotification object:tf];
+        }
+        ok = YES;
+    });
+    return ok;
 }
 
 /// 改头像：下载头像图 URL → 存系统相册 → 点编辑资料页当前头像 → 选相册最新一张
