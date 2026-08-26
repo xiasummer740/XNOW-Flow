@@ -207,7 +207,18 @@ def activate_license(
 
     # 已激活且绑定到其他设备 → 拒绝
     if lic.status == "active" and lic.device_id and lic.device_id != device_id:
-        raise HTTPException(status_code=400, detail="卡密已绑定其他设备")
+        # v1.4.122 后端：device_id 漂移自动重绑。i4Tools 重装=全新安装，device_id 会漂移
+        # （NSUserDefaults 清空 + IDFV 变化），导致卡密绑定旧 ID → 激活 400"已绑定其他设备"。
+        # 若旧设备当前离线（装机漂移的典型状态），自动迁移绑定到新 device_id，用户免改库。
+        old_dev = db.query(DeviceBinding).filter(
+            DeviceBinding.name.in_([lic.device_id, lic.udid or ""])
+        ).first()
+        old_online = bool(old_dev and (old_dev.online or old_dev.is_online))
+        if old_online:
+            raise HTTPException(status_code=400, detail="卡密已绑定其他设备（在线）")
+        logger.warning(f"License {key_norm} 设备漂移自动重绑: {lic.device_id} -> {device_id} (旧设备离线)")
+        lic.device_id = device_id
+        lic.udid = udid
 
     # 未使用 → 激活
     if lic.status in ("unused", "expired"):

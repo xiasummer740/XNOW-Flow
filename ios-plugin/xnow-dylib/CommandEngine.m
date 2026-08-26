@@ -21,6 +21,7 @@
 // TikTok 已知的 accessibility identifiers（ui_scan 实测确认，v1.4.21）
 static NSString *const kAccLike = @"feedLikeButton";
 static NSString *const kAccFollow = @"follow";              // 关注按钮（个人页）
+static NSString *const kAccEditProfile = @"user_info_manage_edit_profile"; // 编辑资料按钮（个人主页）
 static NSString *const kAccComment = @"feedCommentButton";
 static NSString *const kAccShare = @"feedShareButton";
 static NSString *const kAccFavorite = @"feedFavoriteButton"; // 收藏
@@ -3262,13 +3263,24 @@ static NSArray *XN_NurtureComments(void) {
     [NSThread sleepForTimeInterval:1.5];
 
     dispatch_sync(dispatch_get_main_queue(), ^{
-        UIButton *editBtn = [self _findButtonWithAnyLabel:@[@"Edit profile", @"Edit Profile", @"编辑资料", @"编辑"]
-                                                   inView:XN_ActiveWindow()];
-        if (editBtn) {
-            [self _safeTapAtPoint:[editBtn.superview convertPoint:editBtn.center toView:nil]];
+        UIWindow *window = XN_ActiveWindow();
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        // ⚠️ v1.4.123 修复"修改资料没生效"：编辑按钮 accId 是 user_info_manage_edit_profile，
+        // 旧代码只按 label 找（"Edit profile" 带空格 vs accId 下划线不匹配）→ 找不到 → 坐标兜底点偏。
+        // 优先 accId 定位（同 _performFollow 模式），再按 label，坐标兜底仅最后手段。
+        __strong UIView *editView = nil;
+        [self _findVisibleViewWithAccId:kAccEditProfile inView:window screen:screen depth:0 result:&editView];
+        if (!editView) {
+            [self _findVisibleViewWithLabel:@"Edit profile" inView:window screen:screen depth:0 result:&editView];
+        }
+        if (!editView) {
+            [self _findVisibleViewWithLabel:@"编辑资料" inView:window screen:screen depth:0 result:&editView];
+        }
+        if (editView) {
+            CGPoint center = [editView.superview convertPoint:editView.center toView:nil];
+            [self _safeTapAtPoint:center];
         } else {
             // 坐标回退：编辑按钮通常在资料卡右上
-            CGSize screen = [UIScreen mainScreen].bounds.size;
             [self _safeTapAtPoint:CGPointMake(screen.width - 40, screen.height * 0.38)];
         }
     });
