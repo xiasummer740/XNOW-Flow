@@ -1,7 +1,8 @@
 # 问题清单
 
 > 发版门禁依据：发版前全表必须是「已验证」。机制见 `xiangge-env/specs/release-gate.md`。
-> 状态机：待修 → 已修待验 → 已验证（= 真机/测试实测通过）
+> 状态机：待修 → 已修待验 → 已备待发 → 已验证（= 真机/测试实测通过）
+> 攒批门禁：至少 3 项「已修待验」才编译打包（见 CLAUDE.md 发版门禁），紧急单发需祥哥特批
 
 ## 🔴 安全（2026-08-11 全面审查发现，第一批已修4项）
 
@@ -64,10 +65,29 @@
 | 已修待验 | **备份当前账号资料全空 + 前置拦截**（祥哥 v1.4.111/112 装机实证，2026-08-18）：①资料全空根因=AccountManager.currentAccount 需 /user/ 捕获（没进个人页→空）+ NSUserDefaults 启发式没命中。②v1.4.112 加了「资料空→导航个人页触发捕获」兜底后，装机又暴露**面板前置检查拦截**：`_promptBackupCurrentAccount` 在 `currentAccount==nil && activeAccount==nil` 时直接 return「未检测到当前账号」（新装本地池空、没进过个人页→必中），备份根本没执行。**修复**：v1.4.112 把 `_detectCurrentAccountFlow` 提为公开 `detectCurrentAccountFlow` + `backupCurrentAccount` 资料无 aweme_id 时先导航个人页触发 /user/ 捕获；**v1.4.113 删除面板 return**，由 backupCurrentAccount 内部做真实登录态检测（session/cookie）+ 资料抓取。待装机验证（=备份后账号有完整昵称/头像/ID + 后端 B41 账号池同步） | 2026-08-18 真机 | 2026-08-18 |
 | 已验证 | **备份抓成正在浏览的视频作者**（祥哥 v1.4.115 装机实证，2026-08-19）：导航个人页+UI扫描兜底全窗口找 @ 标签，视频流里的 @作者 被误抓成"当前账号"（祥哥要的是自己的号，且**要求任意页面都能直接备份**，不一定在个人主页）。**v1.4.116 根治**：①`_extractProfileFromDefaults` 深度递归扫所有嵌套 dict/JSON（原只扫顶层+特定key组合→TikTok 结构一嵌套就没命中）②**cookie uid_tt 消歧**：TikTok 登录必设 uid_tt（登录用户数字ID），只认它匹配的账号 dict，视频作者缓存永不误选 ③`detectCurrentAccountFlow` 导航兜底降为最后手段（v1.4.115 已加 profile_mine 确认才扫描）④新增 `dump_login` 诊断命令 + 备份失败自诊断（NSUserDefaults key 名 + cookies 域名，**不含值**，上报 server.log → 若提取仍失败，据真实结构写精准提取，不盲猜）。**真机验证通过**：任意页面点备份抓到 @outshine83（祥哥确认浮窗显示 Outshine/@outshine83） | 2026-08-19 真机 | 2026-08-19 |
 | 已修待验 | **备份账号国家不显示**（祥哥 v1.4.116 装机实证，2026-08-19）：备份成功（Outshine/@outshine83 显示）但「国家:—」。根因=country 只认 `region`/`country` 两个键且要求 NSString，TikTok 缓存 dict 字段名可能不同或为 NSNull/非字符串。**v1.4.117 修复**：①`_extractCountryFromDict` 多键位提取（region/country/display_region/country_code/region_code/ip_location/location/area）+类型安全 ②同 uid 多缓存择优（带国家>完整度，仅同账号安全）③备份成功也上报 profile_keys+country 证据（不含值）→server.log 可核实真实字段名 ④面板国家 code→中文名显示。**v1.4.118 再修**：117 装机实测（祥哥 2026-08-24 点备份）profile_keys 含 `act_country` 但 country 值未上报 → keys 数组加 `act_country` + L182 不再用固定 country 键覆盖成空（`_extractCountryFromDict:profile ?: self.lastMatchedCountry`）。**v1.4.119 待装机验证**（=备份后浮窗显示国家，如 🇺🇸 美国） | 2026-08-19 真机 | 2026-08-24 |
-| 已修待验 | **智能浏览闪退**（祥哥 2026-08-20 反馈，点「🌐 智能浏览」即闪退）：**v1.4.119 实锤根因**（VPS 日志 polled smart_browse → 23s 后 CRASH last_action=smart_browse）=`_performSmartBrowse` 外层 `dispatch_sync(main)` block 内又调 `_performLike`/`_performFollow`（内部各自 `dispatch_sync(main)`）→ 主线程嵌套同步自锁 → 系统杀进程。**修复**：互动改为直接调用（内部已切主线程，不再嵌套），上滑单独 `dispatch_sync(main)`（内部不切），互动间加 1.0-1.5s 长延时等 UI 重建（防点到重建中 cell 崩溃）。待装机验证（=智能浏览可跑不闪退，后台看 scrolls/likes 计数） | 2026-08-20 真机 | 2026-08-24 |
-| 已修待验 | **修改资料输入框无法输入**（祥哥 2026-08-20 反馈，昵称/签名框输不进文字）：根因=`_performEditProfile` 只找 UITextField 按 placeholder 关键词匹配且直接赋值不点焦点 → TikTok 输入框可能是 UITextView/受控组件 → 匹配不到或赋值不生效。**v1.4.119 修复**：新增 `_setEditableFieldText:` ①先按 placeholder 找 UITextField ②没有则找 UITextView ③先 `_safeTapAtPoint` 点焦点再赋值 ④发对应 EditingChanged/TextDidChange 通知。待装机验证（=后台改昵称/签名真机生效） | 2026-08-20 真机 | 2026-08-24 |
-| 已修待验 | **关注按钮点不上**（祥哥 2026-08-20 实测，后台「➕ 关注」下发后未点上）：**v1.4.119 实锤**（VPS 日志 state_diag before=after='Follow xo.sleepybrunette' success=False）=命中 label 文本但点击无效（label 非 UIControl，合成触摸点不到按钮本体）。**修复**：①优先 accId=`kAccFollow` 定位按钮 ②label 命中后向上找最近 UIControl 按钮本体 ③按钮是 UIControl 则先 `sendActionsForControlEvents` 再 `_safeTapAtPoint`。待装机验证（=后台关注后 state_diag success=True 或 label 变 Following） | 2026-08-20 真机 | 2026-08-24 |
+| 已验证 | **智能浏览闪退**（祥哥 2026-08-20 反馈，点「🌐 智能浏览」即闪退）：**v1.4.119 实锤根因**（VPS 日志 polled smart_browse → 23s 后 CRASH last_action=smart_browse）=`_performSmartBrowse` 外层 `dispatch_sync(main)` block 内又调 `_performLike`/`_performFollow`（内部各自 `dispatch_sync(main)`）→ 主线程嵌套同步自锁 → 系统杀进程。**修复**：互动改为直接调用（内部已切主线程，不再嵌套），上滑单独 `dispatch_sync(main)`（内部不切），互动间加 1.0-1.5s 长延时等 UI 重建。**v1.4.121 真机验证通过**（2026-08-25 远程下发）：`smart_browse {'status':'success','likes':3,'follows':3,'scrolls':14,'duration':104}`——跑满 104s 无闪退，顺带自动关注 3 个账号 | 2026-08-20 真机 | 2026-08-25 |
+| 已修待验 | **修改资料输入框无法输入**（祥哥 2026-08-20 反馈，昵称/签名框输不进文字）：根因=`_performEditProfile` 只找 UITextField 按 placeholder 关键词匹配且直接赋值不点焦点 → TikTok 输入框可能是 UITextView/受控组件 → 匹配不到或赋值不生效。**v1.4.119 修复**：新增 `_setEditableFieldText:` ①先按 placeholder 找 UITextField ②没有则找 UITextView ③先 `_safeTapAtPoint` 点焦点再赋值 ④发对应 EditingChanged/TextDidChange 通知。**v1.4.123 再修（2026-08-25 真机实测暴露）**：119 只修了输入框赋值，但**编辑按钮定位失败**——`_findButtonWithAnyLabel` 按 label `"Edit profile"`（带空格）匹配 accId `user_info_manage_edit_profile`（下划线）containsString 不命中 → 找不到按钮 → 坐标兜底 (width-40, height*0.38)=(374,340) 点偏 → **编辑资料页根本没打开** → 昵称没改（控件树仍显示 Outshine/@outshine83）。新增 kAccEditProfile 常量，`_performEditProfile` 优先 `_findVisibleViewWithAccId` 定位（同 follow 模式），label 兜底，坐标兜底仅最后手段。待装机验证（=后台改昵称真机生效） | 2026-08-20 真机 | 2026-08-25 |
+| 部分验证 | **关注按钮点不上**（祥哥 2026-08-20 实测，后台「➕ 关注」下发后未点上）：**v1.4.119 实锤**（VPS 日志 state_diag before=after='Follow xo.sleepybrunette' success=False）=命中 label 文本但点击无效（label 非 UIControl，合成触摸点不到按钮本体）。**修复**：①优先 accId=`kAccFollow` 定位按钮 ②label 命中后向上找最近 UIControl 按钮本体 ③按钮是 UIControl 则先 `sendActionsForControlEvents` 再 `_safeTapAtPoint`。**v1.4.121 真机验证**：智能浏览内部自动关注 3 个账号全部成功（`smart_browse follows:3`，走同一 `_performFollow` 逻辑）；**后台独立「➕ 关注」命令待单独实测**（=state_diag success=True 或 label 变 Following） | 2026-08-20 真机 | 2026-08-25 |
 | 已修待验 | **设备重装后 Keychain UID 变化 → 卡激活失败**（2026-08-18 第三次出现）：UID 三次重装三次变（451D→68D9→F8C0），每次 SQL 改绑救急。**根因定位**：激活/授权/浮窗机器码全走 `[DeviceIdentity deviceUID]`（Keychain UUID，注入 TikTok 重装/重签即清空）；而命令主键 `device_id`=iphone_0ECF42DC（IDFV 前8位 + NSUserDefaults 持久化，重装稳定）与 WS 鉴权（device_bindings 表 secret）链路稳定（poll 一直 200）。**v1.4.114 根治**：授权检查×2/激活/浮窗显示/复制机器码全部改用 `self.deviceId`（XNOWER.m 4处+XNFloatingPanel.m 2处），卡密已改绑 `iphone_0ECF42DC`，DeviceIdentity 类弃用保留（待 #49 硬件UDID拍板）。待装机验证（= 114 装后自动激活，重装不再失配） | 2026-08-18 真机 | 2026-08-18 |
 
 > 待办策略：攒批 3-5 项一次装机测，不单点发版。
 > 未列问题但新发现的 → 加一行状态「待修」。
+
+## v1.4.121 待办
+
+### [已修待验] device_id 漂移 → 卡密激活失配
+- **现象**：i4Tools 重装后设备上报 device_id 变化（iphone_8E65C9CA → iphone_A6D8F9B4），卡密绑定旧 ID → 激活 400「卡密已绑定其他设备」
+- **根因**：XNOWER.m XN_HardwareUDID() 用 IOPlatformUUID，IOKit 失败回落 IDFV（装机即漂移，代码注释已写明）
+- **临时处置**：2026-08-25 已把卡密 7YDYWYSKMKZAH06Q 改绑到 iphone_A6D8F9B4
+- **后端根治（已部署 2026-08-25，VPS 重启成功 PID 868282）**：licenses.py activate 加「设备漂移自动重绑」——卡密 active 但绑旧 device_id 且旧设备在线→拒绝；旧设备离线→自动改绑到新 device_id（装机漂移典型场景，用户免改库不再输卡密）
+- **待验证**：重装一次 IPA 后 device_id 变化 → 输入卡密激活应自动重绑成功，不再 400
+
+### [已备待发] 备份账号国家不显示（v1.4.122 cookie 兜底）
+- **状态**：v1.4.122 已编译打包上传 `/opt/xnow-flow/static/`（md5 da7ec896a68239242454661dd8ec0128），等攒批一起发
+- **121 证据链**：2026-08-25 远程 backup_account success（`已备份账号 #1`），但 result 无 country 字段（121 只在非空才上报）→ 国家提取在 121 仍空
+- **122 必成证据**：diagnostic cookies 已含 `store-country-code@.tiktok.com/.tiktokv.com/.tiktokw.us/.tiktokw.eu/.tiktokv.us` 全部带值 → `_countryFromCookies` 兜底必读到国家码
+- **验收**：备份后浮窗显示国家（如 🇺🇸 美国）
+
+### [已备待发] 修改资料编辑按钮定位（v1.4.123，详见上方「已修待验」行）
+- **状态**：v1.4.123 已编译打包上传 `/opt/xnow-flow/static/`，等攒批一起发
+- **验收**：后台改昵称 outshine1 → 真机编辑资料页打开、昵称框填入、保存生效
