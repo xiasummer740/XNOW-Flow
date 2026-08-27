@@ -29,3 +29,4 @@
 
 ## 历史
 - [v1.4.35 (2026-08-07)](2026-08-07-v1.4.35.md) — 账号检测修复、触摸注入、前端合并
+- [v1.4.125 edit_profile 崩溃根因修复（dispatch_sync 主线程嵌套自锁）](2026-08-26-v1.4.125-edit-profile-crash.md) — v1.4.124 装机崩溃(坐标270/438误赋用户名) → 125 坐标修292/523+赋值校验，但装机仍崩(edit_profile:start后死锁)；隔离测 open_tab 稳定 → **实锤根因=外层 dispatch_sync(main) 包 _tapTab 内部 dispatch_sync(main)=主线程自锁→watchdog杀进程**；已修3处(_performEditProfile/_performLogout/_performRegisterAccount)去外层包装+dylib重建上传 TikTok_XNOW_v1.4.125_BH.ipa；**待祥哥装机验证**；同时收齐云控讲解.pptx 98页功能清单→docs/云控功能清单.md(手机/网页分区+缺口对照+三批路线图)

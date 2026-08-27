@@ -149,6 +149,7 @@ static NSArray *XN_NurtureComments(void) {
             @"register_account":  @(CommandActionRegisterAccount),
             // 调试诊断
             @"ui_scan":           @(CommandActionUIScan),
+            @"tap":               @(CommandActionTap),       // v1.4.124 坐标点击 x/y
             // 账号管理
             @"backup_account":    @(CommandActionBackupAccount),
             // 环境伪装 / 切换国家
@@ -276,6 +277,18 @@ static NSArray *XN_NurtureComments(void) {
             case CommandActionUIScan:
                 [self _performUIScan];
                 break;
+
+            case CommandActionTap: {
+                // v1.4.124 坐标点击：远程调试/验证点击链用
+                NSNumber *xn = params[@"x"];
+                NSNumber *yn = params[@"y"];
+                if (xn && yn) {
+                    [self _safeTapAtPoint:CGPointMake(xn.doubleValue, yn.doubleValue)];
+                    result = @{@"status": @"success", @"message": @"tap", @"x": xn, @"y": yn};
+                    hasResult = YES;
+                }
+                break;
+            }
 
             case CommandActionBackupAccount: {
                 // 直接读 TikTok 原生登录数据（session/cookies/Keychain），任意页面可备份，不跳个人页
@@ -2523,12 +2536,11 @@ static NSArray *XN_NurtureComments(void) {
 }
 
 /// 导航到个人主页
+/// ⚠️ v1.4.124: 旧实现点坐标 (w*0.88, h-50)=(364,686) 命中不了底部 tab（tab 实际 y≈712），
+/// 从 feed 切不到个人主页 → 编辑按钮/设置按钮找不到 → 假成功。改用 _tapTab:@"profile"：
+/// 优先 setSelectedIndex 直达（v1.4.92 实测可靠），accId a11y_vo_profile 兜底。
 - (void)_navigateToProfile {
-    CGSize screen = [UIScreen mainScreen].bounds.size;
-    // 点底部 "我" tab（通常在右下角）
-    CGFloat tabY = screen.height - 50;
-    CGFloat profileTabX = screen.width * 0.88;
-    [self _safeTapAtPoint:CGPointMake(profileTabX, tabY)];
+    [self _tapTab:@"profile"];
 }
 
 /// 点右上角
@@ -3215,10 +3227,8 @@ static NSArray *XN_NurtureComments(void) {
 
 /// 退出登录（个人主页 → 设置 → 退出）
 - (void)_performLogout {
-    // 导航到个人主页
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        [self _navigateToProfile];
-    });
+    // 导航到个人主页（v1.4.125：去外层 dispatch_sync，_tapTab 内部自带切主线程，同 open_tab 稳定模式）
+    [self _navigateToProfile];
     [NSThread sleepForTimeInterval:2.0];
 
     // 点右上角设置
@@ -3257,10 +3267,13 @@ static NSArray *XN_NurtureComments(void) {
     if (nickname.length == 0 && signature.length == 0 && link.length == 0 && avatar.length == 0) return;
 
     // 导航到个人主页 → 点编辑资料
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        [self _navigateToProfile];
-    });
+    // ⚠️ v1.4.125 闪退根因修复：原实现外层 dispatch_sync(main) 包 _navigateToProfile(→_tapTab)，
+    // 而 _tapTab 内部自带 dispatch_sync(main) → 主线程嵌套自锁 → iOS watchdog 杀进程。
+    // 命令在后台线程执行，_tapTab 内部自动切主线程，直接调用即可（同 open_tab 已验证稳定模式）。
+    [self _logStep:@"edit_profile:start"];
+    [self _navigateToProfile];
     [NSThread sleepForTimeInterval:1.5];
+    [self _logStep:@"edit_profile:at_profile"];
 
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIWindow *window = XN_ActiveWindow();
@@ -3291,19 +3304,43 @@ static NSArray *XN_NurtureComments(void) {
         [self _applyAvatarToProfile:avatar];
     }
 
-    // 改昵称（v1.4.119：_setEditableFieldText 兼容 UITextField/UITextView + 先点焦点再赋值）
+    // 改昵称（v1.4.124：TikTok 编辑页改版为列表式——主页面无输入框/无 Save，Name 是行入口。
+    // 流程：点 Name 行（v1.4.125 真机 tap 实测 Name 行 y≈292，屏幕 414x896；旧 270 偏上沿易点不中）→
+    // 进昵称子页 → 子页唯一输入框赋值 → 点右上角 Save((w-34,42) 视觉实测)）
     if (nickname.length > 0) {
-        [self _setEditableFieldText:nickname keywords:@[@"name", @"Name", @"昵称", @"name", @"username"]];
-        [NSThread sleepForTimeInterval:0.5];
+        [self _logStep:@"edit_profile:name_tap"];
+        CGSize s = [UIScreen mainScreen].bounds.size;
+        [self _safeTapAtPoint:CGPointMake(s.width * 0.5, 292)];
+        [NSThread sleepForTimeInterval:1.0];
+        if ([self _setEditableFieldText:nickname keywords:@[@"name", @"Name", @"昵称", @"username"]]) {
+            [self _logStep:@"edit_profile:name_set"];
+            [NSThread sleepForTimeInterval:0.5];
+            [self _safeTapAtPoint:CGPointMake(s.width - 34, 42)];
+            [NSThread sleepForTimeInterval:1.0];
+        } else {
+            [self _logStep:@"edit_profile:name_set_fail"];
+        }
     }
 
-    // 改签名
+    // 改签名（v1.4.125：同列表式——点 Bio 行 y≈523（真机 tap 实测；旧 438 会误进 Username 子页，
+    // 把签名文本赋给用户名 → TikTok 用户名校验/保存 → 崩溃 v1.4.124 根因）→ 子页赋值 → Save）
     if (signature.length > 0) {
-        [self _setEditableFieldText:signature keywords:@[@"bio", @"Bio", @"签名", @"简介", @"introduce"]];
-        [NSThread sleepForTimeInterval:0.5];
+        [self _logStep:@"edit_profile:bio_tap"];
+        CGSize s = [UIScreen mainScreen].bounds.size;
+        [self _safeTapAtPoint:CGPointMake(s.width * 0.5, 523)];
+        [NSThread sleepForTimeInterval:1.0];
+        if ([self _setEditableFieldText:signature keywords:@[@"bio", @"Bio", @"签名", @"简介", @"introduce"]]) {
+            [self _logStep:@"edit_profile:bio_set"];
+            [NSThread sleepForTimeInterval:0.5];
+            [self _safeTapAtPoint:CGPointMake(s.width - 34, 42)];
+            [NSThread sleepForTimeInterval:1.0];
+        } else {
+            [self _logStep:@"edit_profile:bio_set_fail"];
+        }
     }
 
     // 保存
+    [self _logStep:@"edit_profile:save"];
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIButton *saveBtn = [self _findButtonWithAnyLabel:@[@"Save", @"save", @"保存", @"Done", @"完成"]
                                                    inView:XN_ActiveWindow()];
@@ -3312,6 +3349,7 @@ static NSArray *XN_NurtureComments(void) {
         }
     });
     [NSThread sleepForTimeInterval:1.0];
+    [self _logStep:@"edit_profile:done"];
 }
 
 /// 按 placeholder 关键词查找输入框
@@ -3359,6 +3397,19 @@ static NSArray *XN_NurtureComments(void) {
             field = [self _findTextViewWithPlaceholderInView:window keywords:keywords];
             isTextView = YES;
         }
+        // v1.4.124: 编辑子页输入框无 placeholder/acc_id（ui_scan 实测空），placeholder 匹配失败时
+        // 回退找窗口内第一个可见可交互 UITextField（编辑子页场景 = 子页唯一输入框）
+        if (!field) {
+            field = [self _findFirstEditableTextFieldInView:window];
+        }
+        // v1.4.125: 校验输入框在屏幕可见中区（y 50~80%高），防误赋给隐藏/列表页背景输入框
+        //（124 崩溃根因之一：tap 点错行时在错误页面找输入框赋值 → TikTok 状态错乱崩）
+        if (field) {
+            CGRect fr = [field.superview convertRect:field.frame toView:window];
+            if (fr.size.height < 10 || fr.origin.y < 50 || fr.origin.y > window.bounds.size.height * 0.8) {
+                field = nil;
+            }
+        }
         if (!field) return;
         [self _safeTapAtPoint:[field.superview convertPoint:field.center toView:nil]];
         if (isTextView) {
@@ -3374,6 +3425,19 @@ static NSArray *XN_NurtureComments(void) {
         ok = YES;
     });
     return ok;
+}
+
+/// 找窗口内第一个可见且可交互的 UITextField（编辑子页输入框无 placeholder 时回退用，v1.4.124）
+- (UITextField *)_findFirstEditableTextFieldInView:(UIView *)view {
+    if ([view isKindOfClass:[UITextField class]]) {
+        UITextField *tf = (UITextField *)view;
+        if (!tf.hidden && tf.userInteractionEnabled && tf.alpha > 0.01) return tf;
+    }
+    for (UIView *sub in view.subviews) {
+        UITextField *tf = [self _findFirstEditableTextFieldInView:sub];
+        if (tf) return tf;
+    }
+    return nil;
 }
 
 /// 改头像：下载头像图 URL → 存系统相册 → 点编辑资料页当前头像 → 选相册最新一张
@@ -4465,10 +4529,8 @@ static NSArray *XN_NurtureComments(void) {
         return @{@"status": @"failed", @"message": @"缺少邮箱或手机号"};
     }
 
-    // Step 1: 导航到个人主页（点底部"我"）
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        [self _navigateToProfile];
-    });
+    // Step 1: 导航到个人主页（v1.4.125：去外层 dispatch_sync，_tapTab 内部自带切主线程，同 open_tab 稳定模式）
+    [self _navigateToProfile];
     [NSThread sleepForTimeInterval:2.0];
 
     // Step 2: 若在登录页，找 "登录/注册" 入口
