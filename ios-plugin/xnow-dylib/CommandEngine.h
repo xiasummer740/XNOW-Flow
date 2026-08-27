@@ -69,6 +69,7 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 
     // 调试诊断 (v1.4.17)
     CommandActionUIScan,            // 扫描当前 UI 结构上报（类型/位置/无障碍标识/状态）
+    CommandActionTap,               // params: x/y —— 坐标点击（v1.4.124 远程调试用）
 
     // 账号管理 (v1.4.22)
     CommandActionBackupAccount,     // 备份当前账号登录态快照

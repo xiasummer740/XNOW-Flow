@@ -14,6 +14,7 @@
 #import "XNWindowHelper.h"
 #import "XNTouchSimulator.h"
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 
 #define SW_LOG(fmt, ...) NSLog(@"[XNOWER][Switcher] " fmt, ##__VA_ARGS__)
 
@@ -182,6 +183,16 @@ static AccountSwitcher *gShared = nil;
     //     v1.4.118：优先多键位提取组装 profile（region/country/act_country 等），
     //     组装 profile 提取为空时保留 _findBestMatch 从原始缓存 dict 提取的值（不再用固定 country 键覆盖成空）
     self.lastMatchedCountry = [self _extractCountryFromDict:profile] ?: self.lastMatchedCountry ?: @"";
+    // v1.4.122：国家兜底——TikTok store-country-code cookie（实测存在），上面全提取空时用它，
+    //     并同步回 profile 供落库（act_country）。cookies 由 TikTok 官方写，值是 ISO 国家码（US/JP…）。
+    if (self.lastMatchedCountry.length == 0) {
+        self.lastMatchedCountry = [self _countryFromCookies] ?: @"";
+    }
+    if (self.lastMatchedCountry.length > 0 && ![profile[@"country"] isEqualToString:self.lastMatchedCountry]) {
+        NSMutableDictionary *p = [profile mutableCopy];
+        p[@"country"] = self.lastMatchedCountry;
+        profile = p;
+    }
 
     // 2. 登录证明 = 拿到真实账号标识（@用户名 unique_id 或数字 aweme_id）。拿不到 → 明确失败，不落演示号
     NSString *awemeNum = profile[@"unique_id"] ?: @"";
@@ -235,8 +246,14 @@ static AccountSwitcher *gShared = nil;
 - (NSDictionary *)_extractProfileFromDefaults {
     @try {
         NSDictionary *dump = [[NSUserDefaults standardUserDefaults] dictionaryRepresentation];
+        // ⚠️ v1.4.120 修复国家提取空：排除我们自己写的 AccountPool 数据（XN_AccountPool 存在 NSUserDefaults，
+        //    被 _collectAccountCandidates 当"账号候选"收集 → 本地账号 act_country 是上次存的空值 → 污染 best，
+        //    挤掉 TikTok 原生缓存（才有真实国家）。TikTok 数据源里绝不会有 XN_ 前缀的 key。
+        NSMutableDictionary *dumpFiltered = [dump mutableCopy];
+        [dumpFiltered removeObjectForKey:@"XN_AccountPool"];
+        [dumpFiltered removeObjectForKey:@"XN_ActiveAccountId"];
         NSMutableArray *cands = [NSMutableArray array];
-        [self _collectAccountCandidates:dump depth:0 candidates:cands];
+        [self _collectAccountCandidates:dumpFiltered depth:0 candidates:cands];
         if (!cands.count) return @{};
 
         // 登录用户数字ID（cookie uid_tt）→ 只认它匹配的候选，杜绝抓成视频作者
@@ -286,6 +303,76 @@ static AccountSwitcher *gShared = nil;
     return @{};
 }
 
+/// v1.4.127: 兼容 secure-coded NSKeyedArchiver 的安全解档。
+/// TikTok 账号管理器用 requiringSecureCoding:YES 归档，旧 unarchiveObjectWithData: 返回 nil →
+/// 全新设备 backup 判"未登录"。iOS11+ 用 unarchiveTopLevelObjectWithData:error: 正确返回对象，
+/// 失败再兜底旧 API，双 @try 兜底零风险。
+- (id)_safeUnarchiveData:(NSData *)data {
+    NSError *err = nil;
+    id obj = nil;
+    if (@available(iOS 11.0, *)) {
+        obj = [NSKeyedUnarchiver unarchiveTopLevelObjectWithData:data error:&err];
+    }
+    if (!obj) {
+        @try {
+            obj = [NSKeyedUnarchiver unarchiveObjectWithData:data];
+        } @catch (id e) {
+            obj = nil;
+        }
+    }
+    return obj;
+}
+
+/// v1.4.127: 把解档出来的自定义模型对象用 KVC 反射（class_copyPropertyList）展开成 plist 字典，
+/// 供 _collectAccountCandidates 扫描账号候选（secure-coded 模型类内部属性就是 unique_id/uid/昵称等）。
+/// 纯 plist 类型原样返回；自定义对象逐属性取值并递归展开，防循环/越界深度限制。
+- (id)_flattenObjectToPlist:(id)value depth:(int)depth {
+    if (depth > 6) return nil;
+    if ([value isKindOfClass:[NSDictionary class]]) {
+        NSMutableDictionary *outD = [NSMutableDictionary dictionary];
+        for (id k in (NSDictionary *)value) {
+            id v = [self _flattenObjectToPlist:[(NSDictionary *)value objectForKey:k] depth:depth + 1];
+            if (v) outD[k] = v;
+        }
+        return outD;
+    }
+    if ([value isKindOfClass:[NSArray class]]) {
+        NSMutableArray *outA = [NSMutableArray array];
+        for (id item in (NSArray *)value) {
+            id v = [self _flattenObjectToPlist:item depth:depth + 1];
+            if (v) [outA addObject:v];
+        }
+        return outA;
+    }
+    if ([value isKindOfClass:[NSString class]] || [value isKindOfClass:[NSNumber class]]
+        || [value isKindOfClass:[NSData class]] || [value isKindOfClass:[NSDate class]]) {
+        return value;
+    }
+    if (value == (id)[NSNull null]) return nil;
+    if ([value isKindOfClass:[NSObject class]]) {
+        NSMutableDictionary *outD = [NSMutableDictionary dictionary];
+        Class cls = [value class];
+        while (cls && cls != [NSObject class]) {
+            unsigned int count = 0;
+            objc_property_t *props = class_copyPropertyList(cls, &count);
+            for (unsigned int i = 0; i < count; i++) {
+                const char *name = property_getName(props[i]);
+                if (!name) continue;
+                NSString *key = [NSString stringWithUTF8String:name];
+                @try {
+                    id v = [value valueForKey:key];
+                    id flat = [self _flattenObjectToPlist:v depth:depth + 1];
+                    if (flat) outD[key] = flat;
+                } @catch (id e) { /* 只读/未实现 KVC 的属性跳过 */ }
+            }
+            if (props) free(props);
+            cls = class_getSuperclass(cls);
+        }
+        return outD.count ? outD : nil;
+    }
+    return nil;
+}
+
 /// 递归收集所有"账号形状"的字典（含 unique_id/uid/aweme_id/sec_uid 任一 + 资料字段）
 - (void)_collectAccountCandidates:(id)value depth:(int)depth candidates:(NSMutableArray<NSDictionary *> *)candidates {
     if (depth > 5 || candidates.count >= 10) return;
@@ -311,6 +398,16 @@ static AccountSwitcher *gShared = nil;
         NSData *data = (NSData *)value;
         if (data.length > 0 && data.length < 2 * 1024 * 1024) {   // 只解析 <2MB 的（防大缓存拖慢）
             id obj = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+            if (!([obj isKindOfClass:[NSDictionary class]] || [obj isKindOfClass:[NSArray class]])) {
+                // v1.4.127：TikTok 账号管理器（NHAccountManagerAccountUsersKey 等）用 NSKeyedArchiver
+                // 存账号（secure-coded），旧 unarchiveObjectWithData: 对 secure archive 返回 nil/抛异常
+                // → 全新设备 backup 判"未登录"。改用 unarchiveTopLevelObjectWithData:error: 正确解析；
+                // 解出的自定义模型对象再 KVC 反射展开成 plist 供候选扫描。
+                obj = [self _safeUnarchiveData:data];
+                if (obj && !([obj isKindOfClass:[NSDictionary class]] || [obj isKindOfClass:[NSArray class]])) {
+                    obj = [self _flattenObjectToPlist:obj depth:0];
+                }
+            }
             if ([obj isKindOfClass:[NSDictionary class]] || [obj isKindOfClass:[NSArray class]]) {
                 [self _collectAccountCandidates:obj depth:depth + 1 candidates:candidates];
             }
@@ -391,7 +488,21 @@ static AccountSwitcher *gShared = nil;
             else if ([v isKindOfClass:[NSNumber class]]) t = @"num";
             else if ([v isKindOfClass:[NSDictionary class]]) t = @"dict";
             else if ([v isKindOfClass:[NSArray class]]) t = @"arr";
-            else if ([v isKindOfClass:[NSData class]]) t = @"data";
+            else if ([v isKindOfClass:[NSData class]]) {
+                // v1.4.121 诊断：区分 NSData 是 JSON 还是 NSKeyedArchiver，定位 TikTok 账号缓存结构
+                t = @"data";
+                NSData *dd = (NSData *)v;
+                if (dd.length > 0 && dd.length < 2 * 1024 * 1024) {
+                    if ([NSJSONSerialization JSONObjectWithData:dd options:0 error:nil]) {
+                        t = @"data:json";
+                    } else {
+                        @try {
+                            id un = [self _safeUnarchiveData:dd];
+                            if (un) t = @"data:archive";
+                        } @catch (id e) {}
+                    }
+                }
+            }
             [keysOut addObject:[NSString stringWithFormat:@"%@:%@", k, t]];
         }
         NSMutableArray *cookiesOut = [NSMutableArray array];
@@ -407,11 +518,25 @@ static AccountSwitcher *gShared = nil;
             @"cookies": cookiesOut ?: @[],
             @"uid_tt": [self _selfUidFromCookies] ?: @"",
             @"login": [self verifyCurrentLogin] ?: @{},
+            @"store_country_code": [self _countryFromCookies] ?: @"",
             @"total_keys": @(dump.count),
         };
     } @catch (id e) {
         return @{@"error": [NSString stringWithFormat:@"%@", e]};
     }
+}
+
+/// v1.4.122：读 TikTok store-country-code cookie（官方写的商店国家码，ISO 格式如 US/JP），
+/// 作为国家提取的兜底来源。cookies 里确定存在（dumpLoginState 已证），仅取 name/value 不回传明文。
+- (NSString *)_countryFromCookies {
+    NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+    for (NSHTTPCookie *cookie in storage.cookies) {
+        NSString *name = cookie.name ?: @"";
+        if ([name hasPrefix:@"store-country-code"] && cookie.value.length > 0) {
+            return cookie.value;
+        }
+    }
+    return @"";
 }
 
 /// 新增账号：清空当前登录态（无痕），让用户登录全新账号

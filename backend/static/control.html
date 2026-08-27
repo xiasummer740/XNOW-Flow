@@ -118,8 +118,9 @@ button:disabled { opacity:.4; cursor:not-allowed; }
     <button class="btn-primary" onclick="createNurturePlan()">📝 创建养号计划</button>
     <button class="btn-primary" onclick="startNurturePlan()">▶️ 开始养号</button>
     <button class="btn-danger" onclick="pauseNurturePlan()">⏸ 暂停养号</button>
+    <button class="btn-danger" onclick="stopCurrentDeviceNurture()">⏹ 停止当前设备养号</button>
   </div>
-  <div class="status" id="nurtureStatus">创建后点「开始养号」立即下发 nurture_tick，后台每 30 分钟自动 tick</div>
+  <div class="status" id="nurtureStatus">创建后点「开始养号」立即下发 nurture_tick，后台每 30 分钟自动 tick；手机浮窗起的养号用「停止当前设备养号」直接下发 nurture_stop</div>
 </div>
 
 <div class="card">
@@ -512,6 +513,20 @@ async function pauseNurturePlan() {
     const r = await api('/api/biz/v2/nurture-plans/' + pid + '/pause/', {method:'POST', body:'{}'});
     log('✅ ' + (r.message || JSON.stringify(r)));
   } catch(e) { log('❌ 暂停失败: ' + e.message); }
+}
+
+// 停止当前设备养号：直接对选中设备下发 nurture_stop（手机浮窗起的连续养号也能停，无需后端计划）
+async function stopCurrentDeviceNurture() {
+  const dev = selectedDevice();
+  if (!dev) { log('⚠️ 请先选择设备'); return; }
+  log(`⏳ 停止当前设备养号: 设备#${dev}`);
+  try {
+    const r = await api('/api/biz/v2/device-bindings/batch/dispatch/', {
+      method:'POST',
+      body: JSON.stringify({device_ids:[parseInt(dev)], action:'nurture_stop', params:{}})
+    });
+    log('✅ ' + (r.message || JSON.stringify(r)));
+  } catch(e) { log('❌ ' + e.message); }
 }
 
 async function saveQuickCommand() {

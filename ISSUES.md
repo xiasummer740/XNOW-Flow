@@ -91,5 +91,45 @@
 - **验收**：备份后浮窗显示国家（如 🇺🇸 美国）
 
 ### [已备待发] 修改资料改昵称（v1.4.123+124+125，详见上方「已修待验」行）
-- **状态**：v1.4.123 已实测 accId 有效（编辑页可开）；v1.4.124 列表式适配但**装机崩溃**（详见已修待验行，坐标 270/438 硬编码错 → 签名误赋用户名崩）；**v1.4.125 两次装机实测仍崩 → 实锤根因=dispatch_sync 主线程嵌套自锁（外层 dispatch_sync(main) 包 _tapTab 内部 dispatch_sync(main)）→ 已修 3 处外层包装，重新构建中待再装机**
+- **状态**：v1.4.123 已实测 accId 有效（编辑页可开）；v1.4.124 列表式适配但**装机崩溃**（详见已修待验行，坐标 270/438 硬编码错 → 签名误赋用户名崩）；**v1.4.125 死锁修复装机验证通过（2026-08-27 实测：edit_profile 全 STEP start→at_profile→name_tap→name_set→bio_tap→bio_set→save→done 跑完，11s 无 CRASH success）**；**但暴露流程新 bug：TikTok 改名弹「Update name?」确认框（7天一次）代码没处理 → 改名不生效 + 签名段在昵称子页误执行把签名覆盖进昵称框（截图实测 昵称框=测试签名来自云控 + 弹窗卡住）→ 已点 Cancel 恢复，昵称 Outshine 未被污染。v1.4.126 修复（构建中）**：新增 `_tapDialogConfirmIfPresent`（识别 TUXDialogHighlightBackgroundButton 弹窗点最右 Confirm）+ 昵称 Save 后点 Confirm + 签名段先清残留弹窗 + `_setEditableFieldText` 加 allowFallback=NO（签名段必须匹配 Bio placeholder 才赋值，禁回退第一个输入框防覆盖昵称）
 - **验收**：后台同时改昵称+签名 → 真机编辑资料页打开、昵称框填入、保存生效且**不崩**（昵称变 outshine1）
+
+## v1.4.127 攒批（7项已修待验 → 已备待发，装 127 一次验全批 + 126 并入）
+
+> **发版门禁**：≥3 项「已修待验」攒批 → 已编译打包 `TikTok_XNOW_v1.4.127_BH.ipa`（374.2MB，2026-08-27 15:56 上传 static）→ 装机验证。v1.4.126 edit_profile 确认弹窗修复源码已并入 127，装 127 一并验。
+
+### [已备待发] ⑦ 全屏沉浸播放态卡死（2026-08-27 祥哥反馈「只能重启」）
+- **现象**：设备进入 TikTok 全屏沉浸播放态——底部导航栏/顶部 For You tab/搜索全部消失，屏幕只剩视频+右上角眼睛/向下箭头图标；**手动点击视频无效、go_back/open_tab 都退不出**，只有重启 App 或手动上滑能恢复
+- **根因（三路证据）**：ui_scan 显示 feed cell/feedLikeButton/For You 仍在 a11y 树 → `_isOnFeed` 假阳性 YES → `_gotoHomeFeed` 以为已在首页、深链兜底被短路；实际导航栏被全屏播放器盖住，setSelectedIndex 只切下层
+- **v1.4.127 修复**：①新增 `_isHomeChromeVisibleOnMain`（hitTest 验证 a11y_vo_home 是否真可见可点）②新增 `_isHomeFeedUsable`（完整首页判定=在feed+导航栏可见）③新增 `_recoverFromImmersive`（dismiss presented→pop 推入页→点右上角收起箭头→上滑，祥哥实测上滑有效）④`_gotoHomeFeed` 成功判定收紧为 `_isHomeFeedUsable`，沉浸态先退全屏再深链兜底
+- **验收**：设备进沉浸态后 `go_home` 应 3s 内自动退出回正常首页（不再需要重启/手动上滑）
+
+### [已备待发] ⑥ like 假成功 → 红心点亮真验收
+- **现象**：like 命令假成功（下发即返回 success，未验证红心）
+- **v1.4.127 修复**：CommandActionLike 改调 `_performLikeSafe`，返回 `已点赞（红心点亮验证通过）/点赞未生效（未检测到红心点亮）`，hasResult=YES
+- **验收**：后台点「❤️ 点赞」→ 返回 message 含红心验收结果
+
+### [已备待发] ⑤ open_tab home 无法从 push 的 profile 退出
+- **现象**：open_profile 推入个人主页后 `open_tab home` 假成功（setSelectedIndex 只切 tab bar 下层，屏幕仍显示推入的 profile）
+- **v1.4.127 修复**：`_tapTab` 切 tab 前先 `_popPushedControllersInWindow`（递归 pop 所有导航栈推入页，保留 tab 根）
+- **验收**：进别人主页 → `open_tab home` → 应回到首页 feed（截图确认非 profile）
+
+### [已备待发] ④ follow 验证假阳性（「Following」子串误判）
+- **现象**：follow 命令对已是自己的视频（own-profile 的「2, Following,」计数按钮）误判为关注成功
+- **v1.4.127 修复**：新增 `_performFollowVerified`——对比点击前后按钮 label 变化 + 判断是否变为 Following/已关注 + 排除 own-profile 计数按钮误判，返回诚实 success/failed
+- **验收**：对未关注用户 follow → 按钮变 Following 才算 success；已关注的视频 follow → 返回 failed（诚实）
+
+### [已备待发] ③ search_keyword 无真实验证
+- **现象**：search_keyword 1s 返回 success，未验证是否真的在结果页
+- **v1.4.127 修复**：`_performSearchKeyword` 改返回 dict，提交搜索后等待 3s + `_isOnSearchResultsOnMain` 验证结果页（Users/Videos/Sounds 分类 tab + 结果列表）
+- **验收**：search_keyword → 返回 message 含真实验证结果
+
+### [已备待发] ② follow_user 用户名深链不导航
+- **现象**：follow_user 传用户名时深链不导航，假成功
+- **v1.4.127 修复**：`_performFollowUser` 重写——数字 uid 走深链；用户名走「回首页→开搜索→输入→提交→点 Users tab→点用户名行→真实验证关注」，返回诚实 dict
+- **验收**：follow_user 用户名 → 真实验证跳转+关注
+
+### [已备待发] ① backup_account 安全解档（secure-coded archive 解不开）
+- **现象**：backup_account「未检测到登录态」——NSUserDefaults 出现 `NHAccountManager*:data:archive` 新结构（NSKeyedArchiver secure-coded），`unarchiveObjectWithData:` 返回 nil → 候选识别不到
+- **v1.4.127 修复**：AccountSwitcher 新增 `_safeUnarchiveData:`（iOS11+ unarchiveTopLevelObjectWithData + @try）+ `_flattenObjectToPlist:`（KVC 反射展平自定义模型，深度6）
+- **验收**：backup_account → 识别到登录态并备份（不再「未检测到登录态」）

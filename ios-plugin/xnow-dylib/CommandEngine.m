@@ -270,9 +270,16 @@ static NSArray *XN_NurtureComments(void) {
                 [self _performSwipeDown]; // 下滑 = 上一个视频
                 break;
 
-            case CommandActionLike:
-                [self _performLike];
+            case CommandActionLike: {
+                // v1.4.127: 不假成功——改用安全版(多级定位+红心真验收+失败重试)，真实上报结果
+                BOOL liked = [self _performLikeSafe];
+                result = @{
+                    @"status": liked ? @"success" : @"failed",
+                    @"message": liked ? @"已点赞（红心点亮验证通过）" : @"点赞未生效（未检测到红心点亮）",
+                };
+                hasResult = YES;
                 break;
+            }
 
             case CommandActionUIScan:
                 [self _performUIScan];
@@ -409,9 +416,16 @@ static NSArray *XN_NurtureComments(void) {
                 break;
             }
 
-            case CommandActionFollow:
-                [self _performFollow];
+            case CommandActionFollow: {
+                // v1.4.127: 不假成功——改用真实验收版(label 变 Following/已关注 或按钮消失 + 失败重试)
+                BOOL followed = [self _performFollowVerified];
+                result = @{
+                    @"status": followed ? @"success" : @"failed",
+                    @"message": followed ? @"已关注（按钮状态验证通过）" : @"关注未生效（按钮状态未变化）",
+                };
+                hasResult = YES;
                 break;
+            }
 
             case CommandActionComment: {
                 NSString *text = params[@"text"] ?: @"Nice!";
@@ -543,7 +557,8 @@ static NSArray *XN_NurtureComments(void) {
                 break;
             case CommandActionSearchKeyword: {
                 NSString *keyword = params[@"keyword"] ?: @"";
-                [self _performSearchKeyword:keyword];
+                result = [self _performSearchKeyword:keyword];
+                hasResult = YES;
                 break;
             }
             case CommandActionOpenUser: {
@@ -1136,6 +1151,95 @@ static NSArray *XN_NurtureComments(void) {
             NSLog(@"[XNOWER] 未找到关注按钮且不在推荐页，跳过关注");
         }
     });
+}
+
+/// v1.4.127 关注真实验收版：多级定位(accId→label) + 点击 + 2s 后读按钮状态真验收 + 失败重试一次
+/// 返回 BOOL，不假成功；验收结果同时上报 state_diag（server.log 可见，同 _performFollow 的验证机制）
+- (BOOL)_performFollowVerified {
+    __block NSString *beforeLabel = @"";
+    for (int attempt = 0; attempt < 2; attempt++) {
+        __block UIView *followView = nil;
+        __block BOOL found = NO;
+        __block BOOL alreadyFollowed = NO;
+        __block NSString *alreadyLbl = @"";
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            UIWindow *window = XN_ActiveWindow();
+            CGSize screen = [UIScreen mainScreen].bounds.size;
+            __strong UIView *fv = nil;
+            [self _findVisibleViewWithAccId:kAccFollow inView:window screen:screen depth:0 result:&fv];
+            if (!fv) [self _findVisibleViewWithLabel:@"Follow" inView:window screen:screen depth:0 result:&fv];
+            if (!fv) [self _findVisibleViewWithLabel:@"关注" inView:window screen:screen depth:0 result:&fv];
+            if (fv) {
+                NSString *curLabel = fv.accessibilityLabel ?: @"";
+                if (attempt == 0) {
+                    beforeLabel = curLabel;
+                } else {
+                    // 重试轮防护：按钮已是"已关注"状态（首轮点击生效但验收超时没等到）→ 直接判成功，
+                    // 不再重复点击（重复点击会把已关注变成取消关注）
+                    if (curLabel.length > 0 && ![curLabel isEqualToString:beforeLabel] &&
+                        ([curLabel rangeOfString:@"Following" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+                         [curLabel rangeOfString:@"已关注" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
+                        alreadyFollowed = YES;
+                        alreadyLbl = curLabel;
+                        return;
+                    }
+                }
+                // 向上找最近可交互按钮（UIControl），否则用 label 所在容器（同 _performFollow）
+                __strong UIView *btnView = fv;
+                UIView *cur = fv.superview;
+                while (cur && cur != window) {
+                    if ([cur isKindOfClass:[UIControl class]] && !cur.hidden && cur.alpha > 0.02) {
+                        btnView = cur;
+                        break;
+                    }
+                    cur = cur.superview;
+                }
+                CGPoint center = [btnView.superview convertPoint:btnView.center toView:nil];
+                if ([btnView isKindOfClass:[UIControl class]]) {
+                    [(UIControl *)btnView sendActionsForControlEvents:UIControlEventTouchUpInside];
+                }
+                [self _safeTapAtPoint:center];
+                followView = fv;
+                found = YES;
+            }
+        });
+        if (alreadyFollowed) {
+            [self _reportFollowVerify:YES before:beforeLabel after:alreadyLbl];
+            return YES;
+        }
+        if (!found || !followView) return NO;
+
+        // 真验收：同步等待主线程 2s 后读 label（不假成功；关注按钮文案经服务端返回，需稍长等待）
+        __weak UIView *weakFV = followView;
+        __block BOOL verified = NO;
+        __block NSString *afterLbl = @"";
+        dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2.0 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            UIView *fv = weakFV;
+            if (!fv) {  // 按钮消失 = UI 重建 = 已关注
+                verified = YES;
+                afterLbl = @"<gone>";
+                dispatch_semaphore_signal(sema);
+                return;
+            }
+            afterLbl = fv.accessibilityLabel ?: @"";
+            BOOL labelChanged = afterLbl.length > 0 && ![afterLbl isEqualToString:beforeLabel];
+            BOOL nowFollowing = [afterLbl rangeOfString:@"Following" options:NSCaseInsensitiveSearch].location != NSNotFound;
+            BOOL nowFollowedCn = [afterLbl rangeOfString:@"已关注" options:NSCaseInsensitiveSearch].location != NSNotFound;
+            BOOL wasFollow = [beforeLabel rangeOfString:@"Follow" options:NSCaseInsensitiveSearch].location != NSNotFound
+                          || [beforeLabel rangeOfString:@"关注" options:NSCaseInsensitiveSearch].location != NSNotFound;
+            // 假阳性防护：必须 label 前后不同（自己的 "2, Following," 计数按钮 before==after 永不判成功）
+            verified = labelChanged && (nowFollowing || nowFollowedCn) && wasFollow;
+            // 宽松兜底：label 整体变化 = 状态已变更（部分版本文案变 Unfollow/其他），仍认成功
+            if (!verified && labelChanged) verified = YES;
+            dispatch_semaphore_signal(sema);
+        });
+        dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 2.8 * NSEC_PER_SEC));
+        [self _reportFollowVerify:verified before:beforeLabel after:afterLbl];
+        if (verified) return YES;
+        // 未验收 → 下一轮重找按钮重试（防 UI 重建后旧引用失效；重试轮已关注则直接成功）
+    }
+    return NO;
 }
 
 /// 回关自动私信：关注成功后，从后端随机取一条话术，向刚关注的用户发私信
@@ -2923,6 +3027,128 @@ static NSArray *XN_NurtureComments(void) {
     });
 }
 
+/// v1.4.127: 弹出当前导航栈里所有推入的页面（保留 tab 根控制器）。
+/// 解决 open_profile 推入的个人主页盖住 tab 切换结果的问题（_tapTab 切 tab 前先弹）。
+- (void)_popPushedControllersInWindow:(UIWindow *)window {
+    @try {
+        void (^walkVC)(UIViewController *, int) = nil;
+        walkVC = ^(UIViewController *vc, int depth) {
+            if (!vc || depth > 20) return;
+            if ([vc isKindOfClass:[UINavigationController class]]) {
+                UINavigationController *nav = (UINavigationController *)vc;
+                if (nav.viewControllers.count > 1) {
+                    [nav popToRootViewControllerAnimated:NO];  // 只 pop 推入页，保留 tab 根
+                }
+            }
+            if (vc.presentedViewController) walkVC(vc.presentedViewController, depth + 1);
+            for (UIViewController *ch in vc.childViewControllers) walkVC(ch, depth + 1);
+        };
+        walkVC(window.rootViewController, 0);
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] popPushedControllers error: %@", e.reason);
+    }
+}
+
+/// v1.4.127: 首页底部导航栏是否真的可见可点（未被全屏沉浸播放器盖住）。
+/// 判定：a11y_vo_home tab 在渲染窗口 + 非隐藏 + hitTest 命中的顶层交互视图落在 tab 子树内。
+/// 背景：TikTok 全屏沉浸播放态下 feed cell/For You 仍在 a11y 树（_isOnFeed 假阳性 YES），
+///       但导航栏被盖住 → 屏幕只剩视频+右上角图标 → 祥哥以为死机只能重启。
+- (BOOL)_isHomeChromeVisibleOnMain {
+    UIWindow *window = XN_ActiveWindow();
+    if (!window) return NO;
+    UIView *homeTab = [self _findViewWithAccessibilityIdentifier:@"a11y_vo_home" inView:window];
+    if (!homeTab || !homeTab.window) return NO;
+    if (homeTab.hidden || homeTab.alpha < 0.05) return NO;
+    CGRect f = [homeTab convertRect:homeTab.bounds toView:window];
+    CGPoint center = CGPointMake(CGRectGetMidX(f), CGRectGetMidY(f));
+    UIView *hit = [window hitTest:center withEvent:nil];
+    if (!hit) return NO;
+    return (hit == homeTab || [hit isDescendantOfView:homeTab]);
+}
+
+/// 线程安全包装（非主线程自动同步到主队列）
+- (BOOL)_isHomeChromeVisible {
+    if (![NSThread isMainThread]) {
+        __block BOOL r = NO;
+        dispatch_sync(dispatch_get_main_queue(), ^{ r = [self _isHomeChromeVisibleOnMain]; });
+        return r;
+    }
+    return [self _isHomeChromeVisibleOnMain];
+}
+
+/// v1.4.127: 完整首页判定 = 在 feed 且底部导航栏可见（只有 feed 不够，沉浸态会假阳性）。
+- (BOOL)_isHomeFeedUsableOnMain {
+    return [self _isOnFeedOnMain] && [self _isHomeChromeVisibleOnMain];
+}
+- (BOOL)_isHomeFeedUsable {
+    if (![NSThread isMainThread]) {
+        __block BOOL r = NO;
+        dispatch_sync(dispatch_get_main_queue(), ^{ r = [self _isHomeFeedUsableOnMain]; });
+        return r;
+    }
+    return [self _isHomeFeedUsableOnMain];
+}
+
+/// 递归收集右上角区域（x>0.8屏宽、y 顶部 25%）的 UIButton（眼睛/向下箭头等），取最下面的那个（收起箭头）。
+- (void)_enumerateTopAreaButtons:(UIView *)root into:(NSMutableArray *)buttons {
+    if (!root) return;
+    if ([root isKindOfClass:[UIButton class]] && !root.hidden && root.alpha > 0.02) [buttons addObject:root];
+    for (UIView *sub in root.subviews) [self _enumerateTopAreaButtons:sub into:buttons];
+}
+
+/// v1.4.127: 退出「全屏沉浸播放态」——feed 在但导航栏被盖住，tap 视频无效，只能收箭头/上滑退出。
+/// 主线程执行（调用方保证在主线程）。依次：dismiss presented → pop 推入页 → 点右上角收起箭头 → 上滑。
+- (void)_recoverFromImmersiveOnMain {
+    @try {
+        UIWindow *window = XN_ActiveWindow();
+        if (!window) return;
+        // 1. dismiss 所有 presented VC（全屏播放器通常是 modal）
+        UIViewController *vc = window.rootViewController;
+        int guard = 0;
+        while (vc && vc.presentedViewController && guard < 5) {
+            UIViewController *p = vc.presentedViewController;
+            [vc dismissViewControllerAnimated:NO completion:nil];
+            vc = p;
+            guard++;
+        }
+        // 2. pop 推入页
+        [self _popPushedControllersInWindow:window];
+        // 3. 点右上角「收起」箭头（眼睛图标下方那个，x>0.8屏宽、y 顶部区域）
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        NSMutableArray *btns = [NSMutableArray array];
+        [self _enumerateTopAreaButtons:window into:btns];
+        UIView *arrow = nil;
+        CGFloat bestY = 0;
+        for (UIView *btn in btns) {
+            CGRect bf = [btn.superview convertRect:btn.frame toView:window];
+            if (bf.origin.x > screen.width * 0.8 && bf.origin.y > 30 && bf.origin.y < screen.height * 0.25) {
+                CGFloat cy = CGRectGetMidY(bf);
+                if (cy > bestY) { bestY = cy; arrow = btn; }
+            }
+        }
+        if (arrow) {
+            [self _safeTapAtPoint:[arrow.superview convertPoint:arrow.center toView:window]];
+        }
+        // 4. 上滑（祥哥实测手动上滑可退出沉浸态）
+        [self _performSwipeUp];
+    } @catch (NSException *e) {
+        NSLog(@"[XNOWER] recoverFromImmersive error: %@", e.reason);
+    }
+}
+
+/// 线程安全包装：最多 3 轮，每轮后验证导航栏恢复可见即停。
+- (void)_recoverFromImmersive {
+    for (int attempt = 0; attempt < 3; attempt++) {
+        if ([self _isHomeFeedUsable]) return;
+        if (![NSThread isMainThread]) {
+            dispatch_sync(dispatch_get_main_queue(), ^{ [self _recoverFromImmersiveOnMain]; });
+        } else {
+            [self _recoverFromImmersiveOnMain];
+        }
+        [NSThread sleepForTimeInterval:1.2];
+    }
+}
+
 /// 切 tab。返回诊断 dict（含实际采用的方法 + selectedIndex before/after），随 open_tab result 回传后端便于排查。
 /// v1.4.106 修复：TikTok 首页 tab 实测 setSelectedIndex:0 不落位（friends→home 卡在原 tab，vc_chain 证实
 ///   AWEFeedRootViewController 类名正确但回读 selectedIndex 仍非 0）→ home 落位验证 + 深链 snssdk1233://feed 兜底
@@ -2933,6 +3159,17 @@ static NSArray *XN_NurtureComments(void) {
         UIWindow *window = XN_ActiveWindow();
         if (!window) { diag = @{@"method": @"no_window"}; return; }
         CGSize screen = [UIScreen mainScreen].bounds.size;
+
+        // 0. 【v1.4.127】先弹出推入的页面（open_profile 推入的个人主页会盖住 tab 切换结果，
+        //    实测 setSelectedIndex 只切了 tab bar 下层，屏幕仍显示推入的 profile = 设备卡在个人页）
+        [self _popPushedControllersInWindow:window];
+
+        // 0b. 【v1.4.127】全屏沉浸态防护：feed 在但导航栏被盖住时先退出全屏，
+        //    否则 setSelectedIndex 切换只作用于下层、屏幕仍停留在全屏视频页（祥哥反馈"只能重启"）。
+        if ([tab isEqualToString:@"home"] && [self _isOnFeedOnMain] && ![self _isHomeChromeVisibleOnMain]) {
+            NSLog(@"[XNOWER] tapTab:home 检测到全屏沉浸态（feed 在但导航栏被盖）→ 退出全屏");
+            [self _recoverFromImmersiveOnMain];
+        }
 
         // 0. 【v1.4.92】直接运行时切 tab：TTKTabBarButton 纯手势(UITapGestureRecognizer)，
         //    合成触摸绕过手势管理器永远触发不了(实测 isSelected 恒 False / touch_diag target_actions 空)。
@@ -3044,14 +3281,18 @@ static NSArray *XN_NurtureComments(void) {
     [self _safeTapAtPoint:CGPointMake(screen.width - 30, 65)];
 }
 
-/// 搜索关键词（打开搜索 → 输入 → 提交）
-- (void)_performSearchKeyword:(NSString *)keyword {
-    if (keyword.length == 0) return;
+/// 搜索关键词（打开搜索 → 输入 → 提交 → 真实验证结果页），返回真实结果，不假成功
+- (NSDictionary *)_performSearchKeyword:(NSString *)keyword {
+    if (keyword.length == 0) {
+        return @{@"status": @"failed", @"message": @"缺少 keyword 参数"};
+    }
+    [self _logStep:@"search_keyword"];
     dispatch_sync(dispatch_get_main_queue(), ^{
         [self _performOpenSearch];
     });
     [NSThread sleepForTimeInterval:1.5];
 
+    __block BOOL typed = NO;
     dispatch_sync(dispatch_get_main_queue(), ^{
         // 找输入框输入
         UITextField *tf = [self _findTextFieldInView:XN_ActiveWindow()];
@@ -3060,19 +3301,58 @@ static NSArray *XN_NurtureComments(void) {
             tf.text = keyword;
             // 触发搜索提交
             [[NSNotificationCenter defaultCenter] postNotificationName:UITextFieldTextDidChangeNotification object:tf];
-            // 找搜索/确认按钮
-            UIButton *searchBtn = [self _findButtonWithAnyLabel:@[@"Search", @"search", @"搜索", @"确定", @"Go"]
-                                                         inView:XN_ActiveWindow()];
-            if (searchBtn) {
-                [self _safeTapAtPoint:[searchBtn.superview convertPoint:searchBtn.center toView:nil]];
-            } else {
-                // 回车提交
-                if ([tf canPerformAction:@selector(insertText:) withSender:nil]) {
-                    [tf.delegate textFieldShouldReturn:tf];
-                }
+            typed = YES;
+        }
+    });
+    if (!typed) {
+        return @{@"status": @"failed", @"message": @"未找到搜索输入框（可能不在搜索页）"};
+    }
+    [NSThread sleepForTimeInterval:0.8];
+
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        // 找搜索/确认按钮
+        UIButton *searchBtn = [self _findButtonWithAnyLabel:@[@"Search", @"search", @"搜索", @"确定", @"Go", @"Search for", @"SEARCH"]
+                                                     inView:XN_ActiveWindow()];
+        if (searchBtn) {
+            [self _safeTapAtPoint:[searchBtn.superview convertPoint:searchBtn.center toView:nil]];
+        } else {
+            // 回车提交
+            UITextField *tf = [self _findTextFieldInView:XN_ActiveWindow()];
+            if (tf && [tf.delegate respondsToSelector:@selector(textFieldShouldReturn:)]) {
+                [tf.delegate textFieldShouldReturn:tf];
             }
         }
     });
+    [NSThread sleepForTimeInterval:3.0];
+
+    // 真验收：结果页出现（分类 tab / 搜索框+结果列表）才算成功
+    __block BOOL onResults = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        onResults = [self _isOnSearchResultsOnMain:XN_ActiveWindow()];
+    });
+    return @{
+        @"status": onResults ? @"success" : @"failed",
+        @"message": onResults ? @"搜索完成，已展示结果页" : @"搜索未生效（未检测到结果页）",
+        @"keyword": keyword,
+    };
+}
+
+/// 搜索结果显示检测（主线程）：结果页渲染分类 tab（Users/Videos/Sounds）或 搜索框+结果列表
+- (BOOL)_isOnSearchResultsOnMain:(UIWindow *)window {
+    if (!window) return NO;
+    @try {
+        // 1. 分类 tab 出现（结果页才渲染分类条）
+        for (NSString *tab in @[@"Users", @"Videos", @"Sounds", @"用户", @"视频", @"声音"]) {
+            if ([self _findButtonWithAnyLabel:@[tab] inView:window]) return YES;
+        }
+        // 2. 搜索框在前台 + 结果列表出现
+        BOOL hasBar = [self _findViewByClassContaining:@"AWESearchBar" inView:window depth:0] != nil;
+        BOOL hasList = [self _findViewByClassContaining:@"FeedTableView" inView:window depth:0] != nil
+                    || [self _findViewByClassContaining:@"AWETableView" inView:window depth:0] != nil;
+        return hasBar && hasList;
+    } @catch (NSException *e) {
+        return NO;
+    }
 }
 
 /// 通过 URL scheme 打开用户主页
@@ -3121,18 +3401,119 @@ static NSArray *XN_NurtureComments(void) {
 
 /// 打开指定用户主页并关注（回关任务的基础：引擎逐粉丝下发 follow_user）
 /// params: {uid 或 target 或 username}
+/// v1.4.127 重写：用户名深链 snssdk1233://user/<username> 实测不导航（卡在自己主页）→
+/// 改为搜索式导航：回首页 → 开搜索 → 输用户名 → 提交 → 切 Users tab → 点第一个匹配结果 →
+/// 真实关注验收。数字 uid 仍走深链直达。不再假成功。
 - (NSDictionary *)_performFollowUser:(NSDictionary *)params {
-    NSString *uid = params[@"uid"] ?: params[@"target"] ?: params[@"username"] ?: @"";
-    if (uid.length == 0) {
+    NSString *target = params[@"uid"] ?: params[@"target"] ?: params[@"username"] ?: @"";
+    if (target.length == 0) {
         return @{@"status": @"failed", @"message": @"缺少 uid/target 参数"};
     }
     [self _logStep:@"follow_user"];
-    [self _performOpenUser:uid];
+
+    // 纯数字 → 深链直达（可靠）
+    BOOL isNumeric = YES;
+    for (NSUInteger i = 0; i < target.length; i++) {
+        unichar c = [target characterAtIndex:i];
+        if (c < '0' || c > '9') { isNumeric = NO; break; }
+    }
+    if (isNumeric) {
+        [self _performOpenUser:target];
+        [NSThread sleepForTimeInterval:2.5];
+        BOOL ok = [self _performFollowVerified];
+        return @{
+            @"status": ok ? @"success" : @"failed",
+            @"message": ok ? [NSString stringWithFormat:@"已关注 %@", target]
+                            : [NSString stringWithFormat:@"关注 %@ 未生效（深链已打开但按钮未变化）", target],
+            @"target": target,
+        };
+    }
+
+    // 1. 回首页（搜索入口在首页右上角）
+    [self _gotoHomeFeed];
+    [NSThread sleepForTimeInterval:1.5];
+
+    // 2. 打开搜索页
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        [self _performOpenSearch];
+    });
+    [NSThread sleepForTimeInterval:1.8];
+
+    // 3. 输入用户名
+    __block BOOL typed = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UITextField *tf = [self _findTextFieldInView:XN_ActiveWindow()];
+        if (tf) {
+            [tf becomeFirstResponder];
+            tf.text = target;
+            [[NSNotificationCenter defaultCenter] postNotificationName:UITextFieldTextDidChangeNotification object:tf];
+            typed = YES;
+        }
+    });
+    if (!typed) {
+        // 搜不到输入框 → 兜底深链（返回真实结果，不假成功）
+        [self _performOpenUser:target];
+        [NSThread sleepForTimeInterval:2.5];
+        BOOL ok = [self _performFollowVerified];
+        return @{
+            @"status": ok ? @"success" : @"failed",
+            @"message": ok ? [NSString stringWithFormat:@"已关注 %@（深链兜底）", target]
+                            : [NSString stringWithFormat:@"关注 %@ 未生效（搜索失败且深链未导航）", target],
+            @"target": target,
+        };
+    }
+    [NSThread sleepForTimeInterval:0.8];
+
+    // 4. 提交搜索
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *searchBtn = [self _findButtonWithAnyLabel:@[@"Search", @"search", @"搜索", @"确定", @"Go", @"Search for", @"SEARCH"]
+                                                     inView:XN_ActiveWindow()];
+        if (searchBtn) {
+            [self _safeTapAtPoint:[searchBtn.superview convertPoint:searchBtn.center toView:nil]];
+        } else {
+            UITextField *tf = [self _findTextFieldInView:XN_ActiveWindow()];
+            if (tf && [tf.delegate respondsToSelector:@selector(textFieldShouldReturn:)]) {
+                [tf.delegate textFieldShouldReturn:tf];
+            }
+        }
+    });
+    [NSThread sleepForTimeInterval:3.0];
+
+    // 5. 切 Users tab（搜索结果分类：用户列表优先展示精确匹配）
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIButton *usersBtn = [self _findButtonWithAnyLabel:@[@"Users", @"用户", @"People", @"Accounts", @"Creator"]
+                                                    inView:XN_ActiveWindow()];
+        if (usersBtn) {
+            [self _safeTapAtPoint:[usersBtn.superview convertPoint:usersBtn.center toView:nil]];
+        }
+    });
+    [NSThread sleepForTimeInterval:1.5];
+
+    // 6. 点第一个匹配用户行（label 含 @target / target，点击 = 打开该用户主页）
+    __block BOOL userOpened = NO;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        __strong UIView *row = nil;
+        [self _findVisibleViewWithLabel:target inView:window screen:[UIScreen mainScreen].bounds.size depth:0 result:&row];
+        if (row) {
+            CGPoint center = [row.superview convertPoint:row.center toView:nil];
+            [self _safeTapAtPoint:center];
+            userOpened = YES;
+        }
+    });
+    if (!userOpened) {
+        [self _performOpenUser:target];  // 结果页无匹配 → 兜底深链
+    }
     [NSThread sleepForTimeInterval:2.5];
-    // 复用关注逻辑（label 查找，profile 页不会触发 feed 坐标兜底）
-    [self _performFollow];
-    [NSThread sleepForTimeInterval:1.0];
-    return @{@"status": @"success", @"message": [NSString stringWithFormat:@"已触发关注 %@", uid]};
+
+    // 7. 真实关注验收
+    BOOL ok = [self _performFollowVerified];
+    return @{
+        @"status": ok ? @"success" : @"failed",
+        @"message": ok ? [NSString stringWithFormat:@"已关注 %@", target]
+                        : [NSString stringWithFormat:@"关注 %@ 未生效（找不到目标或按钮未变化）", target],
+        @"target": target,
+    };
 }
 
 /// 指定视频评论：打开指定视频 → 打开评论面板 → 填文本 → 发送
@@ -3312,11 +3693,15 @@ static NSArray *XN_NurtureComments(void) {
         CGSize s = [UIScreen mainScreen].bounds.size;
         [self _safeTapAtPoint:CGPointMake(s.width * 0.5, 292)];
         [NSThread sleepForTimeInterval:1.0];
-        if ([self _setEditableFieldText:nickname keywords:@[@"name", @"Name", @"昵称", @"username"]]) {
+        if ([self _setEditableFieldText:nickname keywords:@[@"name", @"Name", @"昵称", @"username"] allowFallback:YES]) {
             [self _logStep:@"edit_profile:name_set"];
             [NSThread sleepForTimeInterval:0.5];
-            [self _safeTapAtPoint:CGPointMake(s.width - 34, 42)];
+            [self _safeTapAtPoint:CGPointMake(s.width - 34, 42)];   // 子页右上 Save
+            // v1.4.126: TikTok 改名弹「Update name?」确认框（7天一次）→ 点 Confirm 完成，等回主页
             [NSThread sleepForTimeInterval:1.0];
+            [self _tapDialogConfirmIfPresent];
+            [self _logStep:@"edit_profile:name_confirm"];
+            [NSThread sleepForTimeInterval:1.5];
         } else {
             [self _logStep:@"edit_profile:name_set_fail"];
         }
@@ -3325,21 +3710,28 @@ static NSArray *XN_NurtureComments(void) {
     // 改签名（v1.4.125：同列表式——点 Bio 行 y≈523（真机 tap 实测；旧 438 会误进 Username 子页，
     // 把签名文本赋给用户名 → TikTok 用户名校验/保存 → 崩溃 v1.4.124 根因）→ 子页赋值 → Save）
     if (signature.length > 0) {
+        // v1.4.126: 先清残留确认弹窗（昵称段确认后若未回主页），确保在 Edit profile 主页才点 Bio 行
+        [self _tapDialogConfirmIfPresent];
         [self _logStep:@"edit_profile:bio_tap"];
         CGSize s = [UIScreen mainScreen].bounds.size;
         [self _safeTapAtPoint:CGPointMake(s.width * 0.5, 523)];
         [NSThread sleepForTimeInterval:1.0];
-        if ([self _setEditableFieldText:signature keywords:@[@"bio", @"Bio", @"签名", @"简介", @"introduce"]]) {
+        // v1.4.126: allowFallback=NO —— 必须匹配 Bio placeholder 才赋值，
+        // 防昵称子页残留时回退找昵称框 → 签名文本覆盖昵称（v1.4.125 实测 bug）
+        if ([self _setEditableFieldText:signature keywords:@[@"bio", @"Bio", @"签名", @"简介", @"introduce"] allowFallback:NO]) {
             [self _logStep:@"edit_profile:bio_set"];
             [NSThread sleepForTimeInterval:0.5];
-            [self _safeTapAtPoint:CGPointMake(s.width - 34, 42)];
+            [self _safeTapAtPoint:CGPointMake(s.width - 34, 42)];   // 子页右上 Save
             [NSThread sleepForTimeInterval:1.0];
+            [self _tapDialogConfirmIfPresent];
+            [self _logStep:@"edit_profile:bio_confirm"];
+            [NSThread sleepForTimeInterval:1.5];
         } else {
             [self _logStep:@"edit_profile:bio_set_fail"];
         }
     }
 
-    // 保存
+    // 保存兜底（Edit profile 主页列表式无 Save，只在子页有；若昵称/签名段未触发确认，此处兜底）
     [self _logStep:@"edit_profile:save"];
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIButton *saveBtn = [self _findButtonWithAnyLabel:@[@"Save", @"save", @"保存", @"Done", @"完成"]
@@ -3349,6 +3741,7 @@ static NSArray *XN_NurtureComments(void) {
         }
     });
     [NSThread sleepForTimeInterval:1.0];
+    [self _tapDialogConfirmIfPresent];
     [self _logStep:@"edit_profile:done"];
 }
 
@@ -3385,9 +3778,32 @@ static NSArray *XN_NurtureComments(void) {
 }
 
 /// 编辑资料页改字段：先点获得焦点，再赋值 + 触发编辑事件（兼容 UITextField / UITextView）
+/// v1.4.126: 处理 TikTok 编辑页保存确认弹窗（"Update name?" 等 TUX 对话框）。
+/// 找窗口内 TUXDialogHighlightBackgroundButton（ui_scan 实测弹窗左右各一：Cancel/Confirm），
+/// 取 center.x 最大者（右按钮）= Confirm 点击完成保存。无弹窗则 no-op。
+- (void)_tapDialogConfirmIfPresent {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        if (!window) return;
+        NSMutableArray *btns = [NSMutableArray array];
+        [self _collectViewsOfClassContaining:@"TUXDialogHighlightBackgroundButton" inView:window depth:0 into:btns];
+        if (btns.count == 0) return;
+        UIView *confirm = btns[0];
+        CGPoint confirmC = [confirm.superview convertPoint:confirm.center toView:window];
+        for (UIView *b in btns) {
+            CGPoint c = [b.superview convertPoint:b.center toView:window];
+            if (c.x > confirmC.x) { confirm = b; confirmC = c; }
+        }
+        [self _safeTapAtPoint:confirmC];
+        NSLog(@"[XNOWER] 已点确认弹窗 Confirm(%ld 按钮, x=%.0f)", (long)btns.count, confirmC.x);
+    });
+}
+
 /// ⚠️ v1.4.119 修复"输入框输不进文字"：TikTok 输入框可能是 UITextView/受控组件，
 /// 旧代码只找 UITextField 且不点焦点 → 匹配不到或赋值不生效。
-- (BOOL)_setEditableFieldText:(NSString *)text keywords:(NSArray *)keywords {
+/// ⚠️ v1.4.126 加 allowFallback 参数：=NO 时禁止回退第一个输入框（签名段专用），
+/// 防昵称子页残留时误赋昵称框 → 签名文本覆盖昵称（v1.4.125 实测 bug）。
+- (BOOL)_setEditableFieldText:(NSString *)text keywords:(NSArray *)keywords allowFallback:(BOOL)allowFallback {
     __block BOOL ok = NO;
     dispatch_sync(dispatch_get_main_queue(), ^{
         UIWindow *window = XN_ActiveWindow();
@@ -3399,7 +3815,7 @@ static NSArray *XN_NurtureComments(void) {
         }
         // v1.4.124: 编辑子页输入框无 placeholder/acc_id（ui_scan 实测空），placeholder 匹配失败时
         // 回退找窗口内第一个可见可交互 UITextField（编辑子页场景 = 子页唯一输入框）
-        if (!field) {
+        if (!field && allowFallback) {
             field = [self _findFirstEditableTextFieldInView:window];
         }
         // v1.4.125: 校验输入框在屏幕可见中区（y 50~80%高），防误赋给隐藏/列表页背景输入框
@@ -4394,7 +4810,15 @@ static NSArray *XN_NurtureComments(void) {
     for (int i = 0; i < 4; i++) {
         [self _tapTab:@"home"];
         [NSThread sleepForTimeInterval:2.0];
-        if ([self _isOnFeed]) return YES;
+        // v1.4.127: 成功判定收紧为「在 feed 且导航栏可见」——沉浸态 feed 检测假阳性，只有 feed 不算到家
+        if ([self _isHomeFeedUsable]) return YES;
+        // v1.4.127: feed 在但导航栏被盖（全屏沉浸播放态）→ 先退出全屏
+        if ([self _isOnFeed] && ![self _isHomeChromeVisible]) {
+            [[XNOWER sharedInstance] addLog:@"🚨 检测到全屏沉浸态（导航栏被盖）→ 退出全屏"];
+            [self _recoverFromImmersive];
+            [NSThread sleepForTimeInterval:1.5];
+            if ([self _isHomeFeedUsable]) return YES;
+        }
         // deep link 兜底（本轮试第 i 个 scheme）
         NSString *scheme = (i < schemes.count) ? schemes[i] : @"snssdk1233://";
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -4402,7 +4826,7 @@ static NSArray *XN_NurtureComments(void) {
             [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
         });
         [NSThread sleepForTimeInterval:2.5];
-        if ([self _isOnFeed]) return YES;
+        if ([self _isHomeFeedUsable]) return YES;
         [[XNOWER sharedInstance] addLog:[NSString stringWithFormat:@"⏳ 切回首页中(%d/4) scheme=%@...", i + 1, scheme]];
     }
     return NO;
