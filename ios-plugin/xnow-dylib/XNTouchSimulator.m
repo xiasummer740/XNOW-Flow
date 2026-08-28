@@ -7,8 +7,133 @@
 #import "XNOWER.h"
 #import "XNURLProtocol.h"
 #import <QuartzCore/QuartzCore.h>
+#import <dlfcn.h>
+#import <objc/message.h>
 
 @implementation XNTouchSimulator
+
+// ============================================================
+// v1.4.130 触摸盲区根治：IOHIDEvent 真实事件注入
+// 背景证据：KVC 合成 UITouch 经 sendEvent: 注入时 touch 的 _gestureRecognizers 为空，
+//   UIWindow 的 _sendTouchesForEvent: 不会关联手势识别器 → TikTok 手势收不到事件，
+//   强置 state=Ended 只骗过 state 检查，handler 查 locationInView/numberOfTouches 仍失败。
+//   实测坐标命中 hitTest 正确但事件不被消费 = 触摸盲区（like/follow/search/头像/切tab 全失效）。
+// 方案：IOHIDEvent digitizer 事件注入（iOS 触摸系统真入口）。_handleHIDEvent: 收到后
+//   UIKit 完整建 UITouch + 关联手势识别器，手势状态机正常走 → 根治盲区。
+//   需匹配设备 ContextID（iOS 14+ 无匹配上下文会丢弃合成事件）。
+// 降级：符号/ContextID 取不到时回退旧 KVC 合成触摸（总比不点强）。
+// ============================================================
+
+typedef struct __IOHIDEvent *XNIOHIDEventRef;
+typedef struct __IOHIDEventSystemClient *XNIOHIDClientRef;
+typedef struct __IOHIDServiceClient *XNIOHIDServiceRef;
+
+// 私有 C 符号（dlsym 运行时解析，避免链接期依赖）
+static XNIOHIDEventRef (*s_fnCreateDigitizer)(CFAllocatorRef, uint32_t, double, uint32_t, uint32_t,
+                                              double, double, double, double,
+                                              uint32_t, uint32_t, uint32_t, uint32_t);
+static XNIOHIDClientRef (*s_fnSysClientCreate)(CFAllocatorRef);
+static int (*s_fnSysClientSetMatching)(XNIOHIDClientRef, CFDictionaryRef, CFArrayRef);
+static CFArrayRef (*s_fnSysClientCopyServices)(XNIOHIDClientRef);
+static CFTypeRef (*s_fnServiceCopyProperty)(XNIOHIDServiceRef, CFStringRef);
+
+// IOHIDDigitizerEvent 相位（私有头常量，硬编码稳定值）
+#define XNHID_PHASE_RANGE     (1 << 0)
+#define XNHID_PHASE_TOUCHING  (1 << 1)
+#define XNHID_PHASE_CANCEL    (1 << 3)
+// IOHIDDigitizerTransducerType.Hand
+#define XNHID_TRANSDUCER_HAND (uint32_t)1
+// HID usage（公开标准）：Digitizer page / TouchScreen usage
+#define XNHID_PAGE_DIGITIZER  0x0d
+#define XNHID_USAGE_TOUCH     0x04
+
++ (BOOL)_hidResolveSymbols {
+    static dispatch_once_t once;
+    static BOOL ok;
+    dispatch_once(&once, ^{
+        s_fnCreateDigitizer      = (typeof(s_fnCreateDigitizer))dlsym(RTLD_DEFAULT, "IOHIDEventCreateDigitizerEvent");
+        s_fnSysClientCreate      = (typeof(s_fnSysClientCreate))dlsym(RTLD_DEFAULT, "IOHIDEventSystemClientCreate");
+        s_fnSysClientSetMatching = (typeof(s_fnSysClientSetMatching))dlsym(RTLD_DEFAULT, "IOHIDEventSystemClientSetMatching");
+        s_fnSysClientCopyServices= (typeof(s_fnSysClientCopyServices))dlsym(RTLD_DEFAULT, "IOHIDEventSystemClientCopyServices");
+        s_fnServiceCopyProperty  = (typeof(s_fnServiceCopyProperty))dlsym(RTLD_DEFAULT, "IOHIDServiceClientCopyProperty");
+        ok = s_fnCreateDigitizer && s_fnSysClientCreate && s_fnSysClientSetMatching
+             && s_fnSysClientCopyServices && s_fnServiceCopyProperty;
+        if (!ok) NSLog(@"[XNTouch] IOHIDEvent 符号解析失败，回退 KVC 合成触摸");
+    });
+    return ok;
+}
+
++ (uint32_t)_hidContextID {
+    if (![self _hidResolveSymbols]) return 0;
+    XNIOHIDClientRef client = s_fnSysClientCreate(kCFAllocatorDefault);
+    if (!client) return 0;
+    // 匹配 Digitizer/TouchScreen 服务（dict key 用字面量，避免依赖私有常量头）
+    NSDictionary *matching = @{(id)CFSTR("PrimaryUsagePage"): @(XNHID_PAGE_DIGITIZER),
+                               (id)CFSTR("PrimaryUsage"):    @(XNHID_USAGE_TOUCH)};
+    s_fnSysClientSetMatching(client, (__bridge CFDictionaryRef)matching, NULL);
+    CFArrayRef services = s_fnSysClientCopyServices(client);
+    uint32_t ctx = 0;
+    if (services) {
+        for (CFIndex i = 0; i < CFArrayGetCount(services) && !ctx; i++) {
+            XNIOHIDServiceRef sc = (XNIOHIDServiceRef)CFArrayGetValueAtIndex(services, i);
+            CFTypeRef prop = s_fnServiceCopyProperty(sc, CFSTR("ContextID"));
+            if (prop) {
+                ctx = (uint32_t)[(__bridge NSNumber *)prop unsignedIntValue];
+                CFRelease(prop);
+            }
+        }
+        CFRelease(services);
+    }
+    CFRelease(client);
+    return ctx;
+}
+
++ (void)_hidInject:(uint32_t)phase at:(CGPoint)p ctx:(uint32_t)ctx {
+    // IOHIDEvent 时间戳为纳秒
+    double ts = CACurrentMediaTime() * 1e9;
+    XNIOHIDEventRef event = s_fnCreateDigitizer(kCFAllocatorDefault, XNHID_TRANSDUCER_HAND, ts,
+                                                phase, 0, p.x, p.y, 0, 0,
+                                                0, ctx, 0, 1);
+    if (!event) return;
+    @try {
+        UIApplication *app = [UIApplication sharedApplication];
+        SEL sel = NSSelectorFromString(@"_handleHIDEvent:");
+        if ([app respondsToSelector:sel]) {
+            ((void(*)(id, SEL, XNIOHIDEventRef))objc_msgSend)(app, sel, event);
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[XNTouch] _handleHIDEvent 异常: %@", e.reason);
+    }
+    CFRelease(event);
+}
+
++ (BOOL)_hidTapAtPoint:(CGPoint)p {
+    if (![self _hidResolveSymbols]) return NO;
+    uint32_t ctx = [self _hidContextID];
+    if (!ctx) { NSLog(@"[XNTouch] IOHIDEvent 未取到 ContextID，回退 KVC"); return NO; }
+    NSLog(@"[XNTouch] IOHIDEvent tap(%.0f,%.0f) ctx=%u", p.x, p.y, ctx);
+    [self _hidInject:(XNHID_PHASE_RANGE | XNHID_PHASE_TOUCHING) at:p ctx:ctx];
+    [NSThread sleepForTimeInterval:0.06];
+    [self _hidInject:0 at:p ctx:ctx];
+    return YES;
+}
+
++ (BOOL)_hidSwipeFrom:(CGPoint)from to:(CGPoint)to {
+    if (![self _hidResolveSymbols]) return NO;
+    uint32_t ctx = [self _hidContextID];
+    if (!ctx) { NSLog(@"[XNTouch] IOHIDEvent 未取到 ContextID，回退 KVC"); return NO; }
+    NSLog(@"[XNTouch] IOHIDEvent swipe (%.0f,%.0f)->(%.0f,%.0f) ctx=%u", from.x, from.y, to.x, to.y, ctx);
+    [self _hidInject:(XNHID_PHASE_RANGE | XNHID_PHASE_TOUCHING) at:from ctx:ctx];
+    int steps = 12;
+    for (int i = 1; i <= steps; i++) {
+        CGFloat k = (CGFloat)i / steps;
+        CGPoint p = CGPointMake(from.x + (to.x - from.x) * k, from.y + (to.y - from.y) * k);
+        [self _hidInject:(XNHID_PHASE_RANGE | XNHID_PHASE_TOUCHING) at:p ctx:ctx];
+        [NSThread sleepForTimeInterval:0.016];
+    }
+    [self _hidInject:0 at:to ctx:ctx];
+    return YES;
+}
 
 /// 创建真实 UITouch（私有 ivar 用 KVC 写入，模拟触摸位置/相位）
 + (UITouch *)_makeTouchAt:(CGPoint)point phase:(UITouchPhase)phase view:(UIView *)view window:(UIWindow *)window {
@@ -163,6 +288,10 @@
         dispatch_sync(dispatch_get_main_queue(), ^{ [self tapAtPoint:point]; });
         return;
     }
+    // v1.4.130 首选 IOHIDEvent 真实注入（根治触摸盲区）；失败回退 KVC 合成触摸
+    if ([self _hidTapAtPoint:point]) {
+        return;
+    }
     UIWindow *window = XN_ActiveWindow();
     if (!window) return;
     UIView *view = window;
@@ -184,6 +313,10 @@
 
 + (void)tapView:(UIView *)view atPoint:(CGPoint)point window:(UIWindow *)window reportDiagnostic:(BOOL)diag {
     if (!view || !window) return;
+    // v1.4.130 首选 IOHIDEvent 真实注入（坐标注入走真实 hitTest，盲区按钮恢复响应）；失败回退 KVC
+    if ([self _hidTapAtPoint:point]) {
+        return;
+    }
     if (diag) [self _reportTapDiagnostic:point view:view];      // 诊断上报目标控件
 
     // 若是 UIControl（按钮），直接触发其 action（比合成触摸更可靠，不依赖手势识别）
@@ -305,6 +438,10 @@
 + (void)swipeFrom:(CGPoint)from to:(CGPoint)to {
     if (![NSThread isMainThread]) {
         dispatch_sync(dispatch_get_main_queue(), ^{ [self swipeFrom:from to:to]; });
+        return;
+    }
+    // v1.4.130 首选 IOHIDEvent 真实滑动（根治触摸盲区）；失败回退 KVC
+    if ([self _hidSwipeFrom:from to:to]) {
         return;
     }
     UIWindow *window = XN_ActiveWindow();

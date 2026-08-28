@@ -177,6 +177,22 @@
 ### [129 未验证] ② follow_user uid 段 / ⑧ edit_profile 确认弹窗
 - 127 被阻断项：follow_user 用户名段依赖搜索→触摸盲区；edit_profile 确认弹窗待专项。uid 深链段待复测。
 
+## v1.4.130 攒批 → 装机验证（触摸盲区根治）
+
+> **攒批（2026-08-28 16:33）**：`TikTok_XNOW_v1.4.130_BH.ipa` 已编译打包上传。**本批核心 = 触摸盲区根治**：XNTouchSimulator 升级 IOHIDEvent 真实事件注入（iOS 触摸系统真入口），一个根因解锁 7+ 功能。
+> **根因实锤**：KVC 合成 UITouch 的 `_gestureRecognizers` 数组为空 → UIWindow `_sendTouchesForEvent:` 不关联手势识别器 → TikTok 手势收不到事件 → 坐标命中但事件不被消费（全按钮盲区）。
+> **方案**：IOHIDEvent digitizer 事件（dlsym 运行时解析私有符号 + IOHIDEventSystemClient 取设备 ContextID）经 `UIApplication _handleHIDEvent:` 注入，UIKit 完整建 UITouch + 关联手势识别器，手势状态机正常跑。符号/ContextID 缺失回退旧 KVC。
+
+### 装机验证清单（逐项实测记 真成功/假成功/崩溃）
+1. **like 红心点亮**（回归清单）— 盲区核心
+2. **follow 关注**（回归清单）— 盲区核心
+3. **search 搜索提交**（回归清单）— 盲区核心
+4. **头像 open_profile 导航** — 盲区核心（AWEStoryAvatarButton）
+5. **open_tab profile**（回归清单）— acc_id_tap fallback 盲区
+6. **go_home 从 profile 页**（导航 bug 一并验）
+7. **backup_account**（回归脚本 backup→backup_account 已修，复测）
+8. **控件地图 3 页补采**：following / comment / edit_profile（tap 导航解锁后补采）
+
 ## 🔵 新发现待后续批次（触摸盲区）
 
 > **根因方向（v1.4.129 实锤，升级为「全按钮盲区」专项）**：XNTouchSimulator 合成触摸对 TikTok 主要交互按钮**全部不生效**——搜索/关注/头像/like 四个核心按钮都验证不响应（129 like 真实失败实锤；128 like「通过」是崩溃误回执假阳性）。touch_diag 显示 tapAtPoint 坐标正确命中（AWEFeedVideoButton/TTKSearchEntranceButton），hitTest 命中正确，但 UIControlEventTouchUpInside 不被触发。**假设**：TikTok 这些控件要求真实触摸事件链（UIEvent+多个 UITouch + 正确 timestamp/phase 序列），合成 tap 只发单个 touch 不够。**方向（下批专修）**：XNTouchSimulator 升级——①用 IOHIDEvent/私有 API 注入真实触摸事件 ②发完整 touch 序列（Began→Moved→Ended，带正确 timestamp）③或 sendActionsForControlEvents:UIControlEventAllEvents 全事件广播。**此专项是 like/follow/search/头像/follow_user 全部功能的前置解锁，优先度最高。**
