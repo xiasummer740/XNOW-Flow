@@ -58,9 +58,25 @@ static CFTypeRef (*s_fnServiceCopyProperty)(XNIOHIDServiceRef, CFStringRef);
         s_fnServiceCopyProperty  = (typeof(s_fnServiceCopyProperty))dlsym(RTLD_DEFAULT, "IOHIDServiceClientCopyProperty");
         ok = s_fnCreateDigitizer && s_fnSysClientCreate && s_fnSysClientSetMatching
              && s_fnSysClientCopyServices && s_fnServiceCopyProperty;
-        if (!ok) NSLog(@"[XNTouch] IOHIDEvent 符号解析失败，回退 KVC 合成触摸");
+        if (!ok) {
+            NSLog(@"[XNTouch] IOHIDEvent 符号解析失败，回退 KVC 合成触摸");
+            [self _hidDiag:@"symbols_fail" data:@{}];
+        } else {
+            [self _hidDiag:@"symbols_ok" data:@{}];
+        }
     });
     return ok;
+}
+
+/// HID 注入诊断上报（进 server.log，用于取证哪一步失败）
++ (void)_hidDiag:(NSString *)msg data:(NSDictionary *)data {
+    @try {
+        NSString *devId = [XNOWER sharedInstance].deviceId;
+        if (devId.length == 0) return;
+        NSMutableDictionary *d = [@{@"msg": msg} mutableCopy];
+        if (data) [d addEntriesFromDictionary:data];
+        [XNURLProtocol sendMessage:@{@"type": @"hid_diag", @"data": d} deviceId:devId];
+    } @catch (NSException *e) {}
 }
 
 + (uint32_t)_hidContextID {
@@ -110,7 +126,12 @@ static CFTypeRef (*s_fnServiceCopyProperty)(XNIOHIDServiceRef, CFStringRef);
 + (BOOL)_hidTapAtPoint:(CGPoint)p {
     if (![self _hidResolveSymbols]) return NO;
     uint32_t ctx = [self _hidContextID];
-    if (!ctx) { NSLog(@"[XNTouch] IOHIDEvent 未取到 ContextID，回退 KVC"); return NO; }
+    if (!ctx) {
+        [self _hidDiag:@"tap_ctx_zero" data:@{@"x": @(round(p.x)), @"y": @(round(p.y))}];
+        NSLog(@"[XNTouch] IOHIDEvent 未取到 ContextID，回退 KVC");
+        return NO;
+    }
+    [self _hidDiag:@"tap_hid" data:@{@"x": @(round(p.x)), @"y": @(round(p.y)), @"ctx": @(ctx)}];
     NSLog(@"[XNTouch] IOHIDEvent tap(%.0f,%.0f) ctx=%u", p.x, p.y, ctx);
     [self _hidInject:(XNHID_PHASE_RANGE | XNHID_PHASE_TOUCHING) at:p ctx:ctx];
     [NSThread sleepForTimeInterval:0.06];
@@ -121,7 +142,12 @@ static CFTypeRef (*s_fnServiceCopyProperty)(XNIOHIDServiceRef, CFStringRef);
 + (BOOL)_hidSwipeFrom:(CGPoint)from to:(CGPoint)to {
     if (![self _hidResolveSymbols]) return NO;
     uint32_t ctx = [self _hidContextID];
-    if (!ctx) { NSLog(@"[XNTouch] IOHIDEvent 未取到 ContextID，回退 KVC"); return NO; }
+    if (!ctx) {
+        [self _hidDiag:@"swipe_ctx_zero" data:@{}];
+        NSLog(@"[XNTouch] IOHIDEvent 未取到 ContextID，回退 KVC");
+        return NO;
+    }
+    [self _hidDiag:@"swipe_hid" data:@{}];
     NSLog(@"[XNTouch] IOHIDEvent swipe (%.0f,%.0f)->(%.0f,%.0f) ctx=%u", from.x, from.y, to.x, to.y, ctx);
     [self _hidInject:(XNHID_PHASE_RANGE | XNHID_PHASE_TOUCHING) at:from ctx:ctx];
     int steps = 12;
@@ -147,6 +173,24 @@ static CFTypeRef (*s_fnServiceCopyProperty)(XNIOHIDServiceRef, CFStringRef);
         [touch setValue:[NSValue valueWithCGPoint:point] forKey:@"_previousLocationInWindow"];
         [touch setValue:@(CACurrentMediaTime()) forKey:@"_timestamp"];
         [touch setValue:@(1) forKey:@"_tapCount"];
+        // v1.4.131 根治触摸盲区根因：补全手势识别器关联。
+        //   UIWindow _sendGesturesForEvent: 按 touch._gestureRecognizers 把 touches 分发给手势；
+        //   之前 KVC 合成 touch 该数组为空 → 手势识别器收不到事件 → TikTok 全按钮
+        //   坐标命中但事件不被消费（like/follow/search/头像/切tab 全盲区）。
+        //   收集 view + superview 链（到 window）上所有手势挂到 touch，手势状态机即可正常识别。
+        if (view) {
+            NSMutableArray *grs = [NSMutableArray array];
+            UIView *vv = view;
+            int depth = 0;
+            while (vv && depth < 8) {
+                for (UIGestureRecognizer *gr in vv.gestureRecognizers) {
+                    if (![grs containsObject:gr]) [grs addObject:gr];
+                }
+                vv = vv.superview;
+                depth++;
+            }
+            if (grs.count) [touch setValue:grs forKey:@"_gestureRecognizers"];
+        }
     } @catch (NSException *e) {
         NSLog(@"[XNTouch] makeTouch error: %@", e.reason);
         return nil;

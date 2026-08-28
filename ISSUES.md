@@ -183,6 +183,8 @@
 > **根因实锤**：KVC 合成 UITouch 的 `_gestureRecognizers` 数组为空 → UIWindow `_sendTouchesForEvent:` 不关联手势识别器 → TikTok 手势收不到事件 → 坐标命中但事件不被消费（全按钮盲区）。
 > **方案**：IOHIDEvent digitizer 事件（dlsym 运行时解析私有符号 + IOHIDEventSystemClient 取设备 ContextID）经 `UIApplication _handleHIDEvent:` 注入，UIKit 完整建 UITouch + 关联手势识别器，手势状态机正常跑。符号/ContextID 缺失回退旧 KVC。
 
+> **131 迭代（2026-08-28 16:54）**：130 装机回归 like/follow 仍失败。**touch_diag 证据**：open_search 上报了 touch_diag（而 130 HID 分支在打 diag 前 return）→ **HID 注入降级未生效**（touch_diag 无法区分 129/130 降级，已加设备端上报取证）。131 双管齐下：①`hid_diag` 上报锁死 HID 失败点（符号解析成败 / ContextID 值）②合成 touch 补全 `_gestureRecognizers` 关联（根治真正根因：UIKit `_sendGesturesForEvent:` 按此数组把手势分发给识别器，之前为空 → 手势收不到事件 → 全按钮盲区）。**待重装验证**。
+
 ### 装机验证清单（逐项实测记 真成功/假成功/崩溃）
 1. **like 红心点亮**（回归清单）— 盲区核心
 2. **follow 关注**（回归清单）— 盲区核心
