@@ -146,7 +146,8 @@ CHECKS = [
     ("open_search",  {},                  "open_search（坐标 386,42 命中搜索按钮）"),
     ("follow",       {},                  "follow（按钮状态真验收）"),
     ("go_home",      {},                  "go_home（回首页，沉浸态也能退出）"),
-    ("backup",       {},                  "backup_account（识别登录态并备份）"),
+    # 注意：设备端 action 是 backup_account，不是 backup（backup 无 handler 只回默认 OK）
+    ("backup_account", {},                "backup_account（识别登录态并备份，验收关键字「已备份账号」）"),
 ]
 
 def main():

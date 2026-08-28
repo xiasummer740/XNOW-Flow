@@ -154,28 +154,39 @@
 - **修复**：`_performOpenSearch` 坐标 (width-30,65)→(width-28,42)（ui_scan 实测 TTKSearchEntranceButton center=386,42）
 - **128 装机实测：未验证**（open_tab 崩溃阻断批内其余验证）→ **129 重新验证**
 
-## v1.4.129 攒批（open_tab P0 崩溃单发，装 129 一次验全批）
+## v1.4.129 攒批 → 装机验证结果（2026-08-28）
 
-> **发版门禁**：128 装机暴露 open_tab 崩溃**未修**（P0 崩溃阻断所有验证）→ 紧急单发 129（崩溃=闪退级，CLAUDE.md 例外允许单发）。**129 只含 1 项修复**：open_tab 崩溃根治。已编译打包 `TikTok_XNOW_v1.4.129_BH.ipa`（374.2MB，2026-08-28 14:03 上传 static）→ 装机后**一次验全批**：129 open_tab + 128 的 like（已验✅）/search 坐标 + 127 被阻断的 3 项（②follow_user uid 段 / ⑦沉浸态 / ⑧edit_profile 确认弹窗）。
+> **装机验证（2026-08-28 14:42）**：装 `TikTok_XNOW_v1.4.129_BH.ipa` 跑回归清单 all。**结果：open_tab 崩溃根治 ✅（129 核心目标达成）；like/follow ❌ 触摸盲区（128 的 like「已验证」是崩溃误判，已纠正）；backup ❌=回归脚本 action 写错（backup→backup_account 已修脚本）；go_home ✅ 18s；open_search ✅ 能进搜索页（已采集到 search 页控件为证）**。
 
-### [已修待验] ① open_tab 崩溃根治（128 全树遍历卡死 → 轻量深链兜底）
-- **修复**：删除 `_hasPushedControllersInWindow`（全树遍历卡死根因），`_tapTab` 步骤 0 改 `_isHomeFeedUsable` 轻量判定：不在可操作首页 → `snssdk1233://feed` 深链兜底；正常首页走 setSelectedIndex（v1.4.125 稳定，无重载副作用）。崩溃史注释已写入源码防复活。
-- **验收**：`open_tab profile` 不崩不卡（diag 有返回）→ `open_tab home` 深链回 feed（截图非 profile）→ 设备持续响应（不再 watchdog 杀）
+### [已验证] ① open_tab 崩溃根治（128 全树遍历卡死 → 轻量深链兜底）
+- **129 装机实测：✅ 通过**——`open_tab profile` 返回 `diag:{method:setSelectedIndex, before:0, after:3}`（v1.4.125 稳定路径，不崩不卡）；`open_tab home` 返回 `diag:{method:not_home_deeplink}`（深链兜底回 feed）；设备全程响应，无 CRASH → **已验证**。128 的 `_hasPushedControllersInWindow` 全树遍历卡死根因已删。
 
-### [已修待验→129 重验] ③ search 坐标修正（128 未验证）
-- 128 修复未验（open_tab 崩溃阻断）→ 129 装机一起验
-- **验收**：open_search 精确命中搜索按钮（state_diag acc_label=搜索按钮类名）
+### [已验证→触摸盲区] ② like 红心点亮（128 的「已验证」是崩溃误判）
+- **128 的 like「✅ 已点赞」是假阳性，已纠正**（血证）：128 装机时 13:55:27 `state_diag acc_label='Video liked'`（旧视频残留）→ 同一秒 `CRASH last_action=like` → 崩溃重启后回执 `success「已点赞（红心点亮验证通过）」`。**红心实际没点亮**（isSelected=False），success 是崩溃后的误回执。
+- **129 装机实测：❌ 真实失败**——like 返回「点赞未生效（未检测到红心点亮）」。touch_diag 显示 tapAtPoint(382,390) 执行、hitTest 命中 AWEFeedVideoButton，但红心不亮。**结论：like 也属于触摸盲区**（之前「只有 like button 响应合成触摸」判断错误）。→ 并入触摸盲区专项批次。
 
-### [已修待验→129 重验] ⑦ 沉浸态恢复 / ⑧ edit_profile 确认弹窗 / ② follow_user uid 段
-- 127 装机被 open_tab 崩溃阻断的 3 项 → 129 open_tab 修好后一起验
+### [已验证] ③ search 坐标修正（128 未验 → 129 验）
+- **129 装机实测：✅ 能进搜索页**——设备当前页面已采集为 search 页（AWESearchBar/搜索框/Search 按钮/Trending 列表 64 控件），open_search 坐标 (width-28,42) 命中生效 → **已验证**（后续搜索提交按钮点按属触摸盲区，另列）
+
+### [已验证] ⑦ go_home 沉浸态退出
+- **129 装机实测：✅**——go_home duration 18s 返回 success（设备从非首页状态回 feed）→ **已验证**（18s 偏慢待查是否走深链，非崩溃级）
+
+### [脚本 bug 已修] backup_account 回归脚本 action 写错
+- **129 装机实测：❌「OK: backup」假成功 = 回归脚本 bug**——CHECKS 发 action `backup`，设备端无此 handler 只回默认 OK。正确 action 是 `backup_account`（11:41 实测返回「已备份账号 #1 登录态」+ country:gb + 200+ profile_keys 真备份✅）。**regression-check.py 已改 backup→backup_account**，下版回归复测。
+
+### [129 未验证] ② follow_user uid 段 / ⑧ edit_profile 确认弹窗
+- 127 被阻断项：follow_user 用户名段依赖搜索→触摸盲区；edit_profile 确认弹窗待专项。uid 深链段待复测。
 
 ## 🔵 新发现待后续批次（触摸盲区）
 
-> **根因方向（v1.4.128 未修，留待专项批次）**：XNTouchSimulator 对 TikTok 新 UI 部分控件不生效——搜索按钮/关注按钮/头像按钮对合成触摸+UITapGestureRecognizer KVC firing 均不响应，**只有 like button（feedLikeButton）响应**。已验证：手动 tap (382,390) 点亮红心，但 tap (386,42) 搜索 / tap (384,333) 关注均无效果；hitTest 命中正确（state_diag 显示 acc_label 正确）但事件不被消费。**假设**：TikTok 这些控件用 UIControlEventTouchUpInside 之外的响应机制（如内部手势代理、独立 UIControlEventTouchDown 序列）或要求真实多指/长按序列。**方向**：XNTouchSimulator 升级——补 sendActionsForControlEvents:UIControlEventAllEvents / 事件序列时序对齐 / 用 UIControl 直接 sendAction 到 target。
+> **根因方向（v1.4.129 实锤，升级为「全按钮盲区」专项）**：XNTouchSimulator 合成触摸对 TikTok 主要交互按钮**全部不生效**——搜索/关注/头像/like 四个核心按钮都验证不响应（129 like 真实失败实锤；128 like「通过」是崩溃误回执假阳性）。touch_diag 显示 tapAtPoint 坐标正确命中（AWEFeedVideoButton/TTKSearchEntranceButton），hitTest 命中正确，但 UIControlEventTouchUpInside 不被触发。**假设**：TikTok 这些控件要求真实触摸事件链（UIEvent+多个 UITouch + 正确 timestamp/phase 序列），合成 tap 只发单个 touch 不够。**方向（下批专修）**：XNTouchSimulator 升级——①用 IOHIDEvent/私有 API 注入真实触摸事件 ②发完整 touch 序列（Began→Moved→Ended，带正确 timestamp）③或 sendActionsForControlEvents:UIControlEventAllEvents 全事件广播。**此专项是 like/follow/search/头像/follow_user 全部功能的前置解锁，优先度最高。**
+
+### [待修] 触摸盲区：like 按钮不响应（129 实锤，128 误判已纠正）
+- feedLikeButton (382,390)：129 真实失败「点赞未生效」，128「已点赞」是崩溃误回执（CRASH 后 success + acc_label 残留），isSelected=False 红心未亮
+- 127 sendActions 不亮 / 128 合成触摸也不亮 → 需要真实触摸注入
 
 ### [待修] 触摸盲区：搜索按钮不响应
-- 搜索按钮（TTKSearchEntranceButton center=386,42）对合成触摸不响应（tap 两次+双击失败），127 open_search 坐标也偏
-- 128 已修坐标（③），若 128 装机后仍点不开搜索 → 触摸盲区专项批次修
+- 搜索按钮（TTKSearchEntranceButton center=386,42）：128 坐标修正后能**进搜索页**（open_search ✅），但**搜索提交按钮**（TTKSearchPressStatusButton 374,42）与搜索框输入是否生效待验（129 未测提交搜索）；若提交也盲区 → follow_user 用户名流程仍不可达
 
 ### [待修] 触摸盲区：关注按钮不响应
 - 关注按钮（`kAccFollow` 命中但点击无效，state_diag before=after='Follow xo.sleepybrunette' success=False）——label 非 UIControl 合成触摸点不到按钮本体；手动 tap (384,333) 也无效果
