@@ -137,21 +137,37 @@
 - **v1.4.127 修复**：AccountSwitcher 新增 `_safeUnarchiveData:`（iOS11+ unarchiveTopLevelObjectWithData + @try）+ `_flattenObjectToPlist:`（KVC 反射展平自定义模型，深度6）
 - **127 装机验证：✅ 通过**——backup_account 识别到登录态，200+ 字段 KVC 展平备份成功 → **已验证**
 
-## v1.4.128 攒批（3 项修复已编译已打包，装 128 一次验）
+## v1.4.128 攒批 → 装机验证结果（2026-08-28）
 
-> **发版门禁**：127 装机暴露 open_tab 崩溃回归（P0）→ 攒批 3 项修复：①open_tab 崩溃回归（pop→深链兜底）②like 红心不亮（sendActions→合成触摸）③search 坐标修正。已编译打包 `TikTok_XNOW_v1.4.128_BH.ipa`（374.2MB，2026-08-28 12:10 上传 static）→ 装机验证 127 未完成的 3 项（②follow_user uid 段 / ⑦沉浸态 / ⑧edit_profile 确认弹窗）+ 本批 3 项。
+> **装机验证（2026-08-28）**：装 `TikTok_XNOW_v1.4.128_BH.ipa` 逐项实测。**结果：① open_tab 🚨 仍崩溃（根因升级）→ 129 修复；② like ✅ 已点亮**；③ search 未验证（open_tab 崩溃阻断）。128 全树遍历导致 open_tab 崩溃 → v1.4.129 重建修复（见下方 129 攒批）。
 
-### [已修待验] ① open_tab 崩溃/卡死回归（127 pop 主线程自锁）
-- **修复**：`_popPushedControllersInWindow`→`_hasPushedControllersInWindow`（只检测）+ `_tapTab` 检测推入页且目标 home → `snssdk1233://feed` 深链兜底 + `_recoverFromImmersiveOnMain` 移除 pop
-- **验收**：`open_tab profile` 不崩不卡 → `open_tab home` 深链回 feed（截图非 profile）
+### [已验证→129] ① open_tab 崩溃/卡死回归（128 全树遍历主线程卡死）
+- **128 装机实测：🚨 仍崩溃**——`open_tab profile` 13:47:59 polled → 13:50 offline → 13:54:43 `CRASH: [last_action] open_tab`（watchdog 约 7 分钟才杀，比 127 的 42s 慢）。
+- **128 根因（再升级）**：127 pop 自锁 → 128 改 `_hasPushedControllersInWindow`（主线程 dispatch_sync(main) block 内**完整 VC 树遍历直到 depth 20**）——对比 `_findTabBarControllerInWindow` 找到 TabBar 浅层提前返回（v1.4.125 稳定），全树遍历本身在主线程跑满 → 卡死 → watchdog 杀。**主线程内任何完整 VC 树递归遍历都是雷**（pop 会触发 TikTok 内部 dispatch_sync(main)，遍历会耗尽主线程）。
+- **v1.4.129 根治**：删除 `_hasPushedControllersInWindow`，不再检测推入页。`_tapTab` 步骤 0 改为轻量 `_isHomeFeedUsable`（特征控件查找+hitTest，不遍历完整树）：home 且不在可操作首页 → `snssdk1233://feed` 深链兜底；正常首页走 setSelectedIndex（v1.4.125 稳定路径）。→ **129 重新验证**
 
-### [已修待验] ② like 红心不亮（sendActions 无效）
+### [已验证] ② like 红心不亮（sendActions 无效）
 - **修复**：`_performLikeSafe`/`_waitLikeVerified` retry 统一改合成触摸 `_safeTapAtPoint:`（feedLikeButton center=382,390 手动 tap 红心点亮已验证）
-- **验收**：后台「❤️ 点赞」→ message 含红心点亮验收通过
+- **128 装机实测：✅ 通过**——like 返回「已点赞（红心点亮验证通过）」→ **已验证**
 
 ### [已修待验] ③ search 坐标修正
 - **修复**：`_performOpenSearch` 坐标 (width-30,65)→(width-28,42)（ui_scan 实测 TTKSearchEntranceButton center=386,42）
+- **128 装机实测：未验证**（open_tab 崩溃阻断批内其余验证）→ **129 重新验证**
+
+## v1.4.129 攒批（open_tab P0 崩溃单发，装 129 一次验全批）
+
+> **发版门禁**：128 装机暴露 open_tab 崩溃**未修**（P0 崩溃阻断所有验证）→ 紧急单发 129（崩溃=闪退级，CLAUDE.md 例外允许单发）。**129 只含 1 项修复**：open_tab 崩溃根治。已编译打包 `TikTok_XNOW_v1.4.129_BH.ipa`（374.2MB，2026-08-28 14:03 上传 static）→ 装机后**一次验全批**：129 open_tab + 128 的 like（已验✅）/search 坐标 + 127 被阻断的 3 项（②follow_user uid 段 / ⑦沉浸态 / ⑧edit_profile 确认弹窗）。
+
+### [已修待验] ① open_tab 崩溃根治（128 全树遍历卡死 → 轻量深链兜底）
+- **修复**：删除 `_hasPushedControllersInWindow`（全树遍历卡死根因），`_tapTab` 步骤 0 改 `_isHomeFeedUsable` 轻量判定：不在可操作首页 → `snssdk1233://feed` 深链兜底；正常首页走 setSelectedIndex（v1.4.125 稳定，无重载副作用）。崩溃史注释已写入源码防复活。
+- **验收**：`open_tab profile` 不崩不卡（diag 有返回）→ `open_tab home` 深链回 feed（截图非 profile）→ 设备持续响应（不再 watchdog 杀）
+
+### [已修待验→129 重验] ③ search 坐标修正（128 未验证）
+- 128 修复未验（open_tab 崩溃阻断）→ 129 装机一起验
 - **验收**：open_search 精确命中搜索按钮（state_diag acc_label=搜索按钮类名）
+
+### [已修待验→129 重验] ⑦ 沉浸态恢复 / ⑧ edit_profile 确认弹窗 / ② follow_user uid 段
+- 127 装机被 open_tab 崩溃阻断的 3 项 → 129 open_tab 修好后一起验
 
 ## 🔵 新发现待后续批次（触摸盲区）
 

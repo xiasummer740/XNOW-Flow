@@ -1,0 +1,584 @@
+{
+ "page": "search",
+ "device": "iphone_A6D8F9B4",
+ "captured": "2026-08-28 21:06:34",
+ "count": 64,
+ "controls": [
+  {
+   "class": "UIButton",
+   "x": 26,
+   "y": 42,
+   "frame": "{4, 20}, {44, 44}",
+   "accId": "",
+   "label": "Back",
+   "selected": "False"
+  },
+  {
+   "class": "AWESearchBar",
+   "x": 191,
+   "y": 42,
+   "frame": "{48, 24}, {285, 36}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "_UISearchBarSearchContainerView",
+   "x": 191,
+   "y": 42,
+   "frame": "{48, 24}, {285, 36}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UISearchBarTextField",
+   "x": 191,
+   "y": 42,
+   "frame": "{48, 24}, {285, 36}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "_UISearchBarFieldEditor",
+   "x": 206,
+   "y": 42,
+   "frame": "{79, 24}, {254, 36}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKSearchBarRightButton",
+   "x": 309,
+   "y": 42,
+   "frame": "{285, 24}, {48, 36}",
+   "accId": "",
+   "label": "Voice search",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 315,
+   "y": 42,
+   "frame": "{297, 24}, {36, 36}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKSearchPressStatusButton",
+   "x": 374,
+   "y": 42,
+   "frame": "{349, 26.666666666666671}, {49, 31}",
+   "accId": "",
+   "label": "Search",
+   "selected": "False"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 333,
+   "y": 98,
+   "frame": "{309.66666666666669, 89}, {47.333333333333314, 17}",
+   "accId": "",
+   "label": "Refresh",
+   "selected": "None"
+  },
+  {
+   "class": "AWEPublishProgressDefaultWrapper",
+   "x": 35,
+   "y": 114,
+   "frame": "{12, 84}, {45, 60}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 163,
+   "y": 132,
+   "frame": "{39.999999999999986, 121.66666666666667}, {245.66666666666663, 21.000000000000014}",
+   "accId": "",
+   "label": "call mcdonald's on tiktok tutorial",
+   "selected": "None"
+  },
+  {
+   "class": "UILynxView",
+   "x": 207,
+   "y": 142,
+   "frame": "{8, 116}, {398, 52}",
+   "accId": "",
+   "label": "call mcdonald's on tiktok tutorialacc_trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 80,
+   "y": 151,
+   "frame": "{54, 142.66666666666669}, {52, 17}",
+   "accId": "",
+   "label": "Trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 148,
+   "y": 184,
+   "frame": "{40.000000000000014, 173.66666666666669}, {216.33333333333337, 21}",
+   "accId": "",
+   "label": "Paper Squishy Ideas Go Viral",
+   "selected": "None"
+  },
+  {
+   "class": "UILynxView",
+   "x": 207,
+   "y": 194,
+   "frame": "{8, 168}, {398, 52}",
+   "accId": "",
+   "label": "Paper Squishy Ideas Go Viralacc_trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 80,
+   "y": 203,
+   "frame": "{54, 194.66666666666669}, {52, 17}",
+   "accId": "",
+   "label": "Trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 156,
+   "y": 236,
+   "frame": "{39.999999999999986, 225.66666666666669}, {232.66666666666663, 21}",
+   "accId": "",
+   "label": "spiderman eye makeup tutorial",
+   "selected": "None"
+  },
+  {
+   "class": "UILynxView",
+   "x": 207,
+   "y": 246,
+   "frame": "{8, 220}, {398, 52}",
+   "accId": "",
+   "label": "spiderman eye makeup tutorialacc_trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 80,
+   "y": 255,
+   "frame": "{54, 246.66666666666669}, {52, 17}",
+   "accId": "",
+   "label": "Trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 118,
+   "y": 288,
+   "frame": "{40, 277.66666666666663}, {156, 21}",
+   "accId": "",
+   "label": "Creator Insights Tips",
+   "selected": "None"
+  },
+  {
+   "class": "UILynxView",
+   "x": 207,
+   "y": 298,
+   "frame": "{8, 272}, {398, 52}",
+   "accId": "",
+   "label": "Creator Insights Tipsacc_trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 80,
+   "y": 307,
+   "frame": "{54, 298.66666666666669}, {52, 17}",
+   "accId": "",
+   "label": "Trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 141,
+   "y": 343,
+   "frame": "{40, 332}, {201.33333333333334, 21}",
+   "accId": "",
+   "label": "Cat Sounds to Attract Cats",
+   "selected": "None"
+  },
+  {
+   "class": "UILynxView",
+   "x": 207,
+   "y": 344,
+   "frame": "{8, 324}, {398, 40}",
+   "accId": "",
+   "label": "Cat Sounds to Attract Cats",
+   "selected": "None"
+  },
+  {
+   "class": "AWEMaskWindow",
+   "x": 207,
+   "y": 368,
+   "frame": "{0, 0}, {414, 736}",
+   "accId": "AWEMaskWindow",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UILayoutContainerView",
+   "x": 207,
+   "y": 368,
+   "frame": "{0, 0}, {414, 736}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIEditingOverlayGestureView",
+   "x": 207,
+   "y": 368,
+   "frame": "{0, 0}, {414, 736}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 129,
+   "y": 380,
+   "frame": "{40, 369.66666666666663}, {178.33333333333334, 21}",
+   "accId": "",
+   "label": "Squishy Toy ASMR Viral",
+   "selected": "None"
+  },
+  {
+   "class": "UILynxView",
+   "x": 207,
+   "y": 390,
+   "frame": "{8, 364}, {398, 52}",
+   "accId": "",
+   "label": "Squishy Toy ASMR Viralacc_trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 80,
+   "y": 399,
+   "frame": "{54, 390.66666666666669}, {52, 17}",
+   "accId": "",
+   "label": "Trending",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 400,
+   "frame": "{0, 64}, {414, 672}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UITableView",
+   "x": 207,
+   "y": 400,
+   "frame": "{0, 64}, {414, 672}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UITableView",
+   "x": 207,
+   "y": 414,
+   "frame": "{0, 64}, {414, 700}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 102,
+   "y": 432,
+   "frame": "{40, 421.66666666666669}, {124, 21}",
+   "accId": "",
+   "label": "GTA 6 Reactions",
+   "selected": "None"
+  },
+  {
+   "class": "UILynxView",
+   "x": 207,
+   "y": 442,
+   "frame": "{8, 416}, {398, 52}",
+   "accId": "",
+   "label": "GTA 6 Reactionsacc_trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 80,
+   "y": 451,
+   "frame": "{54, 442.66666666666669}, {52, 17}",
+   "accId": "",
+   "label": "Trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 129,
+   "y": 484,
+   "frame": "{40, 473.66666666666669}, {177.66666666666666, 21}",
+   "accId": "",
+   "label": "SpongeBob Filter Trend",
+   "selected": "None"
+  },
+  {
+   "class": "UILynxView",
+   "x": 207,
+   "y": 494,
+   "frame": "{8, 468}, {398, 52}",
+   "accId": "",
+   "label": "SpongeBob Filter Trendacc_trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 80,
+   "y": 503,
+   "frame": "{54, 494.66666666666669}, {52, 17}",
+   "accId": "",
+   "label": "Trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 145,
+   "y": 536,
+   "frame": "{40, 525.66666666666674}, {209, 21}",
+   "accId": "",
+   "label": "creator insights tool tutorial",
+   "selected": "None"
+  },
+  {
+   "class": "UILynxView",
+   "x": 207,
+   "y": 546,
+   "frame": "{8, 520}, {398, 52}",
+   "accId": "",
+   "label": "creator insights tool tutorialacc_trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 80,
+   "y": 555,
+   "frame": "{54, 546.66666666666674}, {52, 17}",
+   "accId": "",
+   "label": "Trending",
+   "selected": "None"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 570,
+   "frame": "{0, 64}, {414, 1012}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "HybridLynxView",
+   "x": 207,
+   "y": 570,
+   "frame": "{0, 64}, {414, 1012}",
+   "accId": "",
+   "label": "lynxview",
+   "selected": "None"
+  },
+  {
+   "class": "LynxScrollView",
+   "x": 207,
+   "y": 570,
+   "frame": "{0, 64}, {414, 1012}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 154,
+   "y": 588,
+   "frame": "{40, 577.66666666666674}, {227, 21}",
+   "accId": "",
+   "label": "cat in the hat blackpool meme",
+   "selected": "None"
+  },
+  {
+   "class": "UILynxView",
+   "x": 207,
+   "y": 598,
+   "frame": "{8, 572}, {398, 52}",
+   "accId": "",
+   "label": "cat in the hat blackpool memeacc_trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 80,
+   "y": 607,
+   "frame": "{54, 598.66666666666674}, {52, 17}",
+   "accId": "",
+   "label": "Trending",
+   "selected": "None"
+  },
+  {
+   "class": "LynxScrollView",
+   "x": 207,
+   "y": 650,
+   "frame": "{0, 624}, {414, 52}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 91,
+   "y": 656,
+   "frame": "{16, 646}, {150.66666666666666, 20}",
+   "accId": "",
+   "label": "Trending searches",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 251,
+   "y": 656,
+   "frame": "{198.66666666666669, 646}, {104.66666666666669, 20}",
+   "accId": "",
+   "label": "Popular LIVE",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 381,
+   "y": 656,
+   "frame": "{335.33333333333331, 646}, {91.333333333333314, 20}",
+   "accId": "",
+   "label": "Viral songs",
+   "selected": "None"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": 41,
+   "y": 712,
+   "frame": "{0, 687}, {82.799999999999997, 49}",
+   "accId": "a11y_vo_home",
+   "label": "Home",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": 41,
+   "y": 712,
+   "frame": "{0, 687}, {82.799999999999997, 49}",
+   "accId": "",
+   "label": "Home",
+   "selected": "None"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": 124,
+   "y": 712,
+   "frame": "{82.799999999999983, 687}, {82.799999999999983, 49}",
+   "accId": "friends",
+   "label": "Friends",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": 124,
+   "y": 712,
+   "frame": "{82.799999999999983, 687}, {82.799999999999983, 49}",
+   "accId": "",
+   "label": "Friends",
+   "selected": "None"
+  },
+  {
+   "class": "AWETabBarPlusButton",
+   "x": 207,
+   "y": 712,
+   "frame": "{165.59999999999999, 687}, {82.799999999999983, 49}",
+   "accId": "",
+   "label": "Create",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": 290,
+   "y": 712,
+   "frame": "{248.39999999999995, 687}, {82.799999999999983, 49}",
+   "accId": "a11y_vo_inbox",
+   "label": "Inbox Button. 1 unread notifications.",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": 290,
+   "y": 712,
+   "frame": "{248.39999999999995, 687}, {82.799999999999983, 49}",
+   "accId": "",
+   "label": "Inbox",
+   "selected": "None"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": 373,
+   "y": 712,
+   "frame": "{331.19999999999999, 687}, {82.800000000000011, 49}",
+   "accId": "a11y_vo_profile",
+   "label": "Profile",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": 373,
+   "y": 712,
+   "frame": "{331.19999999999999, 687}, {82.800000000000011, 49}",
+   "accId": "",
+   "label": "Profile",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 207,
+   "y": 862,
+   "frame": "{114.33333333333333, 849.66666666666663}, {185.66666666666669, 24}",
+   "accId": "",
+   "label": "Something went wrong",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 207,
+   "y": 892,
+   "frame": "{85.666666666666671, 881.66666666666663}, {242.66666666666663, 21}",
+   "accId": "",
+   "label": "No suggested search topics available.",
+   "selected": "None"
+  },
+  {
+   "class": "LynxTextView",
+   "x": 200,
+   "y": 10641,
+   "frame": "{163, 10632}, {74.333333333333314, 18}",
+   "accId": "",
+   "label": "View more",
+   "selected": "None"
+  }
+ ]
+}

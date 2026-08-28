@@ -140,6 +140,7 @@ def collect(page, wait=4.0, timeout=60):
                   ensure_ascii=False, indent=1)
     write_md(page, deduped)
     write_index()
+    write_all()
     print(f"✅ 采集完成 {page}: {len(deduped)} 控件 → {json_path}")
     return deduped
 
@@ -170,6 +171,30 @@ def write_index():
               "python collect-control-map.py <页面标签>", "```"]
     with open(os.path.join(OUTDIR, "index.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
+
+
+def write_all():
+    """合并全部页面到单个文件 control-map-all.md（用户要求的「一个文件」）"""
+    files = sorted(f for f in os.listdir(OUTDIR) if f.endswith(".json"))
+    lines = ["# TikTok 控件基线地图 · 全量汇总", "",
+             f"> 生成 {time.strftime('%Y-%m-%d %H:%M:%S')} | 设备 {DEVICE} | {len(files)} 个页面",
+             "> 用途: 修控件先查此表，不现场猜。TikTok 更新后重采 diff 对照，锚点漂移一眼看出。", "",
+             "## 页面索引", ""]
+    for f in files:
+        d = json.load(open(os.path.join(OUTDIR, f), encoding="utf-8"))
+        lines.append(f"- `{d['page']}` — {d['count']} 控件（{d['captured']}）")
+    for f in files:
+        d = json.load(open(os.path.join(OUTDIR, f), encoding="utf-8"))
+        lines += ["", f"## {d['page']}（{d['count']} 控件）", "",
+                  "| 类名 | accId | x,y | frame | label | 选中 |",
+                  "|------|-------|-----|-------|-------|-----|"]
+        for c in d["controls"]:
+            label = c["label"].replace("|", "\\|") if c["label"] else ""
+            lines.append(f"| `{c['class']}` | `{c['accId']}` | {c['x']},{c['y']} | `{c['frame']}` | {label} | {c['selected']} |")
+    all_path = os.path.join(OUTDIR, "control-map-all.md")
+    with open(all_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"📦 全量汇总已生成 → {all_path}（{len(files)} 页）")
 
 
 if __name__ == "__main__":

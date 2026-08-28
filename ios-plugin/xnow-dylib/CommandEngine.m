@@ -3031,31 +3031,11 @@ static NSArray *XN_NurtureComments(void) {
     });
 }
 
-/// v1.4.127: 弹出当前导航栈里所有推入的页面（保留 tab 根控制器）。
-/// 解决 open_profile 推入的个人主页盖住 tab 切换结果的问题（_tapTab 切 tab 前先弹）。
-/// v1.4.128: 检测导航栈是否有推入页（只判断不执行 pop）。
-/// ⚠️ 127 崩溃回归修复：v1.4.127 用 popToRootViewControllerAnimated: 在 _tapTab 的主线程
+/// ⚠️ 崩溃史（勿复活）：v1.4.127 用 popToRootViewControllerAnimated: 在 _tapTab 的主线程
 /// dispatch_sync(main) block 内同步 pop → TikTok VC 被 pop 时内部 dispatch_sync(main) → 主线程自锁
-/// → watchdog 杀进程（open_tab profile 崩 / open_tab home 卡死，8/28 装机实测）。不再执行 pop，
-/// 改为「检测到推入页 → home 深链兜底回 feed」，深链导航由 TikTok 处理不会自锁。
-- (BOOL)_hasPushedControllersInWindow:(UIWindow *)window {
-    __block BOOL has = NO;
-    @try {
-        void (^walkVC)(UIViewController *, int) = nil;
-        walkVC = ^(UIViewController *vc, int depth) {
-            if (!vc || depth > 20 || has) return;
-            if ([vc isKindOfClass:[UINavigationController class]]) {
-                if (((UINavigationController *)vc).viewControllers.count > 1) has = YES;
-            }
-            if (vc.presentedViewController) walkVC(vc.presentedViewController, depth + 1);
-            for (UIViewController *ch in vc.childViewControllers) walkVC(ch, depth + 1);
-        };
-        walkVC(window.rootViewController, 0);
-    } @catch (NSException *e) {
-        NSLog(@"[XNOWER] hasPushedControllers error: %@", e.reason);
-    }
-    return has;
-}
+/// → watchdog 杀（open_tab profile 崩 / open_tab home 卡死）；v1.4.128 改「全树遍历检测推入页」
+/// （_hasPushedControllersInWindow）→ 主线程全树遍历卡死 → watchdog 杀。两个方案都已实测崩溃。
+/// v1.4.129 根治：不做推入页检测，home 且不在可操作首页直接深链回 feed（见 _tapTab 步骤 0）。
 
 /// v1.4.127: 首页底部导航栏是否真的可见可点（未被全屏沉浸播放器盖住）。
 /// 判定：a11y_vo_home tab 在渲染窗口 + 非隐藏 + hitTest 命中的顶层交互视图落在 tab 子树内。
@@ -3169,14 +3149,15 @@ static NSArray *XN_NurtureComments(void) {
         if (!window) { diag = @{@"method": @"no_window"}; return; }
         CGSize screen = [UIScreen mainScreen].bounds.size;
 
-        // 0. 【v1.4.128】修复 127 崩溃回归：不再同步 pop 推入页（主线程 popToRoot →
-        //    TikTok VC pop 内部 dispatch_sync(main) → 自锁 watchdog 杀，open_tab 崩/卡死实测）。
-        //    改为：检测到推入页且目标是 home → 深链回 feed（TikTok 深链导航替换推入页，
-        //    open_profile 推入的个人主页也能退出，且深链不会自锁）。
-        if ([self _hasPushedControllersInWindow:window] && [tab isEqualToString:@"home"]) {
-            NSLog(@"[XNOWER] tapTab:home 检测到推入页 → 深链回 feed（127 pop 自锁回归已修）");
+        // 0. 【v1.4.129】修复 128 崩溃回归：128 用 _hasPushedControllersInWindow 全树主线程遍历
+        //    检测推入页 → 主线程卡死 watchdog 杀（open_tab 崩实测，8/28 装机，7 分钟才杀）。
+        //    移除全树遍历。改为：home 且不在可操作首页（feed+导航栏可见）→ 深链回 feed。
+        //    正常首页 _isHomeFeedUsable=YES 走 setSelectedIndex（v1.4.125 稳定路径，无重载副作用）；
+        //    open_profile 推入页/沉浸态 → 深链回 feed（TikTok 深链导航替换推入页，不会自锁）。
+        if ([tab isEqualToString:@"home"] && ![self _isHomeFeedUsable]) {
+            NSLog(@"[XNOWER] tapTab:home 不在可操作首页 → 深链回 feed（128 全树遍历卡死已修）");
             [self _openDeepLink:@"snssdk1233://feed"];
-            diag = @{@"method": @"pushed_deeplink_home"};
+            diag = @{@"method": @"not_home_deeplink"};
             self->_currentPage = @"home";
             return;
         }
