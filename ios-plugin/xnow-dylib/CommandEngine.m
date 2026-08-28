@@ -2842,13 +2842,12 @@ static NSArray *XN_NurtureComments(void) {
             beforeSel = [lv isKindOfClass:[UIControl class]] ? ((UIControl *)lv).isSelected : NO;
             beforeLabel = lv.accessibilityLabel ?: @"";
             // 3. 点击
-            if ([lv isKindOfClass:[UIControl class]]) {
-                [(UIControl *)lv sendActionsForControlEvents:UIControlEventTouchUpInside];
-            } else {
-                CGPoint center = [lv.superview convertPoint:lv.center toView:nil];
-                if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
-                    [self _safeTapAtPoint:center];
-                }
+            // 【v1.4.128】修复：sendActionsForControlEvents: 不触发 TikTok 点赞（8/28 装机实测红心不亮）。
+            //    统一合成触摸 tapAtPoint（XNTouchSimulator 内部 hitTest+sendActions+手势+触摸事件，
+            //    对 TikTok feedLikeButton 实测有效——手动 tap 红心点亮）。
+            CGPoint center = [lv.superview convertPoint:lv.center toView:nil];
+            if (center.x > 0 && center.x < screen.width && center.y > 0 && center.y < screen.height) {
+                [self _safeTapAtPoint:center];
             }
         } @catch (NSException *e) {
             NSLog(@"[XNOWER] likeSafe error: %@", e.reason);
@@ -2883,8 +2882,13 @@ static NSArray *XN_NurtureComments(void) {
         __weak UIView *w2 = likeView;
         dispatch_sync(dispatch_get_main_queue(), ^{
             UIView *lv = w2;
-            if (lv && [lv isKindOfClass:[UIControl class]]) {
-                [(UIControl *)lv sendActionsForControlEvents:UIControlEventTouchUpInside];
+            if (lv) {
+                // v1.4.128: 同主分支改合成触摸（sendActions 不触发 TikTok 点赞）
+                CGPoint c = [lv.superview convertPoint:lv.center toView:nil];
+                CGSize ss = [UIScreen mainScreen].bounds.size;
+                if (c.x > 0 && c.x < ss.width && c.y > 0 && c.y < ss.height) {
+                    [self _safeTapAtPoint:c];
+                }
             }
         });
         return [self _waitLikeVerified:likeView beforeSel:beforeSel beforeLabel:beforeLabel retried:YES];
@@ -3029,24 +3033,28 @@ static NSArray *XN_NurtureComments(void) {
 
 /// v1.4.127: 弹出当前导航栈里所有推入的页面（保留 tab 根控制器）。
 /// 解决 open_profile 推入的个人主页盖住 tab 切换结果的问题（_tapTab 切 tab 前先弹）。
-- (void)_popPushedControllersInWindow:(UIWindow *)window {
+/// v1.4.128: 检测导航栈是否有推入页（只判断不执行 pop）。
+/// ⚠️ 127 崩溃回归修复：v1.4.127 用 popToRootViewControllerAnimated: 在 _tapTab 的主线程
+/// dispatch_sync(main) block 内同步 pop → TikTok VC 被 pop 时内部 dispatch_sync(main) → 主线程自锁
+/// → watchdog 杀进程（open_tab profile 崩 / open_tab home 卡死，8/28 装机实测）。不再执行 pop，
+/// 改为「检测到推入页 → home 深链兜底回 feed」，深链导航由 TikTok 处理不会自锁。
+- (BOOL)_hasPushedControllersInWindow:(UIWindow *)window {
+    __block BOOL has = NO;
     @try {
         void (^walkVC)(UIViewController *, int) = nil;
         walkVC = ^(UIViewController *vc, int depth) {
-            if (!vc || depth > 20) return;
+            if (!vc || depth > 20 || has) return;
             if ([vc isKindOfClass:[UINavigationController class]]) {
-                UINavigationController *nav = (UINavigationController *)vc;
-                if (nav.viewControllers.count > 1) {
-                    [nav popToRootViewControllerAnimated:NO];  // 只 pop 推入页，保留 tab 根
-                }
+                if (((UINavigationController *)vc).viewControllers.count > 1) has = YES;
             }
             if (vc.presentedViewController) walkVC(vc.presentedViewController, depth + 1);
             for (UIViewController *ch in vc.childViewControllers) walkVC(ch, depth + 1);
         };
         walkVC(window.rootViewController, 0);
     } @catch (NSException *e) {
-        NSLog(@"[XNOWER] popPushedControllers error: %@", e.reason);
+        NSLog(@"[XNOWER] hasPushedControllers error: %@", e.reason);
     }
+    return has;
 }
 
 /// v1.4.127: 首页底部导航栏是否真的可见可点（未被全屏沉浸播放器盖住）。
@@ -3111,8 +3119,9 @@ static NSArray *XN_NurtureComments(void) {
             vc = p;
             guard++;
         }
-        // 2. pop 推入页
-        [self _popPushedControllersInWindow:window];
+        // 2. 【v1.4.128】不再 pop 推入页（127 崩溃回归：主线程同步 pop → TikTok VC 内部
+        //    dispatch_sync(main) → 自锁）。全屏沉浸播放器是 presented/modal，上一步 dismiss 已处理；
+        //    推入页由 go_home/open_tab 的深链兜底覆盖。
         // 3. 点右上角「收起」箭头（眼睛图标下方那个，x>0.8屏宽、y 顶部区域）
         CGSize screen = [UIScreen mainScreen].bounds.size;
         NSMutableArray *btns = [NSMutableArray array];
@@ -3160,9 +3169,17 @@ static NSArray *XN_NurtureComments(void) {
         if (!window) { diag = @{@"method": @"no_window"}; return; }
         CGSize screen = [UIScreen mainScreen].bounds.size;
 
-        // 0. 【v1.4.127】先弹出推入的页面（open_profile 推入的个人主页会盖住 tab 切换结果，
-        //    实测 setSelectedIndex 只切了 tab bar 下层，屏幕仍显示推入的 profile = 设备卡在个人页）
-        [self _popPushedControllersInWindow:window];
+        // 0. 【v1.4.128】修复 127 崩溃回归：不再同步 pop 推入页（主线程 popToRoot →
+        //    TikTok VC pop 内部 dispatch_sync(main) → 自锁 watchdog 杀，open_tab 崩/卡死实测）。
+        //    改为：检测到推入页且目标是 home → 深链回 feed（TikTok 深链导航替换推入页，
+        //    open_profile 推入的个人主页也能退出，且深链不会自锁）。
+        if ([self _hasPushedControllersInWindow:window] && [tab isEqualToString:@"home"]) {
+            NSLog(@"[XNOWER] tapTab:home 检测到推入页 → 深链回 feed（127 pop 自锁回归已修）");
+            [self _openDeepLink:@"snssdk1233://feed"];
+            diag = @{@"method": @"pushed_deeplink_home"};
+            self->_currentPage = @"home";
+            return;
+        }
 
         // 0b. 【v1.4.127】全屏沉浸态防护：feed 在但导航栏被盖住时先退出全屏，
         //    否则 setSelectedIndex 切换只作用于下层、屏幕仍停留在全屏视频页（祥哥反馈"只能重启"）。
@@ -3278,7 +3295,9 @@ static NSArray *XN_NurtureComments(void) {
     }
     CGSize screen = [UIScreen mainScreen].bounds.size;
     // 首页右上角搜索图标
-    [self _safeTapAtPoint:CGPointMake(screen.width - 30, 65)];
+    // v1.4.128: 坐标修正——ui_scan 实测 TTKSearchEntranceButton center=(386,42)（screen.width-28, 42），
+    // 127 用 (width-30, 65) y 偏 23px 落在按钮下方缝隙（search_keyword 打开搜索失败根因之一）。
+    [self _safeTapAtPoint:CGPointMake(screen.width - 28, 42)];
 }
 
 /// 搜索关键词（打开搜索 → 输入 → 提交 → 真实验证结果页），返回真实结果，不假成功

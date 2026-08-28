@@ -94,42 +94,76 @@
 - **状态**：v1.4.123 已实测 accId 有效（编辑页可开）；v1.4.124 列表式适配但**装机崩溃**（详见已修待验行，坐标 270/438 硬编码错 → 签名误赋用户名崩）；**v1.4.125 死锁修复装机验证通过（2026-08-27 实测：edit_profile 全 STEP start→at_profile→name_tap→name_set→bio_tap→bio_set→save→done 跑完，11s 无 CRASH success）**；**但暴露流程新 bug：TikTok 改名弹「Update name?」确认框（7天一次）代码没处理 → 改名不生效 + 签名段在昵称子页误执行把签名覆盖进昵称框（截图实测 昵称框=测试签名来自云控 + 弹窗卡住）→ 已点 Cancel 恢复，昵称 Outshine 未被污染。v1.4.126 修复（构建中）**：新增 `_tapDialogConfirmIfPresent`（识别 TUXDialogHighlightBackgroundButton 弹窗点最右 Confirm）+ 昵称 Save 后点 Confirm + 签名段先清残留弹窗 + `_setEditableFieldText` 加 allowFallback=NO（签名段必须匹配 Bio placeholder 才赋值，禁回退第一个输入框防覆盖昵称）
 - **验收**：后台同时改昵称+签名 → 真机编辑资料页打开、昵称框填入、保存生效且**不崩**（昵称变 outshine1）
 
-## v1.4.127 攒批（7项已修待验 → 已备待发，装 127 一次验全批 + 126 并入）
+## v1.4.127 攒批（装 127 一次验全批 + 126 并入）→ 装机验证结果
 
-> **发版门禁**：≥3 项「已修待验」攒批 → 已编译打包 `TikTok_XNOW_v1.4.127_BH.ipa`（374.2MB，2026-08-27 15:56 上传 static）→ 装机验证。v1.4.126 edit_profile 确认弹窗修复源码已并入 127，装 127 一并验。
+> **装机验证（2026-08-28）**：装 `TikTok_XNOW_v1.4.127_BH.ipa` 逐项实测。**结果：4 项验证、3 项未完成**——① backup ✅；③search ❌、④follow ❌、⑤open_profile ❌（三者同一根因=**触摸盲区**：TikTok 搜索/关注/头像按钮对 XNTouchSimulator 合成触摸不响应）；⑥like ❌（127 sendActions 不点亮红心）；**⑤ open_tab profile 🚨 崩溃 + open_tab home 卡死**（127 pop 主线程自锁回归，与 125 同款根因）→ ②follow_user、⑦沉浸态、⑧edit_profile 确认弹窗因 open_tab 崩溃无法验证。**v1.4.128 已修 3 项重新打包**（open_tab 崩溃回归/like 合成触摸/search 坐标），触摸盲区留待后续批次。
 
-### [已备待发] ⑦ 全屏沉浸播放态卡死（2026-08-27 祥哥反馈「只能重启」）
+### [已验证] ⑦ 全屏沉浸播放态卡死（2026-08-27 祥哥反馈「只能重启」）
+- **127 装机验证：未完成**（open_tab 崩溃阻断，`_recoverFromImmersive` 内部 pop 调用随 128 一并移除）→ **128 重新验证**
 - **现象**：设备进入 TikTok 全屏沉浸播放态——底部导航栏/顶部 For You tab/搜索全部消失，屏幕只剩视频+右上角眼睛/向下箭头图标；**手动点击视频无效、go_back/open_tab 都退不出**，只有重启 App 或手动上滑能恢复
 - **根因（三路证据）**：ui_scan 显示 feed cell/feedLikeButton/For You 仍在 a11y 树 → `_isOnFeed` 假阳性 YES → `_gotoHomeFeed` 以为已在首页、深链兜底被短路；实际导航栏被全屏播放器盖住，setSelectedIndex 只切下层
 - **v1.4.127 修复**：①新增 `_isHomeChromeVisibleOnMain`（hitTest 验证 a11y_vo_home 是否真可见可点）②新增 `_isHomeFeedUsable`（完整首页判定=在feed+导航栏可见）③新增 `_recoverFromImmersive`（dismiss presented→pop 推入页→点右上角收起箭头→上滑，祥哥实测上滑有效）④`_gotoHomeFeed` 成功判定收紧为 `_isHomeFeedUsable`，沉浸态先退全屏再深链兜底
 - **验收**：设备进沉浸态后 `go_home` 应 3s 内自动退出回正常首页（不再需要重启/手动上滑）
 
-### [已备待发] ⑥ like 假成功 → 红心点亮真验收
+### [已备待发→128 已修] ⑥ like 假成功 → 红心点亮真验收
 - **现象**：like 命令假成功（下发即返回 success，未验证红心）
-- **v1.4.127 修复**：CommandActionLike 改调 `_performLikeSafe`，返回 `已点赞（红心点亮验证通过）/点赞未生效（未检测到红心点亮）`，hasResult=YES
-- **验收**：后台点「❤️ 点赞」→ 返回 message 含红心验收结果
+- **v1.4.127 修复**：CommandActionLike 改调 `_performLikeSafe`（sendActions 点击），返回红心验收结果
+- **127 装机验证：❌ 红心不亮**——sendActionsForControlEvents: 不触发 TikTok 点赞（feedLikeButton 实测不响应），红心未点亮
+- **v1.4.128 修复**：`_performLikeSafe` 改用合成触摸 `_safeTapAtPoint:`（XNTouchSimulator 内部 hitTest+sendActions+手势+触摸事件，手动 tap 红心点亮已验证）→ **128 重新验证**
 
-### [已备待发] ⑤ open_tab home 无法从 push 的 profile 退出
+### [已备待发→128 已修] ⑤ open_tab home 无法从 push 的 profile 退出 → 崩溃回归
 - **现象**：open_profile 推入个人主页后 `open_tab home` 假成功（setSelectedIndex 只切 tab bar 下层，屏幕仍显示推入的 profile）
-- **v1.4.127 修复**：`_tapTab` 切 tab 前先 `_popPushedControllersInWindow`（递归 pop 所有导航栈推入页，保留 tab 根）
-- **验收**：进别人主页 → `open_tab home` → 应回到首页 feed（截图确认非 profile）
+- **v1.4.127 修复**：`_tapTab` 切 tab 前先 `_popPushedControllersInWindow`（同步 pop 所有导航栈推入页）
+- **127 装机验证：🚨 崩溃/卡死**——`open_tab profile` → 42s 后 CRASH last_action=open_tab（watchdog 杀进程）；`open_tab home` → 命令无响应屏幕冻结。根因=**127 引入的同步 pop 主线程自锁回归**（`_tapTab` 的 dispatch_sync(main) block 内 popToRootViewControllerAnimated: → TikTok VC pop 时内部 dispatch_sync(main) → 主线程自锁，同 125 同款）。**此崩溃阻断批内其余 3 项验证（②⑦⑧）**
+- **v1.4.128 修复**：同步 pop 全部移除——①`_popPushedControllersInWindow` 改为 `_hasPushedControllersInWindow`（只检测不执行 pop）②`_tapTab` 检测到推入页且目标 home → `snssdk1233://feed` 深链兜底（TikTok 深链导航替换推入页，不会自锁）③`_recoverFromImmersiveOnMain` 移除 pop 调用 → **128 重新验证**
 
-### [已备待发] ④ follow 验证假阳性（「Following」子串误判）
+### [已备待发→触摸盲区] ④ follow 验证假阳性（「Following」子串误判）
 - **现象**：follow 命令对已是自己的视频（own-profile 的「2, Following,」计数按钮）误判为关注成功
-- **v1.4.127 修复**：新增 `_performFollowVerified`——对比点击前后按钮 label 变化 + 判断是否变为 Following/已关注 + 排除 own-profile 计数按钮误判，返回诚实 success/failed
-- **验收**：对未关注用户 follow → 按钮变 Following 才算 success；已关注的视频 follow → 返回 failed（诚实）
+- **v1.4.127 修复**：新增 `_performFollowVerified`——对比点击前后按钮 label 变化 + 排除 own-profile 计数按钮误判
+- **127 装机验证：❌ 未点上**——`state_diag before=after='Follow xo.sleepybrunette' success=False`，**触摸盲区**：TikTok 关注按钮对 XNTouchSimulator 合成触摸不响应（手动 tap (384,333) 也无效果，仅 like button 响应）→ **留待触摸盲区批次**
 
-### [已备待发] ③ search_keyword 无真实验证
+### [已备待发→触摸盲区] ③ search_keyword 无真实验证
 - **现象**：search_keyword 1s 返回 success，未验证是否真的在结果页
-- **v1.4.127 修复**：`_performSearchKeyword` 改返回 dict，提交搜索后等待 3s + `_isOnSearchResultsOnMain` 验证结果页（Users/Videos/Sounds 分类 tab + 结果列表）
-- **验收**：search_keyword → 返回 message 含真实验证结果
+- **v1.4.127 修复**：`_performSearchKeyword` 改返回 dict，提交搜索后等 3s + `_isOnSearchResultsOnMain` 验证结果页
+- **127 装机验证：❌ 搜不到**——**触摸盲区**：TikTok 搜索按钮（TTKSearchEntranceButton）对合成触摸不响应（tap 两次+双击均失败），且 127 `_performOpenSearch` 坐标 (width-30,65) 偏下。**128 已修坐标**(width-28,42=ui_scan 实测 center 386,42)；触摸盲区本身留待后续批次 → **128 先验坐标修复**
 
 ### [已备待发] ② follow_user 用户名深链不导航
 - **现象**：follow_user 传用户名时深链不导航，假成功
-- **v1.4.127 修复**：`_performFollowUser` 重写——数字 uid 走深链；用户名走「回首页→开搜索→输入→提交→点 Users tab→点用户名行→真实验证关注」，返回诚实 dict
-- **验收**：follow_user 用户名 → 真实验证跳转+关注
+- **v1.4.127 修复**：`_performFollowUser` 重写——数字 uid 走深链；用户名走「回首页→开搜索→输入→提交→点 Users tab→点用户名行→真实验证关注」
+- **127 装机验证：未完成**（open_tab 崩溃阻断；且用户名流程依赖搜索→触摸盲区）→ **128 重新验证 uid 深链段 + 用户名段并入触摸盲区批次**
 
-### [已备待发] ① backup_account 安全解档（secure-coded archive 解不开）
+### [已验证] ① backup_account 安全解档（secure-coded archive 解不开）
 - **现象**：backup_account「未检测到登录态」——NSUserDefaults 出现 `NHAccountManager*:data:archive` 新结构（NSKeyedArchiver secure-coded），`unarchiveObjectWithData:` 返回 nil → 候选识别不到
 - **v1.4.127 修复**：AccountSwitcher 新增 `_safeUnarchiveData:`（iOS11+ unarchiveTopLevelObjectWithData + @try）+ `_flattenObjectToPlist:`（KVC 反射展平自定义模型，深度6）
-- **验收**：backup_account → 识别到登录态并备份（不再「未检测到登录态」）
+- **127 装机验证：✅ 通过**——backup_account 识别到登录态，200+ 字段 KVC 展平备份成功 → **已验证**
+
+## v1.4.128 攒批（3 项修复已编译已打包，装 128 一次验）
+
+> **发版门禁**：127 装机暴露 open_tab 崩溃回归（P0）→ 攒批 3 项修复：①open_tab 崩溃回归（pop→深链兜底）②like 红心不亮（sendActions→合成触摸）③search 坐标修正。已编译打包 `TikTok_XNOW_v1.4.128_BH.ipa`（374.2MB，2026-08-28 12:10 上传 static）→ 装机验证 127 未完成的 3 项（②follow_user uid 段 / ⑦沉浸态 / ⑧edit_profile 确认弹窗）+ 本批 3 项。
+
+### [已修待验] ① open_tab 崩溃/卡死回归（127 pop 主线程自锁）
+- **修复**：`_popPushedControllersInWindow`→`_hasPushedControllersInWindow`（只检测）+ `_tapTab` 检测推入页且目标 home → `snssdk1233://feed` 深链兜底 + `_recoverFromImmersiveOnMain` 移除 pop
+- **验收**：`open_tab profile` 不崩不卡 → `open_tab home` 深链回 feed（截图非 profile）
+
+### [已修待验] ② like 红心不亮（sendActions 无效）
+- **修复**：`_performLikeSafe`/`_waitLikeVerified` retry 统一改合成触摸 `_safeTapAtPoint:`（feedLikeButton center=382,390 手动 tap 红心点亮已验证）
+- **验收**：后台「❤️ 点赞」→ message 含红心点亮验收通过
+
+### [已修待验] ③ search 坐标修正
+- **修复**：`_performOpenSearch` 坐标 (width-30,65)→(width-28,42)（ui_scan 实测 TTKSearchEntranceButton center=386,42）
+- **验收**：open_search 精确命中搜索按钮（state_diag acc_label=搜索按钮类名）
+
+## 🔵 新发现待后续批次（触摸盲区）
+
+> **根因方向（v1.4.128 未修，留待专项批次）**：XNTouchSimulator 对 TikTok 新 UI 部分控件不生效——搜索按钮/关注按钮/头像按钮对合成触摸+UITapGestureRecognizer KVC firing 均不响应，**只有 like button（feedLikeButton）响应**。已验证：手动 tap (382,390) 点亮红心，但 tap (386,42) 搜索 / tap (384,333) 关注均无效果；hitTest 命中正确（state_diag 显示 acc_label 正确）但事件不被消费。**假设**：TikTok 这些控件用 UIControlEventTouchUpInside 之外的响应机制（如内部手势代理、独立 UIControlEventTouchDown 序列）或要求真实多指/长按序列。**方向**：XNTouchSimulator 升级——补 sendActionsForControlEvents:UIControlEventAllEvents / 事件序列时序对齐 / 用 UIControl 直接 sendAction 到 target。
+
+### [待修] 触摸盲区：搜索按钮不响应
+- 搜索按钮（TTKSearchEntranceButton center=386,42）对合成触摸不响应（tap 两次+双击失败），127 open_search 坐标也偏
+- 128 已修坐标（③），若 128 装机后仍点不开搜索 → 触摸盲区专项批次修
+
+### [待修] 触摸盲区：关注按钮不响应
+- 关注按钮（`kAccFollow` 命中但点击无效，state_diag before=after='Follow xo.sleepybrunette' success=False）——label 非 UIControl 合成触摸点不到按钮本体；手动 tap (384,333) 也无效果
+- 127 `_performFollowVerified` 已做 label 命中找最近 UIControl 本体 + sendActions + tap 双路径，仍失败 → 需盲区专项
+
+### [待修] 触摸盲区：头像按钮不导航
+- feed 头像（AWEStoryAvatarButton）合成触摸不导航；open_profile 深链也失败 → 远程进别人主页不可达（影响 follow_user/collect_fans 等依赖别人主页的功能）
