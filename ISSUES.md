@@ -181,6 +181,15 @@
 
 > **根因方向（v1.4.129 实锤，升级为「全按钮盲区」专项）**：XNTouchSimulator 合成触摸对 TikTok 主要交互按钮**全部不生效**——搜索/关注/头像/like 四个核心按钮都验证不响应（129 like 真实失败实锤；128 like「通过」是崩溃误回执假阳性）。touch_diag 显示 tapAtPoint 坐标正确命中（AWEFeedVideoButton/TTKSearchEntranceButton），hitTest 命中正确，但 UIControlEventTouchUpInside 不被触发。**假设**：TikTok 这些控件要求真实触摸事件链（UIEvent+多个 UITouch + 正确 timestamp/phase 序列），合成 tap 只发单个 touch 不够。**方向（下批专修）**：XNTouchSimulator 升级——①用 IOHIDEvent/私有 API 注入真实触摸事件 ②发完整 touch 序列（Began→Moved→Ended，带正确 timestamp）③或 sendActionsForControlEvents:UIControlEventAllEvents 全事件广播。**此专项是 like/follow/search/头像/follow_user 全部功能的前置解锁，优先度最高。**
 
+> **🚨 触摸盲区影响面扩大到导航命令（129 装机实测 2026-08-28）**：
+> ① **open_tab 的 acc_id_tap 方法也盲区**——`_tapTab` 步骤 0 的 `_selectTabByViewControllerClass` 在部分状态下找不到 profile 类（TTKProfileHomeViewController）→ fallback 到 acc_id_tap（合成触摸点 a11y_vo_profile）→ **假成功但 tab 没切**（16:07 实测 open_tab profile 后 ui_scan 仍显示 feed）。用户从 feed 用 open_tab profile 导航不可靠。
+> ② **go_home 从 profile 页无效**——16:00 实测：在 profile 页 go_home（duration 18s）后 ui_scan 仍显示 TTKProfileRootView=profile 页，没回 feed；但从 friends 页 go_home（2s）正常回 feed。go_home 在 profile 页走了错误的恢复路径（疑似沉浸态恢复逻辑误判 profile 为需恢复状态）。**导航 bug，下批修**。
+> ③ 依赖 tap 点击进入的页面（following 列表 / comment 评论区 / edit_profile 编辑页）在盲区修好前**无法导航采集/操作**。
+
+### 控件基线地图采集进度（2026-08-28）
+- ✅ 已采 4 页：feed(63) / search(64) / profile(73) / friends(63)，汇总 `docs/control-map/control-map-all.md`（一个文件）
+- ⏳ 待采 3 页：following 列表 / comment 评论区 / edit_profile 编辑页——都需 tap 点击导航，盲区采不了 → **触摸盲区专项修后补采**（已采的 4 页 diff 对照基线已可用）
+
 ### [待修] 触摸盲区：like 按钮不响应（129 实锤，128 误判已纠正）
 - feedLikeButton (382,390)：129 真实失败「点赞未生效」，128「已点赞」是崩溃误回执（CRASH 后 success + acc_label 残留），isSelected=False 红心未亮
 - 127 sendActions 不亮 / 128 合成触摸也不亮 → 需要真实触摸注入
