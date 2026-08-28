@@ -1,0 +1,665 @@
+{
+ "page": "profile",
+ "device": "iphone_A6D8F9B4",
+ "captured": "2026-08-28 22:40:49",
+ "count": 73,
+ "controls": [
+  {
+   "class": "TUXDualBallLoadingIndicator",
+   "x": 207,
+   "y": 0,
+   "frame": "{191, -16}, {32, 32}",
+   "accId": "",
+   "label": "Loading",
+   "selected": "None"
+  },
+  {
+   "class": "TUXBadge",
+   "x": 51,
+   "y": 20,
+   "frame": "{46, 12}, {10, 16}",
+   "accId": "",
+   "label": "You have new notifications,0",
+   "selected": "None"
+  },
+  {
+   "class": "TUXBadgeCore",
+   "x": 51,
+   "y": 20,
+   "frame": "{46, 12}, {10, 16}",
+   "accId": "",
+   "label": "You have new notifications,0",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 207,
+   "y": 41,
+   "frame": "{170.66666666666666, 29}, {72, 24}",
+   "accId": "",
+   "label": "Add name",
+   "selected": "False"
+  },
+  {
+   "class": "UIImageView",
+   "x": 251,
+   "y": 41,
+   "frame": "{242.66666666666666, 33}, {15.999999999999972, 16}",
+   "accId": "",
+   "label": "Switch accounts",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 28,
+   "y": 42,
+   "frame": "{8, 20}, {40, 44}",
+   "accId": "nav_bar_start_find_friends",
+   "label": "Find friends",
+   "selected": "False"
+  },
+  {
+   "class": "AWESwitchAccountNavigationBarTitleView",
+   "x": 207,
+   "y": 42,
+   "frame": "{151.66666666666666, 29}, {110.99999999999997, 26}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileViewsEntryView",
+   "x": 306,
+   "y": 42,
+   "frame": "{286, 20}, {40, 44}",
+   "accId": "nav_bar_end_viewer_entrance",
+   "label": "Profile view. 0 profile views.",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 346,
+   "y": 42,
+   "frame": "{326, 20}, {40, 44}",
+   "accId": "nav_bar_end_share_profile",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "UIButton",
+   "x": 386,
+   "y": 42,
+   "frame": "{366, 20}, {40, 44}",
+   "accId": "nav_bar_end_settings",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "TikTokSocialImplSwift.StoryNoteGradientTextView",
+   "x": 176,
+   "y": 55,
+   "frame": "{168.33333333333334, 42.666666666666686}, {16, 24.666666666666671}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 55,
+   "frame": "{168.33333333333334, 35}, {77.666666666666657, 40}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TikTokSocialImplSwift.AlwaysCursorPlaceholderTextView",
+   "x": 207,
+   "y": 55,
+   "frame": "{168.33333333333334, 42.666666666666686}, {77.666666666666657, 24.666666666666671}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 207,
+   "y": 55,
+   "frame": "{155.66666666666666, 55}, {102.99999999999997, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "BDImageView",
+   "x": 159,
+   "y": 59,
+   "frame": "{159, 59}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileAvatarContainerView",
+   "x": 207,
+   "y": 96,
+   "frame": "{0, 30}, {414, 131}",
+   "accId": "header_avatar",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileAvatarSectionView",
+   "x": 207,
+   "y": 96,
+   "frame": "{141.66666666666666, 30}, {130.99999999999997, 131}",
+   "accId": "avatar_normal",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "BDImageView",
+   "x": 207,
+   "y": 107,
+   "frame": "{159, 59}, {96, 96}",
+   "accId": "",
+   "label": "Outshine, Profile photo,",
+   "selected": "None"
+  },
+  {
+   "class": "AWEPublishProgressDefaultWrapper",
+   "x": 35,
+   "y": 114,
+   "frame": "{12, 84}, {45, 60}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKAvatarCommonBadgeView",
+   "x": 243,
+   "y": 143,
+   "frame": "{231, 131}, {24, 24}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 243,
+   "y": 143,
+   "frame": "{231, 131}, {24, 24}",
+   "accId": "",
+   "label": "Plus",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileHeaderView",
+   "x": 207,
+   "y": 165,
+   "frame": "{0, 30}, {414, 269}",
+   "accId": "header",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 243,
+   "y": 177,
+   "frame": "{234.66666666666666, 169.33333333333334}, {16, 16}",
+   "accId": "",
+   "label": "Switch accounts",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 289,
+   "y": 177,
+   "frame": "{259.66666666666669, 162.33333333333334}, {58, 30}",
+   "accId": "user_info_manage",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 289,
+   "y": 177,
+   "frame": "{259.66666666666669, 162.33333333333334}, {58, 30}",
+   "accId": "user_info_manage_edit_profile",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 289,
+   "y": 177,
+   "frame": "{264.66666666666669, 163.33333333333334}, {48, 28}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "UIButton",
+   "x": 189,
+   "y": 178,
+   "frame": "{159.66666666666666, 166}, {59, 23}",
+   "accId": "",
+   "label": "Add name",
+   "selected": "False"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 178,
+   "frame": "{0, 166}, {414, 23}",
+   "accId": "user_account_name_info",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "AWESwitchAccountProfileInfoTitleView",
+   "x": 207,
+   "y": 178,
+   "frame": "{159.66666666666666, 166}, {95, 23}",
+   "accId": "user_info_nickname",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileRootView",
+   "x": 207,
+   "y": 185,
+   "frame": "{0, 30}, {414, 309}",
+   "accId": "TTKProfileRootComponent",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 187,
+   "frame": "{0, 161}, {414, 51}",
+   "accId": "user_info",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "AWEUserNameLabel",
+   "x": 207,
+   "y": 198,
+   "frame": "{166.66666666666666, 188.33333333333334}, {80.666666666666657, 20}",
+   "accId": "user_account_user_name",
+   "label": "@outshine83",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 199,
+   "frame": "{0, 189}, {414, 19}",
+   "accId": "user_account_base_info",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 210,
+   "frame": "{0, 161}, {414, 98}",
+   "accId": "info",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIStackView",
+   "x": 107,
+   "y": 235,
+   "frame": "{57, 217.33333333333331}, {100, 36}",
+   "accId": "relation_info_following",
+   "label": "0, Following,",
+   "selected": "None"
+  },
+  {
+   "class": "UIStackView",
+   "x": 207,
+   "y": 235,
+   "frame": "{157, 217.33333333333331}, {100, 36}",
+   "accId": "relation_info_follower",
+   "label": "0, Followers,",
+   "selected": "None"
+  },
+  {
+   "class": "UIStackView",
+   "x": 307,
+   "y": 235,
+   "frame": "{257, 217.33333333333331}, {100, 36}",
+   "accId": "relation_info_like",
+   "label": "0, Likes,",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 236,
+   "frame": "{0, 212}, {414, 47}",
+   "accId": "user_relation_info",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileRecommendContainerView",
+   "x": 207,
+   "y": 259,
+   "frame": "{0, 259}, {414, 0}",
+   "accId": "recommend",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 259,
+   "frame": "{0, 259}, {414, 0}",
+   "accId": "recommend_user_card",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileBIOSectionView",
+   "x": 207,
+   "y": 277,
+   "frame": "{0, 259}, {414, 36}",
+   "accId": "bio",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 277,
+   "frame": "{40, 263}, {334, 28}",
+   "accId": "bio_add_bio",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 207,
+   "y": 277,
+   "frame": "{77, 263}, {260, 28}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "TTKProfileTabVideoButton",
+   "x": 64,
+   "y": 319,
+   "frame": "{16.5, 299}, {94.5, 40}",
+   "accId": "TTKProfileTabVideoButton_0",
+   "label": "Posts",
+   "selected": "True"
+  },
+  {
+   "class": "TTKProfileTabBaseButton",
+   "x": 159,
+   "y": 319,
+   "frame": "{112, 299}, {94.5, 40}",
+   "accId": "TTKProfileTabBaseButton_10",
+   "label": "Private",
+   "selected": "False"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 319,
+   "frame": "{0, 299}, {414, 40}",
+   "accId": "profile_tab",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIScrollView",
+   "x": 207,
+   "y": 319,
+   "frame": "{0, 299}, {414, 40}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileTabFavouriteButton",
+   "x": 255,
+   "y": 319,
+   "frame": "{207.5, 299}, {94.5, 40}",
+   "accId": "TTKProfileTabFavouriteButton_6",
+   "label": "Favorites",
+   "selected": "False"
+  },
+  {
+   "class": "TTKProfileTabLikeButton",
+   "x": 350,
+   "y": 319,
+   "frame": "{303, 299}, {94.5, 40}",
+   "accId": "TTKProfileTabLikeButton_2",
+   "label": "Liked",
+   "selected": "False"
+  },
+  {
+   "class": "TTKCViewComponentPassthroughView",
+   "x": 207,
+   "y": 339,
+   "frame": "{0, 339}, {414, 0}",
+   "accId": "nav_bar",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 362,
+   "frame": "{0, 339}, {414, 46}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 390,
+   "y": 362,
+   "frame": "{382, 351}, {16, 22}",
+   "accId": "",
+   "label": "Close",
+   "selected": "False"
+  },
+  {
+   "class": "AWEMaskWindow",
+   "x": 207,
+   "y": 368,
+   "frame": "{0, 0}, {414, 736}",
+   "accId": "AWEMaskWindow",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UILayoutContainerView",
+   "x": 207,
+   "y": 368,
+   "frame": "{0, 0}, {414, 736}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "AWEUserProfileSlidingScrollView",
+   "x": 207,
+   "y": 368,
+   "frame": "{0, 0}, {414, 736}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKUserProfileWorkCollectionView",
+   "x": 207,
+   "y": 368,
+   "frame": "{0, 0}, {414, 736}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 385,
+   "frame": "{0, 385}, {414, 0.5}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UICollectionView",
+   "x": 207,
+   "y": 386,
+   "frame": "{0, 385.66666666666663}, {414, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 492,
+   "frame": "{0, 385.66666666666663}, {414, 213}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXButton",
+   "x": 207,
+   "y": 558,
+   "frame": "{162.33333333333334, 542}, {89.333333333333343, 32}",
+   "accId": "",
+   "label": "Upload",
+   "selected": "False"
+  },
+  {
+   "class": "TUXButton",
+   "x": 207,
+   "y": 587,
+   "frame": "{162.33333333333334, 566.66666666666663}, {89.333333333333343, 40}",
+   "accId": "",
+   "label": "Upload",
+   "selected": "False"
+  },
+  {
+   "class": "UIButton",
+   "x": 207,
+   "y": 621,
+   "frame": "{0, 598.5}, {414, 44}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "TUXDualBallLoadingIndicator",
+   "x": 207,
+   "y": 621,
+   "frame": "{191, 604.5}, {32, 32}",
+   "accId": "",
+   "label": "Loading",
+   "selected": "None"
+  },
+  {
+   "class": "YYLabel",
+   "x": 207,
+   "y": 621,
+   "frame": "{16, 598.5}, {382, 44}",
+   "accId": "",
+   "label": "No more results",
+   "selected": "None"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": 41,
+   "y": 712,
+   "frame": "{0, 687}, {82.799999999999997, 49}",
+   "accId": "a11y_vo_home",
+   "label": "Home",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": 41,
+   "y": 712,
+   "frame": "{0, 687}, {82.799999999999997, 49}",
+   "accId": "",
+   "label": "Home",
+   "selected": "None"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": 124,
+   "y": 712,
+   "frame": "{82.799999999999983, 687}, {82.799999999999983, 49}",
+   "accId": "friends",
+   "label": "Friends",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": 124,
+   "y": 712,
+   "frame": "{82.799999999999983, 687}, {82.799999999999983, 49}",
+   "accId": "",
+   "label": "Friends",
+   "selected": "None"
+  },
+  {
+   "class": "AWETabBarPlusButton",
+   "x": 207,
+   "y": 712,
+   "frame": "{165.59999999999999, 687}, {82.799999999999983, 49}",
+   "accId": "",
+   "label": "Create",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": 290,
+   "y": 712,
+   "frame": "{248.39999999999995, 687}, {82.799999999999983, 49}",
+   "accId": "a11y_vo_inbox",
+   "label": "Inbox Button. 1 unread notifications.",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": 290,
+   "y": 712,
+   "frame": "{248.39999999999995, 687}, {82.799999999999983, 49}",
+   "accId": "",
+   "label": "Inbox",
+   "selected": "None"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": 373,
+   "y": 712,
+   "frame": "{331.19999999999999, 687}, {82.800000000000011, 49}",
+   "accId": "a11y_vo_profile",
+   "label": "Profile",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": 373,
+   "y": 712,
+   "frame": "{331.19999999999999, 687}, {82.800000000000011, 49}",
+   "accId": "",
+   "label": "Profile",
+   "selected": "None"
+  }
+ ]
+}
