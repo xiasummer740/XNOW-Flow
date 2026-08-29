@@ -3154,10 +3154,30 @@ static NSArray *XN_NurtureComments(void) {
         //    移除全树遍历。改为：home 且不在可操作首页（feed+导航栏可见）→ 深链回 feed。
         //    正常首页 _isHomeFeedUsable=YES 走 setSelectedIndex（v1.4.125 稳定路径，无重载副作用）；
         //    open_profile 推入页/沉浸态 → 深链回 feed（TikTok 深链导航替换推入页，不会自锁）。
+        //    【v1.4.132】129 的纯深链在 profile 页失效（4 scheme 全被忽略，go_home 18s 假成功实锤）：
+        //    非 feed 页先真实触摸 tap home tab（profile 页 tab bar 可见，a11y_vo_home @(41,712)），
+        //    HID 注入解锁后真切换；tap 后 1.2s 异步复验，未落位再深链兜底。
         if ([tab isEqualToString:@"home"] && ![self _isHomeFeedUsable]) {
-            NSLog(@"[XNOWER] tapTab:home 不在可操作首页 → 深链回 feed（128 全树遍历卡死已修）");
-            [self _openDeepLink:@"snssdk1233://feed"];
-            diag = @{@"method": @"not_home_deeplink"};
+            UIView *homeTab = [self _findViewWithAccessibilityIdentifier:@"a11y_vo_home" inView:window];
+            if (homeTab) {
+                CGPoint c = [homeTab.superview convertPoint:homeTab.center toView:nil];
+                NSLog(@"[XNOWER] tapTab:home 不在可操作首页 → 先触摸 tap home tab (%.0f,%.0f)，未落位再深链",
+                      c.x, c.y);
+                [self _safeTapAtPoint:c];
+                __weak typeof(self) weakSelf = self;
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), ^{
+                    if (![weakSelf _isHomeFeedUsable]) {
+                        NSLog(@"[XNOWER] tapTab:home tap 后仍未落位 → 深链 snssdk1233://feed 兜底");
+                        [weakSelf _openDeepLink:@"snssdk1233://feed"];
+                    }
+                });
+                diag = @{@"method": @"not_home_tap_then_deeplink"};
+            } else {
+                NSLog(@"[XNOWER] tapTab:home 不在可操作首页且找不到 home tab → 深链回 feed");
+                [self _openDeepLink:@"snssdk1233://feed"];
+                diag = @{@"method": @"not_home_deeplink"};
+            }
             self->_currentPage = @"home";
             return;
         }

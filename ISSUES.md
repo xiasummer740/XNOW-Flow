@@ -185,6 +185,11 @@
 
 > **131 迭代（2026-08-28 16:54）**：130 装机回归 like/follow 仍失败。**touch_diag 证据**：open_search 上报了 touch_diag（而 130 HID 分支在打 diag 前 return）→ **HID 注入降级未生效**（touch_diag 无法区分 129/130 降级，已加设备端上报取证）。131 双管齐下：①`hid_diag` 上报锁死 HID 失败点（符号解析成败 / ContextID 值）②合成 touch 补全 `_gestureRecognizers` 关联（根治真正根因：UIKit `_sendGesturesForEvent:` 按此数组把手势分发给识别器，之前为空 → 手势收不到事件 → 全按钮盲区）。**待重装验证**。
 
+> **132 迭代（2026-08-29 10:13 装机实测 + hid_diag 铁证）**：131 装机后设备 id 漂移 iphone_7098FAE4（i4Tools 重装清 NSUserDefaults/IDFV，硬件 IOPlatformUUID 在 app 沙盒取不到 → IDFV 兜底漂移）→ 卡密浮窗 → **后端 rebind 卡 id=2 到新 id 恢复激活**（已完成）。
+> **HID 断点锁定**：tap home tab 坐标 (41,712) 实测上报 `hid_diag data={"msg":"tap_ctx_zero","x":41,"y":712}` + touch_diag `view=TTKTabBarButton gestures=[UITapGestureRecognizer] target_actions=[]`。即：**符号 resolve OK（dlsym 全过）、HID 分支正常进入，唯一断点 = `_hidContextID` 取到 0**。根因判断：`setMatching` 是异步的——服务经 client 内部队列注册，立即 `CopyServices` 常空。
+> **132 修复**：`_hidContextID` 客户端缓存复用 + setMatching 后轮询等服务（最多 1.5s）+ ctx 缓存秒回 + `ctx_probe` 诊断上报（服务数/ctx 值，区分「异步时序」vs「沙盒无 digitizer 服务权限」）。**待重装验证**。
+> **同时新发现导航 bug（132 顺带修）**：`_tapTab:home` 在 `_isHomeFeedUsable=NO`（非 feed 页）走 `not_home_deeplink` 分支**绕过触摸直接深链** `snssdk1233://feed`，但 4 个深链 scheme（空/feed/main/home）在 profile 页全被忽略 → go_home 4 轮耗尽 return NO 却被默认 success（duration 18s 假成功）。**根因**：129 为防全树遍历崩溃删了推入页检测，深链兜底成了唯一回 feed 路径但深链本身失效。**修复方向**：非 feed 页先真实触摸 tap home tab（a11y_vo_home 就在屏内），失败再深链 + 真实验证。
+
 ### 装机验证清单（逐项实测记 真成功/假成功/崩溃）
 1. **like 红心点亮**（回归清单）— 盲区核心
 2. **follow 关注**（回归清单）— 盲区核心

@@ -36,6 +36,10 @@ static XNIOHIDClientRef (*s_fnSysClientCreate)(CFAllocatorRef);
 static int (*s_fnSysClientSetMatching)(XNIOHIDClientRef, CFDictionaryRef, CFArrayRef);
 static CFArrayRef (*s_fnSysClientCopyServices)(XNIOHIDClientRef);
 static CFTypeRef (*s_fnServiceCopyProperty)(XNIOHIDServiceRef, CFStringRef);
+// v1.4.132: client 与 ctx 缓存（首次 setMatching 异步等服务，拿到后秒回；避免每次 tap 重搭 client）
+static XNIOHIDClientRef s_hidClient = NULL;
+static BOOL s_hidMatched = NO;
+static uint32_t s_hidCtx = 0;
 
 // IOHIDDigitizerEvent 相位（私有头常量，硬编码稳定值）
 #define XNHID_PHASE_RANGE     (1 << 0)
@@ -81,26 +85,40 @@ static CFTypeRef (*s_fnServiceCopyProperty)(XNIOHIDServiceRef, CFStringRef);
 
 + (uint32_t)_hidContextID {
     if (![self _hidResolveSymbols]) return 0;
-    XNIOHIDClientRef client = s_fnSysClientCreate(kCFAllocatorDefault);
-    if (!client) return 0;
-    // 匹配 Digitizer/TouchScreen 服务（dict key 用字面量，避免依赖私有常量头）
-    NSDictionary *matching = @{(id)CFSTR("PrimaryUsagePage"): @(XNHID_PAGE_DIGITIZER),
-                               (id)CFSTR("PrimaryUsage"):    @(XNHID_USAGE_TOUCH)};
-    s_fnSysClientSetMatching(client, (__bridge CFDictionaryRef)matching, NULL);
-    CFArrayRef services = s_fnSysClientCopyServices(client);
-    uint32_t ctx = 0;
-    if (services) {
-        for (CFIndex i = 0; i < CFArrayGetCount(services) && !ctx; i++) {
-            XNIOHIDServiceRef sc = (XNIOHIDServiceRef)CFArrayGetValueAtIndex(services, i);
-            CFTypeRef prop = s_fnServiceCopyProperty(sc, CFSTR("ContextID"));
-            if (prop) {
-                ctx = (uint32_t)[(__bridge NSNumber *)prop unsignedIntValue];
-                CFRelease(prop);
-            }
-        }
-        CFRelease(services);
+    if (s_hidCtx) return s_hidCtx;          // 已取到，秒回
+    if (!s_hidClient) s_hidClient = s_fnSysClientCreate(kCFAllocatorDefault);
+    if (!s_hidClient) {
+        [self _hidDiag:@"ctx_client_fail" data:@{}];
+        return 0;
     }
-    CFRelease(client);
+    // 匹配 Digitizer/TouchScreen 服务（dict key 用字面量，避免依赖私有常量头）
+    if (!s_hidMatched) {
+        NSDictionary *matching = @{(id)CFSTR("PrimaryUsagePage"): @(XNHID_PAGE_DIGITIZER),
+                                   (id)CFSTR("PrimaryUsage"):    @(XNHID_USAGE_TOUCH)};
+        s_fnSysClientSetMatching(s_hidClient, (__bridge CFDictionaryRef)matching, NULL);
+        s_hidMatched = YES;
+    }
+    // v1.4.132: setMatching 是异步的——服务经 client 内部队列注册，立即 CopyServices 常为空
+    //   （131 实测 tap_ctx_zero）。轮询等服务挂入（最多 ~1.5s），再遍历取 ContextID。
+    uint32_t ctx = 0;
+    for (int attempt = 0; attempt < 30 && !ctx; attempt++) {
+        CFArrayRef services = s_fnSysClientCopyServices(s_hidClient);
+        if (services) {
+            for (CFIndex i = 0; i < CFArrayGetCount(services) && !ctx; i++) {
+                XNIOHIDServiceRef sc = (XNIOHIDServiceRef)CFArrayGetValueAtIndex(services, i);
+                CFTypeRef prop = s_fnServiceCopyProperty(sc, CFSTR("ContextID"));
+                if (prop) {
+                    ctx = (uint32_t)[(__bridge NSNumber *)prop unsignedIntValue];
+                    CFRelease(prop);
+                }
+            }
+            CFRelease(services);
+        }
+        if (!ctx) usleep(50000);
+    }
+    s_hidCtx = ctx;
+    // ctx_probe: 上报服务数量 + 是否取到 ctx，定位是「异步时序」还是「沙盒拿不到 digitizer 服务」
+    [self _hidDiag:@"ctx_probe" data:@{@"ctx": @(ctx)}];
     return ctx;
 }
 
