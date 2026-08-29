@@ -190,6 +190,8 @@
 > **132 修复**：`_hidContextID` 客户端缓存复用 + setMatching 后轮询等服务（最多 1.5s）+ ctx 缓存秒回 + `ctx_probe` 诊断上报（服务数/ctx 值，区分「异步时序」vs「沙盒无 digitizer 服务权限」）。**待重装验证**。
 > **同时新发现导航 bug（132 顺带修）**：`_tapTab:home` 在 `_isHomeFeedUsable=NO`（非 feed 页）走 `not_home_deeplink` 分支**绕过触摸直接深链** `snssdk1233://feed`，但 4 个深链 scheme（空/feed/main/home）在 profile 页全被忽略 → go_home 4 轮耗尽 return NO 却被默认 success（duration 18s 假成功）。**根因**：129 为防全树遍历崩溃删了推入页检测，深链兜底成了唯一回 feed 路径但深链本身失效。**修复方向**：非 feed 页先真实触摸 tap home tab（a11y_vo_home 就在屏内），失败再深链 + 真实验证。
 
+> **133 攒批发版（2026-08-29 11:13）**：`TikTok_XNOW_v1.4.133_BH.ipa` 已编译打包上传（374.2 MB）。**本批 = 132 全部修复 + 设备 id Keychain 根治**。**132 装不了定位为设备侧**（132 VPS md5=本地 md5=18bce14c...，主二进制 md5 同 131 edcc9c3d，IPA 结构/签名/Info 全一致，非 IPA 损坏——装到一半报错是设备空间/进程/USB）。**Keychain 根治**：XNOWER.m 新增 `XN_KeychainReadDeviceId/XN_KeychainWriteDeviceId`（service=com.xnow.deviceid，kSecAttrAccessibleAfterFirstUnlock），设备 id 生成/恢复后**双写 Keychain**——下次重装 NSUserDefaults 空时先从 Keychain 恢复同一 id，卡密绑定不再失配（旧 DeviceIdentity UID 已弃用，独立 service 互不影响；该注释「Keychain 重装会变」指旧 UID 方案，非本路径）。**待装机验证**：132 的 ctx_probe + tap home 真切换 + 133 Keychain 重装恢复三合一。
+
 ### 装机验证清单（逐项实测记 真成功/假成功/崩溃）
 1. **like 红心点亮**（回归清单）— 盲区核心
 2. **follow 关注**（回归清单）— 盲区核心
@@ -199,6 +201,9 @@
 6. **go_home 从 profile 页**（导航 bug 一并验）
 7. **backup_account**（回归脚本 backup→backup_account 已修，复测）
 8. **控件地图 3 页补采**：following / comment / edit_profile（tap 导航解锁后补采）
+9. **hid_diag ctx_probe**：上报 ctx 是否非 0（132 HID 修复——setMatching 异步→轮询等服务，区分时序 vs 沙盒无权限）
+10. **tap home 真切换**：profile 页发 open_tab home，ui_scan 复验回 feed（132 导航 bug 修复）
+11. **Keychain 重装恢复**：本次装机后 133 已双写 Keychain → 下次重装 device_id 不再漂移（根治卡密重输）
 
 ## 🔵 新发现待后续批次（触摸盲区）
 

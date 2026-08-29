@@ -15,6 +15,7 @@
 #import "XNWindowHelper.h"
 #import <objc/runtime.h>
 #import <pthread.h>
+#import <Security/Security.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -81,6 +82,52 @@ static NSString *XN_HardwareUDID(void) {
         IOObjectRelease(expert);
     }
     return udid;
+}
+
+// ======== device_id Keychain 持久化（v1.4.133 根治卡密重输）========
+// i4Tools 重装=全新安装会清 NSUserDefaults/IDFV，但 iOS Keychain 卸载重装后保留。
+// device_id 双写（NSUserDefaults + Keychain）：重装后 NSUserDefaults 空 → 从 Keychain 恢复
+// 同一 id → 卡密绑定不失配，不用再输卡密。旧 DeviceIdentity UID 已弃用（Keychain 里存的
+// 是独立 service，互不影响）。
+static NSString *const kXNKeychainDeviceService = @"com.xnow.deviceid";
+static NSString *const kXNKeychainDeviceAccount = @"device_id";
+
+static NSString *XN_KeychainReadDeviceId(void) {
+    NSDictionary *query = @{
+        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+        (__bridge id)kSecAttrService: kXNKeychainDeviceService,
+        (__bridge id)kSecAttrAccount: kXNKeychainDeviceAccount,
+        (__bridge id)kSecReturnData: (__bridge id)kCFBooleanTrue,
+        (__bridge id)kSecMatchLimit: (__bridge id)kSecMatchLimitOne,
+    };
+    CFTypeRef result = NULL;
+    OSStatus status = SecItemCopyMatching((__bridge CFDictionaryRef)query, &result);
+    if (status == errSecSuccess && result) {
+        NSData *data = (__bridge_transfer NSData *)result;
+        NSString *uid = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        if (uid.length > 0) return uid;
+    }
+    return nil;
+}
+
+static void XN_KeychainWriteDeviceId(NSString *deviceId) {
+    if (deviceId.length == 0) return;
+    NSData *data = [deviceId dataUsingEncoding:NSUTF8StringEncoding];
+    NSDictionary *query = @{
+        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+        (__bridge id)kSecAttrService: kXNKeychainDeviceService,
+        (__bridge id)kSecAttrAccount: kXNKeychainDeviceAccount,
+    };
+    // 先删旧的再写，保证幂等
+    SecItemDelete((__bridge CFDictionaryRef)query);
+    NSDictionary *add = @{
+        (__bridge id)kSecClass: (__bridge id)kSecClassGenericPassword,
+        (__bridge id)kSecAttrService: kXNKeychainDeviceService,
+        (__bridge id)kSecAttrAccount: kXNKeychainDeviceAccount,
+        (__bridge id)kSecValueData: data,
+        (__bridge id)kSecAttrAccessible: (__bridge id)kSecAttrAccessibleAfterFirstUnlock,
+    };
+    SecItemAdd((__bridge CFDictionaryRef)add, NULL);
 }
 
 static void XN_UncaughtExceptionHandler(NSException *exception) {
@@ -226,9 +273,14 @@ __attribute__((destructor)) static void XNOWERUnload() {
         // 序号(device_code)不进入 deviceId，否则绑定前后 ID 变化导致激活的卡对不上。
         // v1.4.115 根治：装机（i4Tools 重装=全新安装）会清掉 NSUserDefaults/Keychain/IDFV，
         // 旧方案每次重装 device_id 漂移 → 卡密绑定失配 → 又要输卡密。
-        // 改为硬件 UDID（IOPlatformUUID）优先，装机不变；IOKit 失败才回落 IDFV。
+        // v1.4.133 根治卡密重输：device_id 双写 Keychain（iOS 卸载重装后 Keychain 保留），
+        // NSUserDefaults 空时先从 Keychain 恢复，实在没有才走硬件 UDID / IDFV 兜底。
         NSString *savedId = [[NSUserDefaults standardUserDefaults]
                               stringForKey:kXnowDeviceIdKey];
+        if (savedId.length == 0) {
+            // 装机后 NSUserDefaults 被清 → 从 Keychain 恢复同一 id（跨卸载保留）
+            savedId = XN_KeychainReadDeviceId();
+        }
         if (savedId.length > 0) {
             // 旧格式（iphone_<code>_<shortID>）迁移：去掉序号段，恢复稳定格式
             if ([savedId hasPrefix:@"iphone_"] && [[savedId componentsSeparatedByString:@"_"] count] == 3) {
@@ -253,6 +305,8 @@ __attribute__((destructor)) static void XNOWERUnload() {
             _deviceId = [NSString stringWithFormat:@"iphone_%@", shortID];
             [[NSUserDefaults standardUserDefaults] setObject:_deviceId forKey:kXnowDeviceIdKey];
         }
+        // 双写 Keychain：本次装机产生的 device_id 立即固化，下次重装从 Keychain 恢复
+        XN_KeychainWriteDeviceId(_deviceId);
 
         // 生成/恢复设备共享密钥（设备端点鉴权用）
         NSString *savedSecret = [[NSUserDefaults standardUserDefaults] stringForKey:@"XN_DeviceSecret"];
