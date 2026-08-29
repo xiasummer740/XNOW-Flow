@@ -107,6 +107,10 @@ typedef NS_ENUM(NSInteger, CommandAction) {
 
     // 停止采集 (v1.4.108) — F21/F26 修复：置 isCollectingData=NO，让采集循环（fans/videos/comments/likes）尽快退出
     CommandActionStopCollect,
+
+    // 无障碍点击 (v1.4.134) — params: acc_id/label/x,y —— 按 accessibilityActivate 触发控件动作，
+    // 走 VoiceOver 官方点按路径，完全绕过触摸管线（触摸盲区三层全拒后新方向）
+    CommandActionAccClick,
 };
 
 @interface CommandEngine : NSObject

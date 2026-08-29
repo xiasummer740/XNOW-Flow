@@ -37,7 +37,7 @@ _token = None
 _ssh = None
 
 UI_RE = re.compile(
-    r"UI \[([^\]]+)\] x=([\d.]+) y=([\d.]+) frame=\{\{([^}]*)\}, \{([^}]*)\}\} "
+    r"UI \[([^\]]+)\] x=(-?[\d.]+) y=(-?[\d.]+) frame=\{\{([^}]*)\}, \{([^}]*)\}\} "
     r"acc_id=([^ ]*) acc_label=(.*?) sel=(\w+)"
 )
 
@@ -96,12 +96,22 @@ def collect(page, wait=4.0, timeout=60):
     deadline = time.time() + timeout
     time.sleep(wait)
     text = ""
+    got_result = got_summary = False
+    last_sz = 0
     while time.time() < deadline:
         sz = _log_size()
         if sz > before:
-            text = _log_from(before)
-            if "result:" in text:
+            cur = _log_from(before)
+            # ui_scan 元素行在 result 之后才上报（result → "ui_scan: N elements" → UI 行）
+            if "ui_scan: " in cur and " elements" in cur:
+                got_summary = True
+            if "result:" in cur:
+                got_result = True
+            text = cur
+            # 已收到元素上报/结果 且 日志停止增长 = UI 行全部落地
+            if (got_summary or got_result) and sz == last_sz:
                 break
+            last_sz = sz
         time.sleep(1)
     # 收集 UI 行
     controls = []

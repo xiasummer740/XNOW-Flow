@@ -1,27 +1,27 @@
-# TODO 快照 — 2026-08-29 11:15
+# TODO 快照 — 2026-08-29 22:00
 
 ## 当前进度
-- **v1.4.133 已编译打包上传**（`TikTok_XNOW_v1.4.133_BH.ipa` 374.2 MB → VPS static）：
-  - 132 全部修复：XNTouchSimulator `_hidContextID` setMatching 异步→轮询等服务(≤1.5s)+ctx缓存+ctx_probe 诊断
-  - 132 导航 bug：CommandEngine `_tapTab` not_home 分支先触摸 tap home tab→1.2s 异步复验→深链兜底
-  - **133 新增 Keychain 根治**：XNOWER.m `XN_KeychainReadDeviceId/WriteDeviceId`（service=com.xnow.deviceid），device_id 双写 Keychain，重装 NSUserDefaults 空时先从 Keychain 恢复 → 卡密绑定不失配
-- 132 装不了定位 = 设备侧（132 VPS md5=本地=18bce14c，结构同 131，非 IPA 损坏）
+- **✅ 控件基线地图 7 页全齐（2026-08-29）**：feed(63) / search(64) / profile(73) / friends(63) / following(194) / comment(189) / edit_profile(54) = 700 控件
+  - 3 缺页全部人工导航采集：following 从 VPS 日志恢复（设备闪退数据没丢）、comment/edit_profile 直接采集
+  - 视觉模型确认 edit_profile=编辑资料表单（Name/Username/Bio/Pronoun/Links/Fundraiser）
+- **✅ 触摸盲区专项收尾**：四路全死（HID/KVC/sendAction/accessibilityActivate），134 acc_click 验证 5 项全 ok=false
+- **🔥 闪退根因实锤**：`NSInternalInconsistencyException: background thread 改布局`（VPS log 14:46:11），`AWEPublishProgressDefaultWrapper` 卡死上传浮层三页残留，疑似元凶
 
 ## 铁证（已落地）
-- **HID 断点 = `_hidContextID` 返回 0**（tap home tab 上报 `hid_diag {msg:"tap_ctx_zero",x:41,y:712}`）
-- 符号 dlsym resolve OK（open_search 时 symbols_ok）；touch_diag: `TTKTabBarButton gestures=[UITapGestureRecognizer] target_actions=[]`
-- **go_home 假成功**：4 轮深链全失败（snssdk1233:// 空/feed/main/home）→ 18s 耗尽 return NO 却被默认 success，设备困 profile 页
-- **设备 id 漂移根因**：i4Tools 重装清 NSUserDefaults/IDFV，IOPlatformUUID 沙盒取不到 → IDFV 兜底漂移（131→7098FAE4）
-- **后端 rebind 已完成**：卡 id=2 → iphone_7098FAE4（device_bindings id=12），设备已激活
+- 134 acc_diag 五行全 ok=false → ISSUES.md 验证表
+- collect-control-map.py 两个 bug 已修（元素上报等待 + 负数坐标正则）
+- 截图→视觉识别流程打通（uv run vision.py 绕过坏 openai 包；后端 key=image_base64）
 
-## 下一步（等祥哥装机 133）
-1. 装机 133（132 装到一半报错，需确认设备空间/关 TikTok/换 USB 再试）
-2. 验 hid_diag ctx_probe：ctx 是否非 0（services 数量决定时序 vs 沙盒无权限）
-3. 若 ctx>0 → tap home tab 真切换 → 全回归（like/follow/search/open_profile/tab/go_home/backup）
-4. 验 Keychain：本次装机双写后，下次重装 device_id 不漂移（根治卡密重输）
-5. 控件地图 3 页补采（following/comment/edit_profile，tap 导航解锁后）
+## 下一步（等祥哥拍板方向）
+1. **闪退专项**（新批次首选）：后台线程改布局崩溃 —— 找卡死上传来源，查 post_video 失败清理，尝试 main 线程兜底
+2. **触摸全死后 like/follow/comment/edit 怎么办**：
+   - XCUITest 测试框架注入（唯一 Apple 官方合成触摸路径，重构大）
+   - 深链扩展（部分导航可用，like/follow/comment 无深链）
+   - 接受真机退化，转纯网络层能力
+3. 验 Keychain：下次重装 device_id 不漂移（133 已双写）
+4. 后端 ws.py 临时调试点（acc_diag/unknown type 打日志）稳定后可还原
 
 ## 风险备忘
-- IOHIDEventSystemClient 在 app 沙盒若 CopyServices 永远空（无 HID 服务权限）→ 轮询也拿不到 ctx → 需换方案（KVC 完整手势状态机）
-- 后端 ws.py 打了临时调试点（unknown type 打 data），稳定后可还原（ws.py.bak-hid 备份）
-- 132 设备侧装不上原因未定位：装机 133 前先清空间/结束 TikTok 进程
+- 全局 openai 包损坏（openai.types.beta.threads 缺模块），vision 需用 `uv run` 绕过
+- 设备反复闪退（bg 线程布局崩溃），手工导航采集要多留恢复手段
+- 134 是无障碍验证版，不进正式功能

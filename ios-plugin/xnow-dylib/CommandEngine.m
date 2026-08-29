@@ -150,6 +150,7 @@ static NSArray *XN_NurtureComments(void) {
             // 调试诊断
             @"ui_scan":           @(CommandActionUIScan),
             @"tap":               @(CommandActionTap),       // v1.4.124 坐标点击 x/y
+            @"acc_click":         @(CommandActionAccClick),  // v1.4.134 无障碍点击（accessibilityActivate）
             // 账号管理
             @"backup_account":    @(CommandActionBackupAccount),
             // 环境伪装 / 切换国家
@@ -294,6 +295,14 @@ static NSArray *XN_NurtureComments(void) {
                     result = @{@"status": @"success", @"message": @"tap", @"x": xn, @"y": yn};
                     hasResult = YES;
                 }
+                break;
+            }
+
+            case CommandActionAccClick: {
+                // v1.4.134 无障碍点击：按 acc_id/label/坐标定位控件 → accessibilityActivate（VoiceOver 点按路径）
+                [self _performAccClick:params];
+                result = @{@"status": @"success", @"message": @"acc_click"};
+                hasResult = YES;
                 break;
             }
 
@@ -989,6 +998,72 @@ static NSArray *XN_NurtureComments(void) {
 - (void)_safeTapAtPoint:(CGPoint)point {
     [XNTouchSimulator tapAtPoint:point];
     NSLog(@"[XNOWER] 点击 (%.0f, %.0f) 完成", point.x, point.y);
+}
+
+/// v1.4.134 无障碍点击：按 acc_id/label/坐标定位控件 → accessibilityActivate（VoiceOver 官方点按路径，
+/// 完全绕过触摸管线；触摸盲区三层全拒后新方向）。上报 acc_diag 诊断（哪个 view 响应、是否激活成功）。
+- (void)_performAccClick:(NSDictionary *)params {
+    NSString *accId = params[@"acc_id"];
+    NSString *label = params[@"label"];
+    NSNumber *xn = params[@"x"];
+    NSNumber *yn = params[@"y"];
+    if (accId.length == 0 && label.length == 0 && !xn && !yn) return;
+
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        if (!window) { [self _reportAccDiag:@{@"ok": @(NO), @"reason": @"no_window"}]; return; }
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+
+        __strong UIView *target = nil;
+        if (accId.length > 0) {
+            [self _findVisibleViewWithAccId:accId inView:window screen:screen depth:0 result:&target];
+        }
+        if (!target && label.length > 0) {
+            [self _findVisibleViewWithLabel:label inView:window screen:screen depth:0 result:&target];
+        }
+        if (!target && xn && yn) {
+            @try { target = [window hitTest:CGPointMake(xn.doubleValue, yn.doubleValue) withEvent:nil]; }
+            @catch (NSException *e) {}
+        }
+        if (!target) {
+            [self _reportAccDiag:@{@"ok": @(NO), @"reason": @"not_found",
+                                   @"acc_id": accId ?: @"", @"label": label ?: @""}];
+            return;
+        }
+
+        // 激活链：命中 view → superview 链上溯（动作常挂在父容器/手势宿主上）
+        NSMutableArray<UIView *> *chain = [NSMutableArray array];
+        [chain addObject:target];
+        UIView *vv = target.superview;
+        int depth = 0;
+        while (vv && depth < 6) { [chain addObject:vv]; vv = vv.superview; depth++; }
+
+        BOOL activated = NO;
+        NSString *activatedClass = @"";
+        for (UIView *cand in chain) {
+            @try {
+                if ([cand respondsToSelector:@selector(accessibilityActivate)]) {
+                    BOOL ok = [cand accessibilityActivate];
+                    if (ok) { activated = YES; activatedClass = NSStringFromClass(cand.class); break; }
+                }
+            } @catch (NSException *e) {}
+        }
+        // 注：无全局激活通知（UIAccessibilityActivateNotification 在 iOS 不存在），
+        // accessibilityActivate 即唯一激活路径。返回 NO = 该控件未实现 activate，结论明确。v1.4.134
+        [self _reportAccDiag:@{@"ok": @(activated), @"activated_class": activatedClass,
+                               @"acc_id": accId ?: @"", @"label": label ?: @"",
+                               @"hit": NSStringFromClass(target.class),
+                               @"hit_frame": NSStringFromCGRect(target.frame)}];
+    });
+}
+
+/// 无障碍点击诊断上报（进 server.log）
+- (void)_reportAccDiag:(NSDictionary *)data {
+    @try {
+        NSString *devId = [XNOWER sharedInstance].deviceId;
+        if (devId.length == 0) return;
+        [XNURLProtocol sendMessage:@{@"type": @"acc_diag", @"data": data} deviceId:devId];
+    } @catch (NSException *e) {}
 }
 
 #pragma mark - 点赞

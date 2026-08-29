@@ -1,0 +1,494 @@
+{
+ "page": "edit_profile",
+ "device": "iphone_A8DE7E93",
+ "captured": "2026-08-29 21:48:23",
+ "count": 54,
+ "controls": [
+  {
+   "class": "UIButton",
+   "x": 28,
+   "y": 42,
+   "frame": "{6, 20}, {44, 44}",
+   "accId": "",
+   "label": "Back",
+   "selected": "False"
+  },
+  {
+   "class": "TTKSocialAvatarProgressBannerView",
+   "x": 207,
+   "y": 93,
+   "frame": "{0, 64}, {414, 58}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "AWEPublishProgressDefaultWrapper",
+   "x": 35,
+   "y": 114,
+   "frame": "{12, 84}, {45, 60}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKAvatarCommonBadgeView",
+   "x": 151,
+   "y": 130,
+   "frame": "{151, 130}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "BDImageView",
+   "x": 207,
+   "y": 186,
+   "frame": "{151, 130}, {112, 112}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 207,
+   "frame": "{12, 122}, {390, 169}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXLabel",
+   "x": 207,
+   "y": 263,
+   "frame": "{137.33333333333331, 254}, {139.66666666666669, 17}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 12,
+   "y": 291,
+   "frame": "{12, 291.00000063578284}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 317,
+   "frame": "{12, 291.00000063578284}, {390, 52}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXAlertBadge",
+   "x": 359,
+   "y": 317,
+   "frame": "{351, 309.66666730244953}, {15, 15}",
+   "accId": "",
+   "label": "You have 0 new notifications",
+   "selected": "None"
+  },
+  {
+   "class": "TUXToggle",
+   "x": 367,
+   "y": 317,
+   "frame": "{343.33333333333331, 303.00000063578284}, {48, 28}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "TUXRadio",
+   "x": 376,
+   "y": 317,
+   "frame": "{366, 307.00000063578284}, {20, 20}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 12,
+   "y": 343,
+   "frame": "{12, 343.00000063578284}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 367,
+   "frame": "{12, 343.00000063578284}, {390, 48}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXAlertBadge",
+   "x": 359,
+   "y": 367,
+   "frame": "{351, 359.66666730244953}, {15, 15}",
+   "accId": "",
+   "label": "You have 0 new notifications",
+   "selected": "None"
+  },
+  {
+   "class": "AWEMaskWindow",
+   "x": 207,
+   "y": 368,
+   "frame": "{0, 0}, {414, 736}",
+   "accId": "AWEMaskWindow",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UILayoutContainerView",
+   "x": 207,
+   "y": 368,
+   "frame": "{0, 0}, {414, 736}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXToggle",
+   "x": 367,
+   "y": 369,
+   "frame": "{343.33333333333331, 355.00000063578284}, {48, 28}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "TUXRadio",
+   "x": 376,
+   "y": 369,
+   "frame": "{366, 359.00000063578284}, {20, 20}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 12,
+   "y": 391,
+   "frame": "{12, 391.00000063578284}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 417,
+   "frame": "{12, 391.00000063578284}, {390, 52}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXAlertBadge",
+   "x": 359,
+   "y": 417,
+   "frame": "{351, 409.66666730244953}, {15, 15}",
+   "accId": "",
+   "label": "You have 0 new notifications",
+   "selected": "None"
+  },
+  {
+   "class": "TUXToggle",
+   "x": 367,
+   "y": 417,
+   "frame": "{343.33333333333331, 403.00000063578284}, {48, 28}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "TUXRadio",
+   "x": 376,
+   "y": 417,
+   "frame": "{366, 407.00000063578284}, {20, 20}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UITableView",
+   "x": 207,
+   "y": 429,
+   "frame": "{12, 122}, {390, 614}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 12,
+   "y": 484,
+   "frame": "{12, 484.00000127156579}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "TUXToggle",
+   "x": 367,
+   "y": 510,
+   "frame": "{343.33333333333331, 496.00000127156579}, {48, 28}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "TUXRadio",
+   "x": 376,
+   "y": 510,
+   "frame": "{366, 500.00000127156579}, {20, 20}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 523,
+   "frame": "{12, 484.00000127156579}, {390, 77.666664123535156}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXAlertBadge",
+   "x": 359,
+   "y": 523,
+   "frame": "{351, 515.33333460489916}, {15, 15}",
+   "accId": "",
+   "label": "You have 0 new notifications",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 12,
+   "y": 562,
+   "frame": "{12, 561.66666539510095}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 586,
+   "frame": "{12, 561.66666539510095}, {390, 48}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXAlertBadge",
+   "x": 359,
+   "y": 586,
+   "frame": "{351, 578.33333206176758}, {15, 15}",
+   "accId": "",
+   "label": "You have 0 new notifications",
+   "selected": "None"
+  },
+  {
+   "class": "TUXToggle",
+   "x": 367,
+   "y": 588,
+   "frame": "{343.33333333333331, 573.66666539510095}, {48, 28}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "TUXRadio",
+   "x": 376,
+   "y": 588,
+   "frame": "{366, 577.66666539510095}, {20, 20}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 12,
+   "y": 610,
+   "frame": "{12, 609.66666539510095}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 636,
+   "frame": "{12, 609.66666539510095}, {390, 52}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXAlertBadge",
+   "x": 359,
+   "y": 636,
+   "frame": "{351, 628.33333206176758}, {15, 15}",
+   "accId": "",
+   "label": "You have 0 new notifications",
+   "selected": "None"
+  },
+  {
+   "class": "TUXToggle",
+   "x": 367,
+   "y": 636,
+   "frame": "{343.33333333333331, 621.66666539510095}, {48, 28}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "TUXRadio",
+   "x": 376,
+   "y": 636,
+   "frame": "{366, 625.66666539510095}, {20, 20}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 12,
+   "y": 703,
+   "frame": "{12, 702.66666666666663}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": 41,
+   "y": 712,
+   "frame": "{0, 687}, {82.799999999999997, 49}",
+   "accId": "a11y_vo_home",
+   "label": "Home",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": 41,
+   "y": 712,
+   "frame": "{0, 687}, {82.799999999999997, 49}",
+   "accId": "",
+   "label": "Home",
+   "selected": "None"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": 124,
+   "y": 712,
+   "frame": "{82.799999999999983, 687}, {82.799999999999983, 49}",
+   "accId": "friends",
+   "label": "Friends",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": 124,
+   "y": 712,
+   "frame": "{82.799999999999983, 687}, {82.799999999999983, 49}",
+   "accId": "",
+   "label": "Friends",
+   "selected": "None"
+  },
+  {
+   "class": "AWETabBarPlusButton",
+   "x": 207,
+   "y": 712,
+   "frame": "{165.59999999999999, 687}, {82.799999999999983, 49}",
+   "accId": "",
+   "label": "Create",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": 290,
+   "y": 712,
+   "frame": "{248.39999999999995, 687}, {82.799999999999983, 49}",
+   "accId": "a11y_vo_inbox",
+   "label": "Inbox Button. 1 unread notifications.",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": 290,
+   "y": 712,
+   "frame": "{248.39999999999995, 687}, {82.799999999999983, 49}",
+   "accId": "",
+   "label": "Inbox",
+   "selected": "None"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": 373,
+   "y": 712,
+   "frame": "{331.19999999999999, 687}, {82.800000000000011, 49}",
+   "accId": "a11y_vo_profile",
+   "label": "Profile",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": 373,
+   "y": 712,
+   "frame": "{331.19999999999999, 687}, {82.800000000000011, 49}",
+   "accId": "",
+   "label": "Profile",
+   "selected": "None"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 729,
+   "frame": "{12, 702.66666666666663}, {390, 52}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXAlertBadge",
+   "x": 359,
+   "y": 729,
+   "frame": "{351, 721.33333333333326}, {15, 15}",
+   "accId": "",
+   "label": "You have 0 new notifications",
+   "selected": "None"
+  },
+  {
+   "class": "TUXToggle",
+   "x": 367,
+   "y": 729,
+   "frame": "{343.33333333333331, 714.66666666666663}, {48, 28}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "TUXRadio",
+   "x": 376,
+   "y": 729,
+   "frame": "{366, 718.66666666666663}, {20, 20}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  }
+ ]
+}

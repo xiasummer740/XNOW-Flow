@@ -205,7 +205,43 @@
 10. **tap home 真切换**：profile 页发 open_tab home，ui_scan 复验回 feed（132 导航 bug 修复）
 11. **Keychain 重装恢复**：本次装机后 133 已双写 Keychain → 下次重装 device_id 不再漂移（根治卡密重输）
 
+## v1.4.134 无障碍点击验证（触摸盲区转向）
+
+> **方向拍板（2026-08-29，祥哥）**：触摸注入三层全拒已实锤（①HID `ctx_probe ctx:0`=沙盒无 digitizer 服务权限 ②KVC 合成触摸 `isHighlighted=False`=UIWindow 拒收 ③直接调 target-action `click` 页面不动）。8-28 白天纯 KVC 已进不去 following/comment/edit 三页，8-27「全链路成功」真伪存疑。**转向无障碍点击**：`accessibilityActivate`（VoiceOver 官方点按路径，完全绕过触摸管线）。TikTok 有完整无障碍标识体系（`a11y_vo_home` 等 12+ 处已采）。
+> **实现（v1.4.134）**：新增 `acc_click` 命令（CommandEngine `_performAccClick`）——按 `acc_id`/`label`/`x,y` 定位控件 → 命中 view + superview 链逐一调 `accessibilityActivate` → 上报 `acc_diag`（ok / activated_class / 命中类名）。独立命令不影响 tap 流程。
+
+### 134 装机验证清单（逐项实测记 真成功/假成功/崩溃）
+1. **acc_click a11y_vo_home**：profile 页下发 `acc_click acc_id=a11y_vo_home` → acc_diag 看 `ok=true`? → **ui_scan 复验是否切回 feed 页**（验证成功标准 = 页面变化，非返回值）
+2. **acc_click a11y_vo_profile**：feed 页反向切到 profile
+3. **acc_click user_info_manage_edit_profile**：编辑按钮 → ui_scan 看是否进编辑页（采 edit_profile 地图第 5 页）
+4. **acc_click friends**：friends tab → ui_scan 看是否进 friends 页
+5. **acc_click 坐标兜底**：`acc_click x=107,y=235`（Following 数字）→ ui_scan 看是否进 following 列表（补采第 6 页）
+- **成功判定**：acc_diag `ok=true` 且 ui_scan 页面切换 = 真成功；`ok=true` 但页面未变 = 假成功（activate 返回 YES 但动作未执行）；`ok=false` = 控件未实现 activate（该 acc_id 不可用，换 label/坐标）。
+
+### 134 装机验证结果（2026-08-29 实测，5 项全 ok=false → 无障碍点击路线证死）
+
+| # | acc_click | 命中控件 | activated_class | ok | 页面切换 |
+|---|-----------|----------|-----------------|-----|----------|
+| 1 | a11y_vo_home | TTKTabBarButton (0,0 82.8x49) | (空) | ❌ false | 无（仍在 profile） |
+| 2 | a11y_vo_profile | TTKTabBarButton (331.2,0 82.8x49) | (空) | ❌ false | 无 |
+| 3 | friends | TTKTabBarButton (82.8,0) | (空) | ❌ false | 无 |
+| 4 | user_info_manage_edit_profile | UIView (0,0 58x30) | (空) | ❌ false | 无 |
+| 5 | 坐标 107,235 | TUXLabel (100x23.3) | (空) | ❌ false | 无 |
+
+> **结论（第 4 条死路确认）**：TikTok 的 `a11y_vo_*` 标识控件是自定义 UIView（TTKTabBarButton 等），**未实现 `UIAccessibilityAction` 协议的 `accessibilityActivate`**，返回值恒 NO。VoiceOver 在 TikTok 上可用是因为 TikTok 注册了另一套 accessibility 元素树，不是这些带 `a11y_vo_*` 标记的视图。`hit 控件命中正确`（acc_id 定位没问题）但激活动作全部被拒。
+> **四路全死实锤**：① HID `ctx=0` ② KVC `isHighlighted=False` ③ sendAction 无导航 ④ accessibilityActivate `ok=false`。**iOS 沙盒内无法合成触摸或无障碍激活** → like/follow/comment/edit 的自动化不再依赖触摸注入。
+> **控件地图 3 页采集路径改为人工导航**：祥哥手动把设备点到 following/comment/edit_profile 页 → `collect-control-map.py` 跑 ui_scan 采集（采集本身不需要触摸）。
+
 ## 🔵 新发现待后续批次（触摸盲区）
+
+### [待修] 闪退根因实锤：后台线程改布局（2026-08-29）
+- **崩溃报告**（VPS log 14:46:11）：`🚨 CRASH: UncaughtException NSInternalInconsistencyException: Modifications to the layout engine must not be performed from a background thread after it has been accessed from the main thread.`，`last_action=` 为空（非命令触发，自发崩溃）
+- **关联现象**：`AWEPublishProgressDefaultWrapper` 上传进度浮层（x=35,y=114, 45×60）在 following/comment/edit_profile 三页均残留——疑似上次 post_video 上传卡死未清，跨页常驻
+- **假设**：卡死上传状态在后台线程持续更新进度条布局 → 触发 UIKit 布局引擎线程安全断言崩溃；「闪退了又」= 此崩溃反复发生
+- **待修方向**：①定位上次上传卡死来源并清理/重置发布状态 ②或查 post_video 失败后是否未清 AWEPublishProgressDefaultWrapper ③崩溃时能否主动调 main 线程兜底
+- **影响**：设备反复闪退，手工导航也受影响（本次 3 页控件采集中有 1 页靠日志恢复）
+
+
 
 > **根因方向（v1.4.129 实锤，升级为「全按钮盲区」专项）**：XNTouchSimulator 合成触摸对 TikTok 主要交互按钮**全部不生效**——搜索/关注/头像/like 四个核心按钮都验证不响应（129 like 真实失败实锤；128 like「通过」是崩溃误回执假阳性）。touch_diag 显示 tapAtPoint 坐标正确命中（AWEFeedVideoButton/TTKSearchEntranceButton），hitTest 命中正确，但 UIControlEventTouchUpInside 不被触发。**假设**：TikTok 这些控件要求真实触摸事件链（UIEvent+多个 UITouch + 正确 timestamp/phase 序列），合成 tap 只发单个 touch 不够。**方向（下批专修）**：XNTouchSimulator 升级——①用 IOHIDEvent/私有 API 注入真实触摸事件 ②发完整 touch 序列（Began→Moved→Ended，带正确 timestamp）③或 sendActionsForControlEvents:UIControlEventAllEvents 全事件广播。**此专项是 like/follow/search/头像/follow_user 全部功能的前置解锁，优先度最高。**
 
@@ -214,9 +250,15 @@
 > ② **go_home 从 profile 页无效**——16:00 实测：在 profile 页 go_home（duration 18s）后 ui_scan 仍显示 TTKProfileRootView=profile 页，没回 feed；但从 friends 页 go_home（2s）正常回 feed。go_home 在 profile 页走了错误的恢复路径（疑似沉浸态恢复逻辑误判 profile 为需恢复状态）。**导航 bug，下批修**。
 > ③ 依赖 tap 点击进入的页面（following 列表 / comment 评论区 / edit_profile 编辑页）在盲区修好前**无法导航采集/操作**。
 
-### 控件基线地图采集进度（2026-08-28）
-- ✅ 已采 4 页：feed(63) / search(64) / profile(73) / friends(63)，汇总 `docs/control-map/control-map-all.md`（一个文件）
-- ⏳ 待采 3 页：following 列表 / comment 评论区 / edit_profile 编辑页——都需 tap 点击导航，盲区采不了 → **触摸盲区专项修后补采**（已采的 4 页 diff 对照基线已可用）
+### 控件基线地图采集进度（2026-08-28 / 08-29）
+- ✅ 已采 5 页：feed(63) / search(64) / profile(73) / friends(63) / **following(194)**，汇总 `docs/control-map/control-map-all.md`（一个文件）
+- following 页（2026-08-29 人工导航采集，从 VPS 日志恢复）：顶部 `AWESlidingTabButton` 三段式（Following 103 / **Followers 19K 选中** / Suggested）、关系行 `TTKStoryAvatarView`(44,195 68×68)+`AWEAliasEditLabel`(191,186)+`TUXButton Follow`(354,195 88×32)、Back(28,42)、`icEditAlias` 笔标、LIVE 标记 `GBLFeedStaticLiveMarkView`。⚠️ 实际选中是 **Followers** 页签（「Only rocky_teenager can see all followers」横幅印证），但关系列表 UI 结构与 Following 相同，锚点可用
+- ⚠️ 采集时设备闪退：ui_scan 扫完 210 元素后 app 崩溃（WS 断连）。页上有残留 `AWEPublishProgressDefaultWrapper` 上传进度浮层(x=35,y=114)，疑似上一次上传卡死 → 可能与闪退相关，待查
+- ✅ **7 页全齐（2026-08-29）**：feed(63) / search(64) / profile(73) / friends(63) / following(194) / **comment(189)** / **edit_profile(54)**，共 700 控件 → `docs/control-map/control-map-all.md`
+- comment 页（2026-08-29 采集）：评论列表 `UITableView TTKCommentListViewComponent`、关闭按钮 `UIButton(388,227)`、排序 `Sort Option(344,227)`、评论行（TTKCommentAvatarView/TUXLabel username/YYLabel 文本）、点赞 `TTKCommentAnimatedButton(330,385)`、踩 `TTKCommentDislikeAnimatedButton(390,385)`、输入框 `AWEGrowingTextView "Add comment"(170,708)`、发表 `TUXButton CommentInputSendButtonViewComponent(416,708)`、表情/@ 按钮
+- edit_profile 页（2026-08-29 采集，视觉确认=编辑资料表单）：Back(28,42)、头像 `BDImageView(151,130)`、行锚点（Name y=291 / Username y=343 / Bio y=391 / Pronoun y=484 / Links y=562 / Fundraiser y=610，均为 UITableViewCell 行）；⚠️ 字段名在子 label 未被 ui_scan 捕获，行锚点可用但字段名要对照视觉截图
+- 🔧 修复 collect-control-map.py 两个 bug：①等待条件从「见 result: 即停」改为「见 `ui_scan: N elements` 元素上报 + 日志稳定」——元素行在 result 之后才落地，旧逻辑白扫；②坐标正则 `x=(-?[\d.]+)` 支持负数（following 页 tab bar 滑出屏外 x=-373）
+- **采集数据恢复技巧**：ui_scan 扫完设备若闪退，UI 行已完整落在 server.log，可从日志 `grep 'UI \['` 恢复，无需重扫（following 页即如此恢复）
 
 ### [待修] 触摸盲区：like 按钮不响应（129 实锤，128 误判已纠正）
 - feedLikeButton (382,390)：129 真实失败「点赞未生效」，128「已点赞」是崩溃误回执（CRASH 后 success + acc_label 残留），isSelected=False 红心未亮

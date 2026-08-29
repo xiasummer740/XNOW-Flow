@@ -1,0 +1,1754 @@
+{
+ "page": "following",
+ "device": "iphone_A8DE7E93",
+ "captured": "2026-08-29 14:42:37 (log 恢复)",
+ "count": 194,
+ "controls": [
+  {
+   "class": "UIButton",
+   "x": 28,
+   "y": 42,
+   "frame": "{6, 20}, {44, 44}",
+   "accId": "",
+   "label": "Back",
+   "selected": "False"
+  },
+  {
+   "class": "UIImageView",
+   "x": 28,
+   "y": 42,
+   "frame": "{16, 30}, {24, 24}",
+   "accId": "",
+   "label": "Back",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 207,
+   "y": 42,
+   "frame": "{143.33333333333334, 32.333333333333336}, {127.33333333333334, 19.333333333333336}",
+   "accId": "",
+   "label": "rocky_teenager",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 408,
+   "y": 42,
+   "frame": "{408, 42}, {0, 0}",
+   "accId": "",
+   "label": "Add friends",
+   "selected": "None"
+  },
+  {
+   "class": "TUXDualBallLoadingIndicator",
+   "x": 207,
+   "y": 78,
+   "frame": "{191, 62}, {32, 32}",
+   "accId": "",
+   "label": "Loading",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 28,
+   "y": 86,
+   "frame": "{6, 64}, {44, 44}",
+   "accId": "",
+   "label": "Back",
+   "selected": "False"
+  },
+  {
+   "class": "UIImageView",
+   "x": 28,
+   "y": 86,
+   "frame": "{16, 74}, {24, 24}",
+   "accId": "",
+   "label": "Back",
+   "selected": "None"
+  },
+  {
+   "class": "AWESlidingTabButton",
+   "x": 64,
+   "y": 86,
+   "frame": "{-7.1054273576010019e-15, 64}, {127.33333333333334, 44}",
+   "accId": "",
+   "label": "Following 103",
+   "selected": "False"
+  },
+  {
+   "class": "UIButtonLabel",
+   "x": 64,
+   "y": 86,
+   "frame": "{13.752336086247116, 77.666666666666657}, {100.04824502744781, 17}",
+   "accId": "",
+   "label": "Following 103",
+   "selected": "None"
+  },
+  {
+   "class": "AWESlidingTabButton",
+   "x": 191,
+   "y": 86,
+   "frame": "{127.33333333333334, 64}, {127.33333333333334, 44}",
+   "accId": "",
+   "label": "Followers 19K",
+   "selected": "True"
+  },
+  {
+   "class": "UIButtonLabel",
+   "x": 191,
+   "y": 86,
+   "frame": "{142, 77.666666666666657}, {98, 17}",
+   "accId": "",
+   "label": "Followers 19K",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 207,
+   "y": 86,
+   "frame": "{167.66666666666663, 76.333333333333343}, {79, 19.333333333333329}",
+   "accId": "",
+   "label": "Followers",
+   "selected": "None"
+  },
+  {
+   "class": "UIScrollView",
+   "x": 207,
+   "y": 86,
+   "frame": "{0, 64}, {414, 44}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "AWESlidingTabButton",
+   "x": 318,
+   "y": 86,
+   "frame": "{254.66666666666671, 64}, {127.33333333333334, 44}",
+   "accId": "",
+   "label": "Suggested",
+   "selected": "False"
+  },
+  {
+   "class": "UIButtonLabel",
+   "x": 319,
+   "y": 86,
+   "frame": "{280.00000000000006, 77.666666666666657}, {77, 17}",
+   "accId": "",
+   "label": "Suggested",
+   "selected": "None"
+  },
+  {
+   "class": "AWEPublishProgressDefaultWrapper",
+   "x": 35,
+   "y": 114,
+   "frame": "{12, 84}, {45, 60}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 137,
+   "frame": "{0, 116}, {414, 41}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 207,
+   "y": 137,
+   "frame": "{82.666666666666686, 129.33333333333334}, {249, 14.666666666666657}",
+   "accId": "",
+   "label": "Only rocky_teenager can see all followers",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 0,
+   "y": 157,
+   "frame": "{0, 157}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 0,
+   "y": 157,
+   "frame": "{0, 152}, {0, 10}",
+   "accId": "",
+   "label": "Next",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 98,
+   "y": 186,
+   "frame": "{84, 176}, {28, 20}",
+   "accId": "",
+   "label": "Lisa",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 116,
+   "y": 186,
+   "frame": "{116, 176}, {0, 20}",
+   "accId": "icEditAlias",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "AWEAliasEditLabel",
+   "x": 191,
+   "y": 186,
+   "frame": "{84, 176}, {214, 20}",
+   "accId": "",
+   "label": "Lisa",
+   "selected": "None"
+  },
+  {
+   "class": "TTKStoryAvatarView",
+   "x": 44,
+   "y": 195,
+   "frame": "{10, 161}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 44,
+   "y": 195,
+   "frame": "{28, 179}, {32, 32}",
+   "accId": "icon_cell_play",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "GBLFeedStaticLiveMarkView",
+   "x": 44,
+   "y": 195,
+   "frame": "{10, 161}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 195,
+   "frame": "{0, 157}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 195,
+   "frame": "{0, 157}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKRelationButton",
+   "x": 354,
+   "y": 195,
+   "frame": "{310, 179}, {88, 32}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXButton",
+   "x": 354,
+   "y": 195,
+   "frame": "{310, 179}, {88, 32}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "False"
+  },
+  {
+   "class": "UIButtonLabel",
+   "x": 354,
+   "y": 195,
+   "frame": "{332.66666666666674, 187}, {43, 16}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 391,
+   "y": 195,
+   "frame": "{383, 187.66666666666669}, {15, 15}",
+   "accId": "icon_explore_whitearrow",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 191,
+   "y": 205,
+   "frame": "{84, 176}, {214, 58.666666666666657}",
+   "accId": "",
+   "label": "Lisa, lisawarren1983,",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 191,
+   "y": 207,
+   "frame": "{84, 200}, {214, 14.666666666666657}",
+   "accId": "",
+   "label": "lisawarren1983",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 69,
+   "y": 220,
+   "frame": "{69, 220}, {0, 0}",
+   "accId": "",
+   "label": "Create a Story",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 69,
+   "y": 220,
+   "frame": "{69, 220}, {0, 0}",
+   "accId": "",
+   "label": "Add",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 44,
+   "y": 227,
+   "frame": "{33.666666666666686, 221}, {21, 11.333333333333343}",
+   "accId": "",
+   "label": "LIVE",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 0,
+   "y": 233,
+   "frame": "{0, 233}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 0,
+   "y": 233,
+   "frame": "{0, 228}, {0, 10}",
+   "accId": "",
+   "label": "Next",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 158,
+   "y": 262,
+   "frame": "{84, 252}, {148.33333333333334, 20}",
+   "accId": "",
+   "label": "user3198336080816",
+   "selected": "None"
+  },
+  {
+   "class": "AWEAliasEditLabel",
+   "x": 191,
+   "y": 262,
+   "frame": "{84, 252}, {214, 20}",
+   "accId": "",
+   "label": "user3198336080816",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 236,
+   "y": 262,
+   "frame": "{236.33333333333337, 252}, {0, 20}",
+   "accId": "icEditAlias",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKStoryAvatarView",
+   "x": 44,
+   "y": 271,
+   "frame": "{10, 237}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 44,
+   "y": 271,
+   "frame": "{28, 255}, {32, 32}",
+   "accId": "icon_cell_play",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "GBLFeedStaticLiveMarkView",
+   "x": 44,
+   "y": 271,
+   "frame": "{10, 237}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 271,
+   "frame": "{0, 233}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 271,
+   "frame": "{0, 233}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKRelationButton",
+   "x": 354,
+   "y": 271,
+   "frame": "{310, 255}, {88, 32}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXButton",
+   "x": 354,
+   "y": 271,
+   "frame": "{310, 255}, {88, 32}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "False"
+  },
+  {
+   "class": "UIButtonLabel",
+   "x": 354,
+   "y": 271,
+   "frame": "{332.66666666666674, 263}, {43, 16}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 391,
+   "y": 271,
+   "frame": "{383, 263.66666666666669}, {15, 15}",
+   "accId": "icon_explore_whitearrow",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 191,
+   "y": 281,
+   "frame": "{84, 252}, {214, 58.666666666666686}",
+   "accId": "",
+   "label": "user3198336080816, shasta1962,",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 191,
+   "y": 283,
+   "frame": "{84, 276}, {214, 14.666666666666686}",
+   "accId": "",
+   "label": "shasta1962",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 69,
+   "y": 296,
+   "frame": "{69, 296}, {0, 0}",
+   "accId": "",
+   "label": "Create a Story",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 69,
+   "y": 296,
+   "frame": "{69, 296}, {0, 0}",
+   "accId": "",
+   "label": "Add",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 44,
+   "y": 303,
+   "frame": "{33.666666666666686, 297}, {21, 11.333333333333314}",
+   "accId": "",
+   "label": "LIVE",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 0,
+   "y": 309,
+   "frame": "{0, 309}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 0,
+   "y": 309,
+   "frame": "{0, 304}, {0, 10}",
+   "accId": "",
+   "label": "Next",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 145,
+   "y": 338,
+   "frame": "{84, 328}, {122.66666666666669, 20}",
+   "accId": "",
+   "label": "Dallas Mcmichael",
+   "selected": "None"
+  },
+  {
+   "class": "AWEAliasEditLabel",
+   "x": 191,
+   "y": 338,
+   "frame": "{84, 328}, {214, 20}",
+   "accId": "",
+   "label": "Dallas Mcmichael",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 211,
+   "y": 338,
+   "frame": "{210.66666666666663, 328}, {0, 20}",
+   "accId": "icEditAlias",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKStoryAvatarView",
+   "x": 44,
+   "y": 347,
+   "frame": "{10, 313}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 44,
+   "y": 347,
+   "frame": "{28, 331}, {32, 32}",
+   "accId": "icon_cell_play",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "GBLFeedStaticLiveMarkView",
+   "x": 44,
+   "y": 347,
+   "frame": "{10, 313}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 347,
+   "frame": "{0, 309}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 347,
+   "frame": "{0, 309}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKRelationButton",
+   "x": 354,
+   "y": 347,
+   "frame": "{310, 331}, {88, 32}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXButton",
+   "x": 354,
+   "y": 347,
+   "frame": "{310, 331}, {88, 32}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "False"
+  },
+  {
+   "class": "UIButtonLabel",
+   "x": 354,
+   "y": 347,
+   "frame": "{332.66666666666674, 339}, {43, 16}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 391,
+   "y": 347,
+   "frame": "{383, 339.66666666666669}, {15, 15}",
+   "accId": "icon_explore_whitearrow",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 191,
+   "y": 357,
+   "frame": "{84, 328}, {214, 58.666666666666686}",
+   "accId": "",
+   "label": "Dallas Mcmichael, dallasmcmichael2,",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 191,
+   "y": 359,
+   "frame": "{84, 352}, {214, 14.666666666666686}",
+   "accId": "",
+   "label": "dallasmcmichael2",
+   "selected": "None"
+  },
+  {
+   "class": "AWEMaskWindow",
+   "x": 207,
+   "y": 368,
+   "frame": "{0, 0}, {414, 736}",
+   "accId": "AWEMaskWindow",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UILayoutContainerView",
+   "x": 207,
+   "y": 368,
+   "frame": "{0, 0}, {414, 736}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 69,
+   "y": 372,
+   "frame": "{69, 372}, {0, 0}",
+   "accId": "",
+   "label": "Create a Story",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 69,
+   "y": 372,
+   "frame": "{69, 372}, {0, 0}",
+   "accId": "",
+   "label": "Add",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 44,
+   "y": 379,
+   "frame": "{33.666666666666686, 373}, {21, 11.333333333333314}",
+   "accId": "",
+   "label": "LIVE",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 0,
+   "y": 385,
+   "frame": "{0, 385}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 0,
+   "y": 385,
+   "frame": "{0, 380}, {0, 10}",
+   "accId": "",
+   "label": "Next",
+   "selected": "None"
+  },
+  {
+   "class": "AWESlidingScrollView",
+   "x": 207,
+   "y": 390,
+   "frame": "{0, 44}, {414, 692}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UICollectionView",
+   "x": 207,
+   "y": 390,
+   "frame": "{0, 44}, {414, 692}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 92,
+   "y": 414,
+   "frame": "{84, 404}, {15.333333333333329, 20}",
+   "accId": "",
+   "label": "A.",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 103,
+   "y": 414,
+   "frame": "{103.33333333333337, 404}, {0, 20}",
+   "accId": "icEditAlias",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "AWEAliasEditLabel",
+   "x": 191,
+   "y": 414,
+   "frame": "{84, 404}, {214, 20}",
+   "accId": "",
+   "label": "A.",
+   "selected": "None"
+  },
+  {
+   "class": "TTKStoryAvatarView",
+   "x": 44,
+   "y": 423,
+   "frame": "{10, 389}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 44,
+   "y": 423,
+   "frame": "{28, 407}, {32, 32}",
+   "accId": "icon_cell_play",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "GBLFeedStaticLiveMarkView",
+   "x": 44,
+   "y": 423,
+   "frame": "{10, 389}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 423,
+   "frame": "{0, 385}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 423,
+   "frame": "{0, 385}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKRelationButton",
+   "x": 354,
+   "y": 423,
+   "frame": "{310, 407}, {88, 32}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXButton",
+   "x": 354,
+   "y": 423,
+   "frame": "{310, 407}, {88, 32}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "False"
+  },
+  {
+   "class": "UIButtonLabel",
+   "x": 354,
+   "y": 423,
+   "frame": "{332.66666666666674, 415}, {43, 16}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 391,
+   "y": 423,
+   "frame": "{383, 415.66666666666669}, {15, 15}",
+   "accId": "icon_explore_whitearrow",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 191,
+   "y": 433,
+   "frame": "{84, 404}, {214, 58.666666666666686}",
+   "accId": "",
+   "label": "A., assia7946,",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 191,
+   "y": 435,
+   "frame": "{84, 428}, {214, 14.666666666666686}",
+   "accId": "",
+   "label": "assia7946",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 69,
+   "y": 448,
+   "frame": "{69, 448}, {0, 0}",
+   "accId": "",
+   "label": "Create a Story",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 69,
+   "y": 448,
+   "frame": "{69, 448}, {0, 0}",
+   "accId": "",
+   "label": "Add",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 44,
+   "y": 455,
+   "frame": "{33.666666666666686, 449}, {21, 11.333333333333314}",
+   "accId": "",
+   "label": "LIVE",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 0,
+   "y": 461,
+   "frame": "{0, 461}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 0,
+   "y": 461,
+   "frame": "{0, 456}, {0, 10}",
+   "accId": "",
+   "label": "Next",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 129,
+   "y": 490,
+   "frame": "{84, 480}, {89.666666666666686, 20}",
+   "accId": "",
+   "label": "🫴танука🐈‍⬛",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 178,
+   "y": 490,
+   "frame": "{177.66666666666663, 480}, {0, 20}",
+   "accId": "icEditAlias",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "AWEAliasEditLabel",
+   "x": 191,
+   "y": 490,
+   "frame": "{84, 480}, {214, 20}",
+   "accId": "",
+   "label": "🫴танука🐈‍⬛",
+   "selected": "None"
+  },
+  {
+   "class": "TTKStoryAvatarView",
+   "x": 44,
+   "y": 499,
+   "frame": "{10, 465}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 44,
+   "y": 499,
+   "frame": "{16, 471}, {56, 56}",
+   "accId": "",
+   "label": "A., LIVE, lisawarren1983",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 44,
+   "y": 499,
+   "frame": "{28, 483}, {32, 32}",
+   "accId": "icon_cell_play",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "GBLFeedStaticLiveMarkView",
+   "x": 44,
+   "y": 499,
+   "frame": "{10, 465}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 499,
+   "frame": "{0, 461}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 499,
+   "frame": "{0, 461}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKRelationButton",
+   "x": 354,
+   "y": 499,
+   "frame": "{310, 483}, {88, 32}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXButton",
+   "x": 354,
+   "y": 499,
+   "frame": "{310, 483}, {88, 32}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "False"
+  },
+  {
+   "class": "UIButtonLabel",
+   "x": 354,
+   "y": 499,
+   "frame": "{332.66666666666674, 491}, {43, 16}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 391,
+   "y": 499,
+   "frame": "{383, 491.66666666666669}, {15, 15}",
+   "accId": "icon_explore_whitearrow",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 191,
+   "y": 509,
+   "frame": "{84, 480}, {214, 58.666666666666629}",
+   "accId": "",
+   "label": "🫴танука🐈‍⬛, kok75791,",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 191,
+   "y": 511,
+   "frame": "{84, 504}, {214, 14.666666666666629}",
+   "accId": "",
+   "label": "kok75791",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 69,
+   "y": 524,
+   "frame": "{69, 524}, {0, 0}",
+   "accId": "",
+   "label": "Create a Story",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 69,
+   "y": 524,
+   "frame": "{69, 524}, {0, 0}",
+   "accId": "",
+   "label": "Add",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 44,
+   "y": 531,
+   "frame": "{33.666666666666686, 525}, {21, 11.333333333333371}",
+   "accId": "",
+   "label": "LIVE",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 0,
+   "y": 537,
+   "frame": "{0, 537}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 0,
+   "y": 537,
+   "frame": "{0, 532}, {0, 10}",
+   "accId": "",
+   "label": "Next",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 126,
+   "y": 566,
+   "frame": "{84, 556}, {83.666666666666686, 20}",
+   "accId": "",
+   "label": "Bree Crump",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 172,
+   "y": 566,
+   "frame": "{171.66666666666663, 556}, {0, 20}",
+   "accId": "icEditAlias",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "AWEAliasEditLabel",
+   "x": 191,
+   "y": 566,
+   "frame": "{84, 556}, {214, 20}",
+   "accId": "",
+   "label": "Bree Crump",
+   "selected": "None"
+  },
+  {
+   "class": "TTKStoryAvatarView",
+   "x": 44,
+   "y": 575,
+   "frame": "{10, 541}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 44,
+   "y": 575,
+   "frame": "{28, 559}, {32, 32}",
+   "accId": "icon_cell_play",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "GBLFeedStaticLiveMarkView",
+   "x": 44,
+   "y": 575,
+   "frame": "{10, 541}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 575,
+   "frame": "{0, 537}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 575,
+   "frame": "{0, 537}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKRelationButton",
+   "x": 354,
+   "y": 575,
+   "frame": "{310, 559}, {88, 32}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXButton",
+   "x": 354,
+   "y": 575,
+   "frame": "{310, 559}, {88, 32}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "False"
+  },
+  {
+   "class": "UIButtonLabel",
+   "x": 354,
+   "y": 575,
+   "frame": "{332.66666666666674, 567}, {43, 16}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 391,
+   "y": 575,
+   "frame": "{383, 567.66666666666674}, {15, 15}",
+   "accId": "icon_explore_whitearrow",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 191,
+   "y": 585,
+   "frame": "{84, 556}, {214, 58.666666666666629}",
+   "accId": "",
+   "label": "Bree Crump, bree.crump3,",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 191,
+   "y": 587,
+   "frame": "{84, 580}, {214, 14.666666666666629}",
+   "accId": "",
+   "label": "bree.crump3",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 69,
+   "y": 600,
+   "frame": "{69, 600}, {0, 0}",
+   "accId": "",
+   "label": "Create a Story",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 69,
+   "y": 600,
+   "frame": "{69, 600}, {0, 0}",
+   "accId": "",
+   "label": "Add",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 44,
+   "y": 607,
+   "frame": "{33.666666666666686, 601}, {21, 11.333333333333371}",
+   "accId": "",
+   "label": "LIVE",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 0,
+   "y": 613,
+   "frame": "{0, 613}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 0,
+   "y": 613,
+   "frame": "{0, 608}, {0, 10}",
+   "accId": "",
+   "label": "Next",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 178,
+   "y": 642,
+   "frame": "{84, 632}, {187.33333333333337, 20}",
+   "accId": "",
+   "label": "⒭⒜⒩⒟⒪⒨_⒧⒪⒩⒟⒪⒩",
+   "selected": "None"
+  },
+  {
+   "class": "AWEAliasEditLabel",
+   "x": 191,
+   "y": 642,
+   "frame": "{84, 632}, {214, 20}",
+   "accId": "",
+   "label": "⒭⒜⒩⒟⒪⒨_⒧⒪⒩⒟⒪⒩",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 275,
+   "y": 642,
+   "frame": "{275.33333333333326, 632}, {0, 20}",
+   "accId": "icEditAlias",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKStoryAvatarView",
+   "x": 44,
+   "y": 651,
+   "frame": "{10, 617}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 44,
+   "y": 651,
+   "frame": "{28, 635}, {32, 32}",
+   "accId": "icon_cell_play",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "GBLFeedStaticLiveMarkView",
+   "x": 44,
+   "y": 651,
+   "frame": "{10, 617}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 651,
+   "frame": "{0, 613}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 651,
+   "frame": "{0, 613}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKRelationButton",
+   "x": 354,
+   "y": 651,
+   "frame": "{310, 635}, {88, 32}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXButton",
+   "x": 354,
+   "y": 651,
+   "frame": "{310, 635}, {88, 32}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "False"
+  },
+  {
+   "class": "UIButtonLabel",
+   "x": 354,
+   "y": 651,
+   "frame": "{332.66666666666674, 643}, {43, 16}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 391,
+   "y": 651,
+   "frame": "{383, 643.66666666666663}, {15, 15}",
+   "accId": "icon_explore_whitearrow",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 191,
+   "y": 661,
+   "frame": "{84, 632}, {214, 58.666666666666629}",
+   "accId": "",
+   "label": "⒭⒜⒩⒟⒪⒨_⒧⒪⒩⒟⒪⒩, not_london676,",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 191,
+   "y": 663,
+   "frame": "{84, 656}, {214, 14.666666666666629}",
+   "accId": "",
+   "label": "not_london676",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 69,
+   "y": 676,
+   "frame": "{69, 676}, {0, 0}",
+   "accId": "",
+   "label": "Create a Story",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 69,
+   "y": 676,
+   "frame": "{69, 676}, {0, 0}",
+   "accId": "",
+   "label": "Add",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 44,
+   "y": 683,
+   "frame": "{33.666666666666686, 677}, {21, 11.333333333333371}",
+   "accId": "",
+   "label": "LIVE",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": -248,
+   "y": 687,
+   "frame": "{-248.40000000000001, 687}, {0, 0}",
+   "accId": "",
+   "label": "Post",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 0,
+   "y": 689,
+   "frame": "{0, 689}, {0, 0}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 0,
+   "y": 689,
+   "frame": "{0, 684}, {0, 10}",
+   "accId": "",
+   "label": "Next",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": -111,
+   "y": 697,
+   "frame": "{-119.26666666666671, 689}, {16, 16}",
+   "accId": "",
+   "label": "1",
+   "selected": "None"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": -373,
+   "y": 712,
+   "frame": "{-414, 687}, {82.800000000000011, 49}",
+   "accId": "a11y_vo_home",
+   "label": "Home",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": -373,
+   "y": 712,
+   "frame": "{-414, 687}, {82.800000000000011, 49}",
+   "accId": "",
+   "label": "Home",
+   "selected": "None"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": -290,
+   "y": 712,
+   "frame": "{-331.20000000000005, 687}, {82.800000000000011, 49}",
+   "accId": "friends",
+   "label": "Friends",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": -290,
+   "y": 712,
+   "frame": "{-331.20000000000005, 687}, {82.800000000000011, 49}",
+   "accId": "",
+   "label": "Friends",
+   "selected": "None"
+  },
+  {
+   "class": "TTKTabBar",
+   "x": -207,
+   "y": 712,
+   "frame": "{-414, 687}, {414, 49}",
+   "accId": "",
+   "label": "Tab Bar",
+   "selected": "None"
+  },
+  {
+   "class": "AWETabBarPlusButton",
+   "x": -207,
+   "y": 712,
+   "frame": "{-248.40000000000001, 687}, {82.799999999999983, 49}",
+   "accId": "",
+   "label": "Create",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": -124,
+   "y": 712,
+   "frame": "{-165.60000000000005, 687}, {82.799999999999997, 49}",
+   "accId": "a11y_vo_inbox",
+   "label": "Inbox Button. 1 unread notifications.",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": -124,
+   "y": 712,
+   "frame": "{-165.60000000000005, 687}, {82.799999999999997, 49}",
+   "accId": "",
+   "label": "Inbox",
+   "selected": "None"
+  },
+  {
+   "class": "TTKTabBarButton",
+   "x": -41,
+   "y": 712,
+   "frame": "{-82.800000000000011, 687}, {82.799999999999997, 49}",
+   "accId": "a11y_vo_profile",
+   "label": "Profile",
+   "selected": "False"
+  },
+  {
+   "class": "TTKTabBarAnimationContentView",
+   "x": -41,
+   "y": 712,
+   "frame": "{-82.800000000000011, 687}, {82.799999999999997, 49}",
+   "accId": "",
+   "label": "Profile",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 156,
+   "y": 718,
+   "frame": "{84, 708}, {143, 20}",
+   "accId": "",
+   "label": "Анастасія Давидюк",
+   "selected": "None"
+  },
+  {
+   "class": "AWEAliasEditLabel",
+   "x": 191,
+   "y": 718,
+   "frame": "{84, 708}, {214, 20}",
+   "accId": "",
+   "label": "Анастасія Давидюк",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 231,
+   "y": 718,
+   "frame": "{231, 708}, {0, 20}",
+   "accId": "icEditAlias",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": -373,
+   "y": 725,
+   "frame": "{-414, 718.66666666666663}, {82.666666666666686, 13}",
+   "accId": "",
+   "label": "Home",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": -290,
+   "y": 725,
+   "frame": "{-331.20000000000005, 718.66666666666663}, {82.666666666666686, 13}",
+   "accId": "",
+   "label": "Friends",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": -124,
+   "y": 725,
+   "frame": "{-165.60000000000005, 718.66666666666663}, {82.666666666666671, 13}",
+   "accId": "",
+   "label": "Inbox",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": -41,
+   "y": 725,
+   "frame": "{-82.800000000000011, 718.66666666666663}, {82.666666666666671, 13}",
+   "accId": "",
+   "label": "Profile",
+   "selected": "None"
+  },
+  {
+   "class": "TTKStoryAvatarView",
+   "x": 44,
+   "y": 727,
+   "frame": "{10, 693}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 44,
+   "y": 727,
+   "frame": "{28, 711}, {32, 32}",
+   "accId": "icon_cell_play",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "GBLFeedStaticLiveMarkView",
+   "x": 44,
+   "y": 727,
+   "frame": "{10, 693}, {68, 68}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 727,
+   "frame": "{0, 689}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UITableViewCellContentView",
+   "x": 207,
+   "y": 727,
+   "frame": "{0, 689}, {414, 76}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKRelationButton",
+   "x": 354,
+   "y": 727,
+   "frame": "{310, 711}, {88, 32}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXButton",
+   "x": 354,
+   "y": 727,
+   "frame": "{310, 711}, {88, 32}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "False"
+  },
+  {
+   "class": "UIButtonLabel",
+   "x": 354,
+   "y": 727,
+   "frame": "{332.66666666666674, 719}, {43, 16}",
+   "accId": "",
+   "label": "Follow",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 391,
+   "y": 727,
+   "frame": "{383, 719.66666666666663}, {15, 15}",
+   "accId": "icon_explore_whitearrow",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 191,
+   "y": 737,
+   "frame": "{84, 708}, {214, 58.666666666666629}",
+   "accId": "",
+   "label": "Анастасія Давидюк, user1837790097814,",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 191,
+   "y": 739,
+   "frame": "{84, 732}, {214, 14.666666666666629}",
+   "accId": "",
+   "label": "user1837790097814",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 69,
+   "y": 752,
+   "frame": "{69, 752}, {0, 0}",
+   "accId": "",
+   "label": "Create a Story",
+   "selected": "None"
+  },
+  {
+   "class": "UIImageView",
+   "x": 69,
+   "y": 752,
+   "frame": "{69, 752}, {0, 0}",
+   "accId": "",
+   "label": "Add",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 44,
+   "y": 759,
+   "frame": "{33.666666666666686, 753}, {21, 11.333333333333371}",
+   "accId": "",
+   "label": "LIVE",
+   "selected": "None"
+  },
+  {
+   "class": "UIToolbar",
+   "x": 207,
+   "y": 761,
+   "frame": "{0, 736}, {414, 49}",
+   "accId": "Toolbar",
+   "label": "Toolbar",
+   "selected": "None"
+  },
+  {
+   "class": "TUXDualBallLoadingIndicator",
+   "x": 207,
+   "y": 4028,
+   "frame": "{191, 4012}, {32, 32}",
+   "accId": "",
+   "label": "Loading",
+   "selected": "None"
+  },
+  {
+   "class": "YYLabel",
+   "x": 207,
+   "y": 4057,
+   "frame": "{0, 4050}, {414, 14}",
+   "accId": "",
+   "label": " ",
+   "selected": "None"
+  }
+ ]
+}
