@@ -234,12 +234,19 @@
 
 ## 🔵 新发现待后续批次（触摸盲区）
 
-### [待修] 闪退根因实锤：后台线程改布局（2026-08-29）
-- **崩溃报告**（VPS log 14:46:11）：`🚨 CRASH: UncaughtException NSInternalInconsistencyException: Modifications to the layout engine must not be performed from a background thread after it has been accessed from the main thread.`，`last_action=` 为空（非命令触发，自发崩溃）
-- **关联现象**：`AWEPublishProgressDefaultWrapper` 上传进度浮层（x=35,y=114, 45×60）在 following/comment/edit_profile 三页均残留——疑似上次 post_video 上传卡死未清，跨页常驻
-- **假设**：卡死上传状态在后台线程持续更新进度条布局 → 触发 UIKit 布局引擎线程安全断言崩溃；「闪退了又」= 此崩溃反复发生
-- **待修方向**：①定位上次上传卡死来源并清理/重置发布状态 ②或查 post_video 失败后是否未清 AWEPublishProgressDefaultWrapper ③崩溃时能否主动调 main 线程兜底
-- **影响**：设备反复闪退，手工导航也受影响（本次 3 页控件采集中有 1 页靠日志恢复）
+### 闪退专项结论（2026-08-29 深挖完成）：两类崩溃，主因是 TikTok 自身 bug
+**① 唯一带调用栈的崩溃 = TikTok 自己的后台线程改布局（14:46:11）**
+- `NSInternalInconsistencyException: Modifications to the layout engine must not be performed from a background thread...`，`last_action=` 空 = 非指令触发，**空闲自发崩溃**
+- **调用栈 0-17 帧无一是我们 dylib**：`objc_exception_throw → CoreAutoLayout ×4 → UIKitCore → MusicallyCore awemeMain ×3（TikTok 主二进制，偏移 4 亿字节处）→ QuartzCore → pthread`。崩溃点在 TikTok 二进制内部，不在注入代码
+- 已排除我们 dylib 的后台线程：AccountManager(dispatch_sync 回主线程)、XNOWER 心跳(仅发消息)均安全；`post_video`/publish 指令**从未下发过**
+- ❌ **「上传浮层卡死」假设证伪**：`AWEPublishProgressDefaultWrapper`(x=35,y=114,45×60) 在 feed/profile/edit_profile/following/comment **全部 7 页扫描都以同坐标常驻**——是 TikTok 视图树里的常驻休眠 overlay，不是卡死上传。清理发布状态不会修这个崩
+- 时间线：14:42:37 following 页扫描完 → 14:44:56 心跳断(offline) → 14:46:11 TikTok 重启后上报 pending 异常。**崩溃发生在扫描后空闲 4 分钟时**
+
+**② 无栈崩溃 = SIGKILL 级（ok+ok 成对，1s 内双启动）**
+- 今天 4 段崩溃全部空闲/手工导航时段，无一在执行我们指令；3 段为 `CRASH: ok` 双报（崩溃→iOS 自动重启→无崩溃文件），符合 **jetsam 内存压力杀 / watchdog 杀** 特征（设备 414×736 = iPhone 6/7/8 代低内存，TikTok 内存吃紧）
+- 昨天 08-28 的 `last_action=open_tab`×5 崩溃 = **主线程卡死 → watchdog SIGKILL**，v1.4.129 已移除全树主线程遍历修复；今天 open_tab 全过验证修复生效
+
+**结论与方向**：我们指令侧已确认不崩（今天所有指令通过）；闪退主因是 TikTok 自身 bug + 低内存设备压力，**无法从注入侧根治**（栈在人家二进制里）。可选项：①swizzle objc_exception_throw 吞掉此异常（高风险，布局引擎可能已损坏，需祥哥拍板）②崩溃自愈已具备（TikTok 重启→dylib 自动重注入→设备回线）③不主动反复刷新内存重的页面
 
 
 
@@ -253,7 +260,7 @@
 ### 控件基线地图采集进度（2026-08-28 / 08-29）
 - ✅ 已采 5 页：feed(63) / search(64) / profile(73) / friends(63) / **following(194)**，汇总 `docs/control-map/control-map-all.md`（一个文件）
 - following 页（2026-08-29 人工导航采集，从 VPS 日志恢复）：顶部 `AWESlidingTabButton` 三段式（Following 103 / **Followers 19K 选中** / Suggested）、关系行 `TTKStoryAvatarView`(44,195 68×68)+`AWEAliasEditLabel`(191,186)+`TUXButton Follow`(354,195 88×32)、Back(28,42)、`icEditAlias` 笔标、LIVE 标记 `GBLFeedStaticLiveMarkView`。⚠️ 实际选中是 **Followers** 页签（「Only rocky_teenager can see all followers」横幅印证），但关系列表 UI 结构与 Following 相同，锚点可用
-- ⚠️ 采集时设备闪退：ui_scan 扫完 210 元素后 app 崩溃（WS 断连）。页上有残留 `AWEPublishProgressDefaultWrapper` 上传进度浮层(x=35,y=114)，疑似上一次上传卡死 → 可能与闪退相关，待查
+- ⚠️ 采集时设备闪退：ui_scan 扫完 210 元素后 app 崩溃（WS 断连）。页上 `AWEPublishProgressDefaultWrapper`(x=35,y=114) 后来确认是**全部 7 页常驻的休眠 overlay**，与闪退无关（闪退= T ikTok 后台线程改布局 bug，见上方专项结论）
 - ✅ **7 页全齐（2026-08-29）**：feed(63) / search(64) / profile(73) / friends(63) / following(194) / **comment(189)** / **edit_profile(54)**，共 700 控件 → `docs/control-map/control-map-all.md`
 - comment 页（2026-08-29 采集）：评论列表 `UITableView TTKCommentListViewComponent`、关闭按钮 `UIButton(388,227)`、排序 `Sort Option(344,227)`、评论行（TTKCommentAvatarView/TUXLabel username/YYLabel 文本）、点赞 `TTKCommentAnimatedButton(330,385)`、踩 `TTKCommentDislikeAnimatedButton(390,385)`、输入框 `AWEGrowingTextView "Add comment"(170,708)`、发表 `TUXButton CommentInputSendButtonViewComponent(416,708)`、表情/@ 按钮
 - edit_profile 页（2026-08-29 采集，视觉确认=编辑资料表单）：Back(28,42)、头像 `BDImageView(151,130)`、行锚点（Name y=291 / Username y=343 / Bio y=391 / Pronoun y=484 / Links y=562 / Fundraiser y=610，均为 UITableViewCell 行）；⚠️ 字段名在子 label 未被 ui_scan 捕获，行锚点可用但字段名要对照视觉截图
