@@ -30,6 +30,8 @@ int const kXnowBackendPort = 8000;
 // ====== 全局状态 ======
 static volatile BOOL    sBackendReachable = NO;
 static NSDictionary     *gLastFeedVideo = nil;   // 最近一次 feed 响应里的视频信息（供下载无水印视频）
+static NSDictionary     *gLastFeedHeaders = nil; // 最近一次 feed 请求的 header（v1.4.135 网络层交互复用 app 会话）
+static NSString         *gLastFeedURL = nil;     // 最近一次 feed 请求的 URL（复用真实 API 节点 host）
 static volatile CFAbsoluteTime sLastPing = 0;
 
 // ====== 类扩展 ======
@@ -415,6 +417,14 @@ static volatile CFAbsoluteTime sLastPing = 0;
     // [环境伪装] 若已设置目标国，改写 region/时区/语言/MCC 等 query 参数（与出口IP一致）
     [CountryEnv applyEnvToMutableRequest:forwardReq];
 
+    // [会话缓存] v1.4.135 网络层交互：缓存最近 feed 请求的 header + URL，
+    // 供 net_like 等纯网络层命令复用 app 会话/签名（不依赖触摸）
+    NSString *abs = self.request.URL.absoluteString ?: @"";
+    if ([abs containsString:@"/feed"] || [abs containsString:@"/recommend"]) {
+        gLastFeedHeaders = self.request.allHTTPHeaderFields;
+        gLastFeedURL = abs;
+    }
+
     // [Piggyback] 利用 TikTok 网络栈向后端发心跳（限频）
     [self _maybePingBackend];
 
@@ -509,6 +519,16 @@ static volatile CFAbsoluteTime sLastPing = 0;
 /// 返回最近一次 feed 捕获到的视频信息
 + (NSDictionary *)lastFeedVideo {
     return gLastFeedVideo ?: @{};
+}
+
+/// 返回最近一次 feed 请求的 header（v1.4.135 网络层交互复用 app 会话；无捕获返回空字典）
++ (NSDictionary *)lastFeedRequestHeaders {
+    return gLastFeedHeaders ?: @{};
+}
+
+/// 返回最近一次 feed 请求的 URL（复用真实 API 节点 host）
++ (NSString *)lastFeedRequestURL {
+    return gLastFeedURL ?: @"";
 }
 
 #pragma mark - Piggyback: 向后端通信（限频）

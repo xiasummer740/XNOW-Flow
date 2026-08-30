@@ -77,6 +77,7 @@ static NSArray *XN_NurtureComments(void) {
 @property (nonatomic, assign) int nurtureMode;       // 当前养号模式 1/2
 - (NSDictionary *)_tapTab:(NSString *)tab;          // v1.4.106 返回诊断 dict（含 home 深链兜底）
 - (void)_openDeepLink:(NSString *)urlString;         // 打开 TikTok 深链（snssdk1233://）
+- (NSDictionary *)_performNetLike:(NSString *)awemeId; // v1.4.135 网络层点赞（纯网络层方案）
 @end
 
 @implementation CommandEngine
@@ -101,6 +102,7 @@ static NSArray *XN_NurtureComments(void) {
             @"scroll_down":      @(CommandActionScrollDown),
             @"scroll_up":        @(CommandActionScrollUp),
             @"like":             @(CommandActionLike),
+            @"net_like":         @(CommandActionNetLike),   // v1.4.135 网络层点赞（纯网络层，不碰触摸）
             @"follow":           @(CommandActionFollow),
             @"comment":          @(CommandActionComment),
             @"collect":          @(CommandActionCollect),
@@ -278,6 +280,15 @@ static NSArray *XN_NurtureComments(void) {
                     @"status": liked ? @"success" : @"failed",
                     @"message": liked ? @"已点赞（红心点亮验证通过）" : @"点赞未生效（未检测到红心点亮）",
                 };
+                hasResult = YES;
+                break;
+            }
+
+            case CommandActionNetLike: {
+                // v1.4.135 网络层点赞：纯网络层方案，直接构造 TikTok 点赞请求走 app 会话，
+                // 不依赖触摸（触摸盲区 UIControl 全死）。响应完整上报供验证/诊断。
+                NSString *awemeId = params[@"aweme_id"] ?: @"";
+                result = [self _performNetLike:awemeId];
                 hasResult = YES;
                 break;
             }
@@ -2969,6 +2980,80 @@ static NSArray *XN_NurtureComments(void) {
         return [self _waitLikeVerified:likeView beforeSel:beforeSel beforeLabel:beforeLabel retried:YES];
     }
     return verified;
+}
+
+/// v1.4.135 网络层点赞（纯网络层，交互选 C）——触摸盲区 UIControl 全死后的正解：
+/// 不复用触摸点红心，直接构造 TikTok 点赞请求走 app 自身会话（feed 拦截到的 header 全量复用，
+/// 含 Cookie/device_id/x-tt-token 等），经 NSURLSession 发出。响应 status_code==0 才算成功。
+/// params.aweme_id 缺省时取最近一次 feed 捕获的第一条视频。响应 body 截断上报供验证/诊断。
+- (NSDictionary *)_performNetLike:(NSString *)awemeId {
+    [self _logStep:@"net_like"];
+    NSDictionary *feedHeaders = [XNURLProtocol lastFeedRequestHeaders];
+    NSString *feedURL = [XNURLProtocol lastFeedRequestURL];
+
+    if (awemeId.length == 0) {
+        awemeId = [XNURLProtocol lastFeedVideo][@"aweme_id"] ?: @"";
+    }
+    if (awemeId.length == 0) {
+        return @{@"status": @"failed",
+                 @"message": @"无 aweme_id（先浏览 feed 捕获视频，或显式传 aweme_id）",
+                 @"feed_headers_captured": @(feedHeaders.count > 0)};
+    }
+
+    // 复用 feed 请求的 host（TikTok 真实 API 节点），路径换 aweme/digg
+    NSString *diggHost = @"api.tiktokv.com", *scheme = @"https";
+    if (feedURL.length > 0) {
+        NSURL *u = [NSURL URLWithString:feedURL];
+        if (u.host.length > 0) diggHost = u.host;
+        if (u.scheme.length > 0) scheme = u.scheme;
+    }
+    NSString *diggURL = [NSString stringWithFormat:@"%@://%@/aweme/v1/aweme/digg/", scheme, diggHost];
+
+    // body（application/x-www-form-urlencoded）
+    NSString *bodyStr = [NSString stringWithFormat:@"aweme_id=%@&digg_type=1&repost=false", awemeId];
+
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:diggURL]];
+    req.HTTPMethod = @"POST";
+    req.HTTPBody = [bodyStr dataUsingEncoding:NSUTF8StringEncoding];
+    NSMutableDictionary *h = [feedHeaders mutableCopy] ?: [NSMutableDictionary dictionary];
+    [h removeObjectForKey:@"Content-Length"];   // body 已变，length 由系统重算
+    [h removeObjectForKey:@"Host"];             // 由 URL 决定
+    h[@"Content-Type"] = @"application/x-www-form-urlencoded";
+    req.allHTTPHeaderFields = h;
+
+    __block NSDictionary *result = nil;
+    dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+    NSURLSession *session = [NSURLSession sharedSession];
+    NSURLSessionDataTask *task = [session dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
+        if (err) {
+            result = @{@"status": @"failed",
+                       @"message": [NSString stringWithFormat:@"网络错误: %@", err.localizedDescription],
+                       @"aweme_id": awemeId, @"url": diggURL};
+        } else {
+            NSString *bodyTxt = data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : @"";
+            NSString *trunc = bodyTxt.length > 1500 ? [bodyTxt substringToIndex:1500] : bodyTxt;
+            NSInteger http = ((NSHTTPURLResponse *)resp).statusCode;
+            BOOL ok = NO; NSString *statusMsg = @"";
+            @try {
+                id obj = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+                if ([obj isKindOfClass:[NSDictionary class]]) {
+                    NSNumber *sc = obj[@"status_code"];
+                    if ([sc isKindOfClass:[NSNumber class]] && sc.intValue == 0) ok = YES;
+                    id sm = obj[@"status_msg"];
+                    if ([sm isKindOfClass:[NSString class]]) statusMsg = sm;
+                }
+            } @catch (NSException *e) {}
+            result = @{@"status": ok ? @"success" : @"failed",
+                       @"message": ok ? [NSString stringWithFormat:@"网络层点赞成功 aweme=%@", awemeId]
+                                      : [NSString stringWithFormat:@"HTTP %ld status_msg=%@", (long)http, statusMsg],
+                       @"aweme_id": awemeId, @"url": diggURL, @"http": @(http),
+                       @"response": trunc};
+        }
+        dispatch_semaphore_signal(sema);
+    }];
+    [task resume];
+    dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC));
+    return result ?: @{@"status": @"failed", @"message": @"点赞请求超时（20s）", @"aweme_id": awemeId};
 }
 
 /// 递归找 label 包含关键词且屏幕内可见的视图（feed 有多个 Follow 按钮，命中当前屏幕内 + 排除顶部 Following 标签）

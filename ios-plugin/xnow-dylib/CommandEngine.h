@@ -111,6 +111,10 @@ typedef NS_ENUM(NSInteger, CommandAction) {
     // 无障碍点击 (v1.4.134) — params: acc_id/label/x,y —— 按 accessibilityActivate 触发控件动作，
     // 走 VoiceOver 官方点按路径，完全绕过触摸管线（触摸盲区三层全拒后新方向）
     CommandActionAccClick,
+
+    // 网络层点赞 (v1.4.135) — 交互选 C（纯网络层）：不复用触摸，直接构造 TikTok 点赞请求
+    // 走 app 自己的会话/签名发 HTTP（params: aweme_id 可选，默认取当前 feed 第一条视频）
+    CommandActionNetLike,
 };
 
 @interface CommandEngine : NSObject

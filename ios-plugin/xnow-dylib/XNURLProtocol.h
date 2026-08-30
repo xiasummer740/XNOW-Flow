@@ -60,6 +60,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// 返回 @{url, author, desc, aweme_id}，无则 nil
 + (NSDictionary *)lastFeedVideo;
 
+/// v1.4.135 网络层交互（纯网络层方案）：最近一次 feed 请求的 header（复用 app 会话/签名）
++ (NSDictionary *)lastFeedRequestHeaders;
+
+/// v1.4.135 网络层交互：最近一次 feed 请求的 URL（复用真实 API 节点 host）
++ (NSString *)lastFeedRequestURL;
+
 /// 回关自动私信：随机取一条激活话术（设备 secret 鉴权）
 + (void)fetchReplyTemplate:(NSString *)deviceId
                 completion:(void (^)(NSDictionary *template, NSError *error))completion;

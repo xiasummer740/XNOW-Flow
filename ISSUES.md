@@ -232,6 +232,17 @@
 > **四路全死实锤**：① HID `ctx=0` ② KVC `isHighlighted=False` ③ sendAction 无导航 ④ accessibilityActivate `ok=false`。**iOS 沙盒内无法合成触摸或无障碍激活** → like/follow/comment/edit 的自动化不再依赖触摸注入。
 > **控件地图 3 页采集路径改为人工导航**：祥哥手动把设备点到 following/comment/edit_profile 页 → `collect-control-map.py` 跑 ui_scan 采集（采集本身不需要触摸）。
 
+## v1.4.135 网络层点赞（交互选 C 纯网络层，祥哥 2026-08-30 拍板「先做点赞」）
+
+> **方向**：触摸四路全死后，点赞/关注/评论/编辑不再依赖 UI，直接构造 TikTok 请求走 app 自身会话（feed 拦截 header 全量复用，含 Cookie/device_id/x-tt-token）→ NSURLSession 发出 → `status_code==0` 才算成功。
+> **实现（v1.4.135）**：新增 `net_like` 命令（CommandEngine `_performNetLike:`）——aweme_id 缺省取当前 feed 第一条视频；XNURLProtocol 新增缓存最近 feed 请求 header/URL（`lastFeedRequestHeaders`/`lastFeedRequestURL`）；复用 feed host 拼 `/aweme/v1/aweme/digg/`，form body `aweme_id&digg_type=1&repost=false`。
+
+### 135 装机验证清单
+1. **net_like 默认**：feed 首页下发 `net_like`（不带参数）→ 结果 `status=success` 且 response `status_code=0` = 真成功；若 failed，看上报的 `response` body（HTTP 码/status_msg）判断：签名被拒 / 端点不对 / 需要换路径
+2. **net_like 指定视频**：`net_like aweme_id=<已知视频ID>` → 同上验证
+3. **验证已点**：feed 上该视频红心是否点亮（如果能）→ 或 re-scan 看 is_digg 字段（若可达）
+4. **会话材料诊断**：结果里的 `feed_headers_captured` / 上报的 response 帮助定位签名机制
+
 ## 🔵 新发现待后续批次（触摸盲区）
 
 ### 闪退专项结论（2026-08-29 深挖完成）：两类崩溃，主因是 TikTok 自身 bug
