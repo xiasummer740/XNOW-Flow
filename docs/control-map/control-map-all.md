@@ -1,17 +1,18 @@
 # TikTok 控件基线地图 · 全量汇总
 
-> 生成 2026-08-29 21:48:23 | 设备 iphone_A8DE7E93 | 7 个页面
+> 生成 2026-08-30 18:15:01 | 设备 iphone_A8DE7E93 | 8 个页面
 > 用途: 修控件先查此表，不现场猜。TikTok 更新后重采 diff 对照，锚点漂移一眼看出。
 
 ## 页面索引
 
 - `comment` — 189 控件（2026-08-29 21:46:37）
-- `edit_profile` — 54 控件（2026-08-29 21:48:23）
+- `edit_profile` — 20 控件（2026-08-30 17:58:42）
 - `feed` — 63 控件（2026-08-28 19:58:00）
 - `following` — 194 控件（2026-08-29 14:42:37 (log 恢复)）
-- `friends` — 63 控件（2026-08-28 23:05:33）
+- `friends` — 36 控件（2026-08-30 18:05:47）
+- `inbox` — 28 控件（2026-08-30 18:13:34）
 - `profile` — 73 控件（2026-08-28 22:40:49）
-- `search` — 64 控件（2026-08-28 21:06:34）
+- `search` — 24 控件（2026-08-30 18:15:01）
 
 ## comment（189 控件）
 
@@ -207,51 +208,21 @@
 | `TUXDualBallLoadingIndicator` | `` | 207,7382 | `{191, 7366}, {32, 32}` | Loading | None |
 | `YYLabel` | `` | 207,7382 | `{16, 7360}, {382, 44}` |   | None |
 
-## edit_profile（54 控件）
+## edit_profile（20 控件）
 
 | 类名 | accId | x,y | frame | label | 选中 |
 |------|-------|-----|-------|-------|-----|
+| `UIButton` | `` | 12,-414 | `{12, -413.66666603088379}, {0, 0}` |  | False |
+| `UITableViewCellContentView` | `` | 207,-388 | `{12, -413.66666603088379}, {390, 52}` |  | None |
+| `TUXToggle` | `` | 367,-388 | `{343.33333333333331, -401.66666603088379}, {48, 28}` |  | False |
+| `TUXRadio` | `` | 376,-388 | `{366, -397.66666603088379}, {20, 20}` |  | None |
+| `TUXAlertBadge` | `` | 359,-387 | `{351, -394.9999993642171}, {15, 15}` | You have 0 new notifications | None |
 | `UIButton` | `` | 28,42 | `{6, 20}, {44, 44}` | Back | False |
 | `TTKSocialAvatarProgressBannerView` | `` | 207,93 | `{0, 64}, {414, 58}` |  | None |
 | `AWEPublishProgressDefaultWrapper` | `` | 35,114 | `{12, 84}, {45, 60}` |  | None |
-| `TTKAvatarCommonBadgeView` | `` | 151,130 | `{151, 130}, {0, 0}` |  | None |
-| `BDImageView` | `` | 207,186 | `{151, 130}, {112, 112}` |  | None |
-| `UITableViewCellContentView` | `` | 207,207 | `{12, 122}, {390, 169}` |  | None |
-| `TUXLabel` | `` | 207,263 | `{137.33333333333331, 254}, {139.66666666666669, 17}` |  | None |
-| `UIButton` | `` | 12,291 | `{12, 291.00000063578284}, {0, 0}` |  | False |
-| `UITableViewCellContentView` | `` | 207,317 | `{12, 291.00000063578284}, {390, 52}` |  | None |
-| `TUXAlertBadge` | `` | 359,317 | `{351, 309.66666730244953}, {15, 15}` | You have 0 new notifications | None |
-| `TUXToggle` | `` | 367,317 | `{343.33333333333331, 303.00000063578284}, {48, 28}` |  | False |
-| `TUXRadio` | `` | 376,317 | `{366, 307.00000063578284}, {20, 20}` |  | None |
-| `UIButton` | `` | 12,343 | `{12, 343.00000063578284}, {0, 0}` |  | False |
-| `UITableViewCellContentView` | `` | 207,367 | `{12, 343.00000063578284}, {390, 48}` |  | None |
-| `TUXAlertBadge` | `` | 359,367 | `{351, 359.66666730244953}, {15, 15}` | You have 0 new notifications | None |
 | `AWEMaskWindow` | `AWEMaskWindow` | 207,368 | `{0, 0}, {414, 736}` |  | None |
 | `UILayoutContainerView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `TUXToggle` | `` | 367,369 | `{343.33333333333331, 355.00000063578284}, {48, 28}` |  | False |
-| `TUXRadio` | `` | 376,369 | `{366, 359.00000063578284}, {20, 20}` |  | None |
-| `UIButton` | `` | 12,391 | `{12, 391.00000063578284}, {0, 0}` |  | False |
-| `UITableViewCellContentView` | `` | 207,417 | `{12, 391.00000063578284}, {390, 52}` |  | None |
-| `TUXAlertBadge` | `` | 359,417 | `{351, 409.66666730244953}, {15, 15}` | You have 0 new notifications | None |
-| `TUXToggle` | `` | 367,417 | `{343.33333333333331, 403.00000063578284}, {48, 28}` |  | False |
-| `TUXRadio` | `` | 376,417 | `{366, 407.00000063578284}, {20, 20}` |  | None |
-| `UITableView` | `` | 207,429 | `{12, 122}, {390, 614}` |  | None |
-| `UIButton` | `` | 12,484 | `{12, 484.00000127156579}, {0, 0}` |  | False |
-| `TUXToggle` | `` | 367,510 | `{343.33333333333331, 496.00000127156579}, {48, 28}` |  | False |
-| `TUXRadio` | `` | 376,510 | `{366, 500.00000127156579}, {20, 20}` |  | None |
-| `UITableViewCellContentView` | `` | 207,523 | `{12, 484.00000127156579}, {390, 77.666664123535156}` |  | None |
-| `TUXAlertBadge` | `` | 359,523 | `{351, 515.33333460489916}, {15, 15}` | You have 0 new notifications | None |
-| `UIButton` | `` | 12,562 | `{12, 561.66666539510095}, {0, 0}` |  | False |
-| `UITableViewCellContentView` | `` | 207,586 | `{12, 561.66666539510095}, {390, 48}` |  | None |
-| `TUXAlertBadge` | `` | 359,586 | `{351, 578.33333206176758}, {15, 15}` | You have 0 new notifications | None |
-| `TUXToggle` | `` | 367,588 | `{343.33333333333331, 573.66666539510095}, {48, 28}` |  | False |
-| `TUXRadio` | `` | 376,588 | `{366, 577.66666539510095}, {20, 20}` |  | None |
-| `UIButton` | `` | 12,610 | `{12, 609.66666539510095}, {0, 0}` |  | False |
-| `UITableViewCellContentView` | `` | 207,636 | `{12, 609.66666539510095}, {390, 52}` |  | None |
-| `TUXAlertBadge` | `` | 359,636 | `{351, 628.33333206176758}, {15, 15}` | You have 0 new notifications | None |
-| `TUXToggle` | `` | 367,636 | `{343.33333333333331, 621.66666539510095}, {48, 28}` |  | False |
-| `TUXRadio` | `` | 376,636 | `{366, 625.66666539510095}, {20, 20}` |  | None |
-| `UIButton` | `` | 12,703 | `{12, 702.66666666666663}, {0, 0}` |  | False |
+| `UITableView` | `` | 207,429 | `{12, 122}, {390, 613.99999999999989}` |  | None |
 | `TTKTabBarButton` | `a11y_vo_home` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | False |
 | `TTKTabBarAnimationContentView` | `` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | None |
 | `TTKTabBarButton` | `friends` | 124,712 | `{82.799999999999983, 687}, {82.799999999999983, 49}` | Friends | False |
@@ -261,10 +232,6 @@
 | `TTKTabBarAnimationContentView` | `` | 290,712 | `{248.39999999999995, 687}, {82.799999999999983, 49}` | Inbox | None |
 | `TTKTabBarButton` | `a11y_vo_profile` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | False |
 | `TTKTabBarAnimationContentView` | `` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | None |
-| `UITableViewCellContentView` | `` | 207,729 | `{12, 702.66666666666663}, {390, 52}` |  | None |
-| `TUXAlertBadge` | `` | 359,729 | `{351, 721.33333333333326}, {15, 15}` | You have 0 new notifications | None |
-| `TUXToggle` | `` | 367,729 | `{343.33333333333331, 714.66666666666663}, {48, 28}` |  | False |
-| `TUXRadio` | `` | 376,729 | `{366, 718.66666666666663}, {20, 20}` |  | None |
 
 ## feed（63 控件）
 
@@ -533,7 +500,7 @@
 | `TUXDualBallLoadingIndicator` | `` | 207,4028 | `{191, 4012}, {32, 32}` | Loading | None |
 | `YYLabel` | `` | 207,4057 | `{0, 4050}, {414, 14}` |   | None |
 
-## friends（63 控件）
+## friends（36 控件）
 
 | 类名 | accId | x,y | frame | label | 选中 |
 |------|-------|-----|-------|-------|-----|
@@ -549,18 +516,11 @@
 | `UIView` | `TTKFeedSkylightComponent` | 207,99 | `{0, 0}, {414, 197}` |  | None |
 | `AWEPublishProgressWrapper` | `TTKFeedPublishComponent` | 48,109 | `{16, 70}, {63, 78}` |  | None |
 | `AWEPublishProgressDefaultWrapper` | `` | 35,114 | `{12, 84}, {45, 60}` |  | None |
-| `BDImageView` | `` | 54,117 | `{15, 78}, {78, 78}` |  | None |
-| `UIButton` | `` | 389,125 | `{374, 110}, {30, 30}` |  | False |
-| `UIView` | `` | 54,131 | `{4, 64}, {100, 133}` |  | None |
 | `UIScrollView` | `` | 207,131 | `{0, 64}, {414, 133}` |  | None |
 | `UICollectionView` | `` | 207,131 | `{0, 64}, {414, 133}` |  | None |
 | `TTKAvatarCommonBadgeView` | `` | 83,146 | `{73, 136}, {20, 20}` |  | None |
-| `UIView` | `` | 83,146 | `{73, 136}, {20, 20}` | Plus | None |
-| `UIView` | `` | 207,344 | `{0, 0}, {414, 687}` |  | None |
-| `TUXButton` | `` | 207,349 | `{20, 325}, {374, 48}` | Connect with contacts | False |
 | `AWEMaskWindow` | `AWEMaskWindow` | 207,368 | `{0, 0}, {414, 736}` |  | None |
 | `UILayoutContainerView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `UIView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
 | `AWEFeedSlidingScrollView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
 | `UIView` | `TTKFeedRootComponent` | 207,368 | `{0, 0}, {414, 736}` |  | None |
 | `AWENewFeedTableView` | `TTKFeedTableViewService` | 207,368 | `{0, 0}, {414, 736}` |  | None |
@@ -568,38 +528,51 @@
 | `UITableViewCellContentView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
 | `AWEFeedLiveSkylightCatchView` | `TTKFeedSkylightCatchComponent` | 207,368 | `{0, 0}, {414, 736}` |  | None |
 | `TTKRelationUserCardCollectionView` | `` | 207,376 | `{0, 64}, {414, 623}` |  | None |
-| `TUXButton` | `` | 207,409 | `{20, 385}, {374, 48}` | Connect with Facebook friends | False |
-| `TUXButton` | `` | 207,469 | `{20, 445}, {374, 48}` | Invite friends | False |
-| `TTKShareRowCell` | `` | 44,536 | `{12, 492.33333333333337}, {64, 87}` | My QR code | None |
-| `UIView` | `` | 44,536 | `{12, 492.33333333333337}, {64, 87}` |  | None |
-| `TTKShareRowCell` | `` | 112,536 | `{80, 492.33333333333337}, {64, 87}` | SMS | None |
-| `UIView` | `` | 112,536 | `{80, 492.33333333333337}, {64, 87}` |  | None |
-| `TTKShareRowCell` | `` | 180,536 | `{148, 492.33333333333337}, {64, 87}` | Copy link | None |
-| `UIView` | `` | 180,536 | `{148, 492.33333333333337}, {64, 87}` |  | None |
-| `TTKShareInviteFriendsRowView` | `` | 205,536 | `{-4, 493}, {418, 86}` |  | None |
-| `TTKShareRowCell` | `` | 248,536 | `{216, 492.33333333333337}, {64, 87}` | WA Business | None |
-| `UIView` | `` | 248,536 | `{216, 492.33333333333337}, {64, 87}` |  | None |
-| `TTKShareRowCell` | `` | 316,536 | `{284, 492.33333333333337}, {64, 87}` | Facebook | None |
-| `UIView` | `` | 316,536 | `{284, 492.33333333333337}, {64, 87}` |  | None |
-| `TTKShareRowCell` | `` | 384,536 | `{352, 492.33333333333337}, {64, 87}` | More | None |
-| `UIView` | `` | 384,536 | `{352, 492.33333333333337}, {64, 87}` |  | None |
+| `TUXButton` | `` | 207,376 | `{20, 352}, {374, 48}` | Connect with Facebook friends | False |
+| `TTKShareRowCell` | `` | 44,503 | `{12, 459.33333333333331}, {64, 86.999999999999943}` | My QR code | None |
+| `TTKShareInviteFriendsRowView` | `` | 205,503 | `{-4, 460}, {418, 86}` |  | None |
 | `TTKTabBarButton` | `a11y_vo_home` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | False |
 | `TTKTabBarAnimationContentView` | `` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | None |
-| `UITabBarButton` | `` | 52,712 | `{2, 688}, {100, 48}` |  | False |
 | `TTKTabBarButton` | `friends` | 124,712 | `{82.799999999999983, 687}, {82.799999999999983, 49}` | Friends | False |
-| `TTKTabBarAnimationContentView` | `` | 124,712 | `{82.799999999999983, 687}, {82.799999999999983, 49}` | Friends | None |
-| `UITabBarButton` | `` | 156,712 | `{106, 688}, {99, 48}` |  | False |
 | `AWETabBarPlusButton` | `` | 207,712 | `{165.59999999999999, 687}, {82.799999999999983, 49}` | Create | False |
-| `UITabBarButton` | `` | 259,712 | `{209, 688}, {100, 48}` |  | False |
 | `TTKTabBarButton` | `a11y_vo_inbox` | 290,712 | `{248.39999999999995, 687}, {82.799999999999983, 49}` | Inbox Button. 1 unread notifications. | False |
-| `TTKTabBarAnimationContentView` | `` | 290,712 | `{248.39999999999995, 687}, {82.799999999999983, 49}` | Inbox | None |
-| `UITabBarButton` | `` | 363,712 | `{313, 688}, {99, 48}` |  | False |
 | `TTKTabBarButton` | `a11y_vo_profile` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | False |
-| `TTKTabBarAnimationContentView` | `` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | None |
 | `AWEFeedRefreshFooter` | `` | 207,758 | `{0, 736}, {414, 44}` | No more results | None |
-| `UIButton` | `` | 207,758 | `{0, 736}, {414, 44}` |  | False |
 | `TUXDualBallLoadingIndicator` | `` | 207,758 | `{191, 742}, {32, 32}` | Loading | None |
 | `YYLabel` | `` | 207,758 | `{16, 736}, {382, 44}` | No more results | None |
+
+## inbox（28 控件）
+
+| 类名 | accId | x,y | frame | label | 选中 |
+|------|-------|-----|-------|-------|-----|
+| `TUXDualBallLoadingIndicator` | `` | 207,38 | `{191, 22}, {32, 32}` | Loading | None |
+| `UIButton` | `` | 28,42 | `{6, 20}, {44, 44}` |  | False |
+| `UIView` | `` | 225,42 | `{183.66666666666666, 27}, {82.666666666666657, 30}` |  | None |
+| `TTKInboxActivityStatusView` | `` | 248,42 | `{236.33333333333334, 34}, {24.000000000000028, 16}` | Status | None |
+| `TTTAttributedLabel` | `` | 183,111 | `{74, 79}, {217, 64}` |  | None |
+| `UIControl` | `` | 207,111 | `{8, 79}, {398, 64}` |  | False |
+| `TUXButton` | `` | 336,111 | `{303, 97}, {65, 28}` | Invite | False |
+| `AWEPublishProgressDefaultWrapper` | `` | 35,114 | `{12, 84}, {45, 60}` |  | None |
+| `TikTokSocialImplSwift.StoryNoteGradientTextView` | `` | 28,181 | `{20, 168.66666666666669}, {16, 24.666666666666657}` |  | None |
+| `TikTokSocialImplSwift.AlwaysCursorPlaceholderTextView` | `` | 54,181 | `{23.333333333333332, 162.33333333333331}, {61.333333333333343, 37.333333333333343}` |  | None |
+| `BDImageView` | `` | 54,223 | `{15, 184}, {78, 78}` |  | None |
+| `UIImageView` | `` | 154,223 | `{115, 184}, {78, 78}` |  | None |
+| `TUXSpinner` | `` | 358,223 | `{346, 211}, {24, 24}` | Loading | None |
+| `UICollectionView` | `` | 207,236 | `{0, 174}, {414, 123}` |  | None |
+| `TTKAvatarCommonBadgeView` | `` | 83,252 | `{73, 242}, {20, 20}` |  | None |
+| `TUXCheckbox` | `` | -11,341 | `{-22, 330}, {22, 22}` |  | None |
+| `TTKInboxActivityFrameEntranceOrderingCell` | `` | 207,341 | `{0, 305}, {414, 72}` |  | None |
+| `AWEMaskWindow` | `AWEMaskWindow` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `UILayoutContainerView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `UIEditingOverlayGestureView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `TTKWidgetCollectionView` | `` | 207,376 | `{0, 64}, {414, 623}` |  | None |
+| `YYLabel` | `` | 207,543 | `{16, 521.00999999999999}, {382, 44}` | No more results | None |
+| `TTKTabBarButton` | `a11y_vo_home` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | False |
+| `TTKTabBarAnimationContentView` | `` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | None |
+| `TTKTabBarButton` | `friends` | 124,712 | `{82.799999999999983, 687}, {82.799999999999983, 49}` | Friends | False |
+| `AWETabBarPlusButton` | `` | 207,712 | `{165.59999999999999, 687}, {82.799999999999983, 49}` | Create | False |
+| `TTKTabBarButton` | `a11y_vo_inbox` | 290,712 | `{248.39999999999995, 687}, {82.799999999999983, 49}` | Inbox Button. 1 unread notifications. | False |
+| `TTKTabBarButton` | `a11y_vo_profile` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | False |
 
 ## profile（73 控件）
 
@@ -679,71 +652,31 @@
 | `TTKTabBarButton` | `a11y_vo_profile` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | False |
 | `TTKTabBarAnimationContentView` | `` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | None |
 
-## search（64 控件）
+## search（24 控件）
 
 | 类名 | accId | x,y | frame | label | 选中 |
 |------|-------|-----|-------|-------|-----|
-| `UIButton` | `` | 26,42 | `{4, 20}, {44, 44}` | Back | False |
-| `AWESearchBar` | `` | 191,42 | `{48, 24}, {285, 36}` |  | None |
-| `_UISearchBarSearchContainerView` | `` | 191,42 | `{48, 24}, {285, 36}` |  | None |
-| `UISearchBarTextField` | `` | 191,42 | `{48, 24}, {285, 36}` |  | False |
-| `_UISearchBarFieldEditor` | `` | 206,42 | `{79, 24}, {254, 36}` |  | None |
-| `TTKSearchBarRightButton` | `` | 309,42 | `{285, 24}, {48, 36}` | Voice search | None |
-| `UIView` | `` | 315,42 | `{297, 24}, {36, 36}` |  | None |
-| `TTKSearchPressStatusButton` | `` | 374,42 | `{349, 26.666666666666671}, {49, 31}` | Search | False |
-| `LynxTextView` | `` | 333,98 | `{309.66666666666669, 89}, {47.333333333333314, 17}` | Refresh | None |
+| `TUXBarItem` | `` | 28,42 | `{16, 30}, {24, 24}` | Back | None |
+| `UIButton` | `` | 28,42 | `{16, 30}, {24, 24}` | Back | False |
+| `UIImageView` | `` | 68,42 | `{58, 32}, {20, 20}` |  | None |
+| `UIView` | `` | 223,42 | `{48, 24}, {350, 36}` |  | None |
+| `TUXCustomPlaceholderTextField` | `` | 227,42 | `{84, 32}, {286, 20}` |  | False |
+| `UIFieldEditor` | `` | 227,42 | `{84, 32}, {286, 20}` |  | None |
+| `AWESlidingTabButton` | `` | 30,84 | `{3.5527136788005009e-15, 64}, {60, 40}` | All | True |
+| `UIScrollView` | `` | 207,84 | `{0, 64}, {414, 40}` |  | None |
 | `AWEPublishProgressDefaultWrapper` | `` | 35,114 | `{12, 84}, {45, 60}` |  | None |
-| `LynxTextView` | `` | 163,132 | `{39.999999999999986, 121.66666666666667}, {245.66666666666663, 21.000000000000014}` | call mcdonald's on tiktok tutorial | None |
-| `UILynxView` | `` | 207,142 | `{8, 116}, {398, 52}` | call mcdonald's on tiktok tutorialacc_trending | None |
-| `LynxTextView` | `` | 80,151 | `{54, 142.66666666666669}, {52, 17}` | Trending | None |
-| `LynxTextView` | `` | 148,184 | `{40.000000000000014, 173.66666666666669}, {216.33333333333337, 21}` | Paper Squishy Ideas Go Viral | None |
-| `UILynxView` | `` | 207,194 | `{8, 168}, {398, 52}` | Paper Squishy Ideas Go Viralacc_trending | None |
-| `LynxTextView` | `` | 80,203 | `{54, 194.66666666666669}, {52, 17}` | Trending | None |
-| `LynxTextView` | `` | 156,236 | `{39.999999999999986, 225.66666666666669}, {232.66666666666663, 21}` | spiderman eye makeup tutorial | None |
-| `UILynxView` | `` | 207,246 | `{8, 220}, {398, 52}` | spiderman eye makeup tutorialacc_trending | None |
-| `LynxTextView` | `` | 80,255 | `{54, 246.66666666666669}, {52, 17}` | Trending | None |
-| `LynxTextView` | `` | 118,288 | `{40, 277.66666666666663}, {156, 21}` | Creator Insights Tips | None |
-| `UILynxView` | `` | 207,298 | `{8, 272}, {398, 52}` | Creator Insights Tipsacc_trending | None |
-| `LynxTextView` | `` | 80,307 | `{54, 298.66666666666669}, {52, 17}` | Trending | None |
-| `LynxTextView` | `` | 141,343 | `{40, 332}, {201.33333333333334, 21}` | Cat Sounds to Attract Cats | None |
-| `UILynxView` | `` | 207,344 | `{8, 324}, {398, 40}` | Cat Sounds to Attract Cats | None |
+| `AWEFeedRefreshFooter` | `` | 207,126 | `{0, 104}, {414, 44}` |   | None |
+| `TUXDualBallLoadingIndicator` | `` | 207,126 | `{191, 110}, {32, 32}` | Loading | None |
+| `YYLabel` | `` | 207,126 | `{16, 104}, {382, 44}` |   | None |
 | `AWEMaskWindow` | `AWEMaskWindow` | 207,368 | `{0, 0}, {414, 736}` |  | None |
 | `UILayoutContainerView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
 | `UIEditingOverlayGestureView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `LynxTextView` | `` | 129,380 | `{40, 369.66666666666663}, {178.33333333333334, 21}` | Squishy Toy ASMR Viral | None |
-| `UILynxView` | `` | 207,390 | `{8, 364}, {398, 52}` | Squishy Toy ASMR Viralacc_trending | None |
-| `LynxTextView` | `` | 80,399 | `{54, 390.66666666666669}, {52, 17}` | Trending | None |
-| `UIView` | `` | 207,400 | `{0, 64}, {414, 672}` |  | None |
-| `UITableView` | `` | 207,400 | `{0, 64}, {414, 672}` |  | None |
-| `UITableView` | `` | 207,414 | `{0, 64}, {414, 700}` |  | None |
-| `LynxTextView` | `` | 102,432 | `{40, 421.66666666666669}, {124, 21}` | GTA 6 Reactions | None |
-| `UILynxView` | `` | 207,442 | `{8, 416}, {398, 52}` | GTA 6 Reactionsacc_trending | None |
-| `LynxTextView` | `` | 80,451 | `{54, 442.66666666666669}, {52, 17}` | Trending | None |
-| `LynxTextView` | `` | 129,484 | `{40, 473.66666666666669}, {177.66666666666666, 21}` | SpongeBob Filter Trend | None |
-| `UILynxView` | `` | 207,494 | `{8, 468}, {398, 52}` | SpongeBob Filter Trendacc_trending | None |
-| `LynxTextView` | `` | 80,503 | `{54, 494.66666666666669}, {52, 17}` | Trending | None |
-| `LynxTextView` | `` | 145,536 | `{40, 525.66666666666674}, {209, 21}` | creator insights tool tutorial | None |
-| `UILynxView` | `` | 207,546 | `{8, 520}, {398, 52}` | creator insights tool tutorialacc_trending | None |
-| `LynxTextView` | `` | 80,555 | `{54, 546.66666666666674}, {52, 17}` | Trending | None |
-| `UITableViewCellContentView` | `` | 207,570 | `{0, 64}, {414, 1012}` |  | None |
-| `HybridLynxView` | `` | 207,570 | `{0, 64}, {414, 1012}` | lynxview | None |
-| `LynxScrollView` | `` | 207,570 | `{0, 64}, {414, 1012}` |  | None |
-| `LynxTextView` | `` | 154,588 | `{40, 577.66666666666674}, {227, 21}` | cat in the hat blackpool meme | None |
-| `UILynxView` | `` | 207,598 | `{8, 572}, {398, 52}` | cat in the hat blackpool memeacc_trending | None |
-| `LynxTextView` | `` | 80,607 | `{54, 598.66666666666674}, {52, 17}` | Trending | None |
-| `LynxScrollView` | `` | 207,650 | `{0, 624}, {414, 52}` |  | None |
-| `LynxTextView` | `` | 91,656 | `{16, 646}, {150.66666666666666, 20}` | Trending searches | None |
-| `LynxTextView` | `` | 251,656 | `{198.66666666666669, 646}, {104.66666666666669, 20}` | Popular LIVE | None |
-| `LynxTextView` | `` | 381,656 | `{335.33333333333331, 646}, {91.333333333333314, 20}` | Viral songs | None |
+| `UICollectionView` | `` | 207,400 | `{0, 64}, {414, 672}` |  | None |
+| `AWESlidingScrollView` | `` | 207,420 | `{0, 104}, {414, 632}` |  | None |
+| `TUXStatusView` | `` | 207,420 | `{0, 104}, {414, 632}` |  | None |
 | `TTKTabBarButton` | `a11y_vo_home` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | False |
 | `TTKTabBarAnimationContentView` | `` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | None |
 | `TTKTabBarButton` | `friends` | 124,712 | `{82.799999999999983, 687}, {82.799999999999983, 49}` | Friends | False |
-| `TTKTabBarAnimationContentView` | `` | 124,712 | `{82.799999999999983, 687}, {82.799999999999983, 49}` | Friends | None |
 | `AWETabBarPlusButton` | `` | 207,712 | `{165.59999999999999, 687}, {82.799999999999983, 49}` | Create | False |
 | `TTKTabBarButton` | `a11y_vo_inbox` | 290,712 | `{248.39999999999995, 687}, {82.799999999999983, 49}` | Inbox Button. 1 unread notifications. | False |
-| `TTKTabBarAnimationContentView` | `` | 290,712 | `{248.39999999999995, 687}, {82.799999999999983, 49}` | Inbox | None |
 | `TTKTabBarButton` | `a11y_vo_profile` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | False |
-| `TTKTabBarAnimationContentView` | `` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | None |
-| `LynxTextView` | `` | 207,862 | `{114.33333333333333, 849.66666666666663}, {185.66666666666669, 24}` | Something went wrong | None |
-| `LynxTextView` | `` | 207,892 | `{85.666666666666671, 881.66666666666663}, {242.66666666666663, 21}` | No suggested search topics available. | None |
-| `LynxTextView` | `` | 200,10641 | `{163, 10632}, {74.333333333333314, 18}` | View more | None |

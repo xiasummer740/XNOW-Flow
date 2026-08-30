@@ -1,26 +1,24 @@
-# TODO 快照 — 2026-08-29 深夜
+# TODO 快照 — 2026-08-30 凌晨
 
-## 当前进度
-- **✅ 控件基线地图 7 页全齐（2026-08-29）**：feed(63) / search(64) / profile(73) / friends(63) / following(194) / comment(189) / edit_profile(54) = 700 控件
-- **✅ 触摸盲区专项收尾**：四路全死（HID/KVC/sendAction/accessibilityActivate），134 acc_click 验证 5 项全 ok=false
-- **✅ 闪退专项深挖完成（2026-08-29 深夜）**：唯一带栈崩溃(14:46 NSInternalInconsistencyException) 调用栈 0 帧是我们 dylib = **TikTok 自身后台线程改布局 bug**；`AWEPublishProgressDefaultWrapper`「上传卡死」假设**证伪**（7 页全常驻休眠 overlay）；今天 4 段崩溃全空闲时段、无一是我们指令；昨天 open_tab watchdog 崩已由 129 修复且今天全过
+## 当前进度（祥哥四指令已执行 3/4）
+1. **✅ 闪退选 B**：已文档化不动（TikTok 自身 bug + 崩溃自愈兜底）
+2. **✅ 滚动加载采集**：collect_scroll 机制验证（edit_profile 单元格位移）；**4 页滚动采集完成** edit_profile(165)/friends(290)/inbox(250)/search(175)；friends 页重采修复了之前误采成 edit_profile 的脏数据
+3. **✅ 自由切页 5/5 打通**：feed=open_tab home / search=open_search / profile=open_tab profile / friends=open_tab friends / inbox=open_tab inbox，每页 ui_scan 判据落位；**go_back 左缘右滑退推入页验证成功**（edit_profile→profile）
+4. **⏳ 交互选 C 纯网络层**：未动工，下一大项
 
-## 铁证（已落地）
-- 14:46 崩溃调用栈逐帧分析：objc_exception_throw→CoreAutoLayout→UIKitCore→**MusicallyCore awemeMain ×3**→QuartzCore→pthread，无 XNOWER/CommandEngine 帧
-- post_video/publish 指令历史核对：从未下发过
-- 崩溃时间线：扫描后空闲 4 分钟崩、心跳断→重启上报 pending；ok+ok 成对 = jetsam/SIGKILL 特征
-- ISSUES.md 闪退段已改写为完整实锤结论
+## 关键发现（本会话实锤）
+- **go_back 是退推入页的唯一现成路径**：`_performGoBack`(CommandEngine.m:2833) 找 Back 按钮 tap（死）→ 兜底左缘右滑 `_simulateSwipeFrom:(5,midY)→(0.6w,midY)`（有效）——之前「open_tab friends 成功但画面还是 edit_profile」的根因就是推入页不随 tab 切换消失
+- **open_search 的搜索图标 tap 有效**：图标是手势识别非 UIControl（Lynx 搜索页打开成功）——证明「手势识别的 view tap 有效，UIControl touchUpInside 无效」边界更清晰
+- **scroll_down 在列表页不是 no-op**：`_tryPageFeed` 找到 AWENewFeedTableView 走 setContentOffset 路径（日志 offset 736→2944 递增），只是 friends/inbox 列表短/空态滚动无新内容
+- **控件地图现 8 页**：feed(63)/search(175)/profile(73)/friends(290)/following(194)/comment(189)/edit_profile(165)/inbox(250)
 
-## 下一步（等祥哥拍板方向）
-1. **闪退自愈/规避**：TikTok 侧 bug 无法根治 → 三选：①swizzle 吞异常（高风险，需拍板）②依赖崩溃自愈(已具备)③避开内存重页面
-2. **触摸全死后 like/follow/comment/edit 怎么办**：
-   - XCUITest 测试框架注入（唯一 Apple 官方合成触摸路径，重构大）
-   - 深链扩展（部分导航可用，like/follow/comment 无深链）
-   - 接受真机退化，转纯网络层能力
+## 下一步
+1. **纯网络层 like/follow/comment/edit（#18）**：运行时内省 MusicallyCore 找请求模型（RepostDiggRequestModel 已确认存在）→ 用 app 网络栈发请求 → 新命令。推入页（following/comment/edit_profile）数据操作也走此层，不依赖 UI 导航
+2. 深链补强：验证 snssdk1233://aweme/detail/<id> 打开视频详情 → 评论面板是否可达
 3. 验 Keychain：下次重装 device_id 不漂移（133 已双写）
-4. 后端 ws.py 临时调试点（acc_diag/unknown type 打日志）稳定后可还原
 
 ## 风险备忘
-- 全局 openai 包损坏（openai.types.beta.threads 缺模块），vision 需用 `uv run` 绕过
-- 设备空闲会崩（TikTok 自身 bug + 低内存），手工导航采集要多留恢复手段
-- 134 是无障碍验证版，不进正式功能
+- 全局 openai 包损坏，vision 用 `uv run` 绕过
+- 设备空闲会崩（TikTok 自身 bug + 低内存），导航/采集多留恢复手段
+- 134 无障碍验证版不进正式功能
+- 触摸 tap 对 UIControl 全死（四路已证），纯网络层是唯一正解

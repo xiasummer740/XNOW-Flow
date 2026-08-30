@@ -21,7 +21,7 @@ TikTok 更新后: 重新采集同页面 → diff 对照旧基线，一眼看出�
 import os, re, sys, json, time, urllib.request, urllib.error, paramiko
 
 PROJECT = os.path.dirname(os.path.abspath(__file__))
-DEVICE = "iphone_A6D8F9B4"
+DEVICE = os.environ.get("XNOW_DEVICE", "iphone_A8DE7E93")
 CLOUD = "http://192.129.210.52:8000"
 HOST = "192.129.210.52"
 OUTDIR = os.path.join(PROJECT, "docs", "control-map")
@@ -87,14 +87,14 @@ def _log_from(offset, maxbytes=300000):
     return o.read().decode("utf-8", "replace")
 
 
-def collect(page, wait=4.0, timeout=60):
-    """下发 ui_scan 并解析控件"""
+def _scan_once(timeout=60):
+    """下发 ui_scan 并解析控件（单次快照）。返回去重后的 controls 列表。"""
     os.makedirs(OUTDIR, exist_ok=True)
     before = _log_size()
-    r = _api("POST", f"/api/biz/v2/devices/{DEVICE}/command/",
-             {"action": "ui_scan", "params": {}})
+    _api("POST", f"/api/biz/v2/devices/{DEVICE}/command/",
+         {"action": "ui_scan", "params": {}})
     deadline = time.time() + timeout
-    time.sleep(wait)
+    time.sleep(4.0)
     text = ""
     got_result = got_summary = False
     last_sz = 0
@@ -132,7 +132,6 @@ def collect(page, wait=4.0, timeout=60):
     # 去重(同 class+accId+坐标 10px 内)
     deduped, seen = [], []
     for c in controls:
-        key = (c["class"], c["accId"])
         dup = any(abs(c["x"] - s["x"]) <= 10 and abs(c["y"] - s["y"]) <= 10
                   and s["class"] == c["class"] and s["accId"] == c["accId"] for s in seen)
         if not dup:
@@ -141,29 +140,90 @@ def collect(page, wait=4.0, timeout=60):
         print("⚠️  未解析到控件行。可能 ui_scan 未完成或 log 读取失败，最后 2000 字符：")
         print(text[-2000:])
         return None
-    # 落盘
+    return deduped
+
+
+def collect(page, wait=4.0, timeout=60):
+    """下发 ui_scan 并解析控件（单页单次采集）"""
+    deduped = _scan_once(timeout)
+    if deduped is None:
+        return None
+    _save(page, deduped)
+    print(f"✅ 采集完成 {page}: {len(deduped)} 控件 → {os.path.join(OUTDIR, page + '.json')}")
+    return deduped
+
+
+def collect_scroll(page, scrolls=6, timeout=60):
+    """滚动采集：scan → scroll_down → 再 scan → 合并，覆盖滚动加载的控件。
+
+    合并策略：按 (class, accId, label) 归并 —— 列表行模板（同 class+accId）重复出现
+    记为多实例；新 label（滚动加载出的新行内容）也纳入。输出「控件类型 + 实例数 +
+    首次出现位置」，反应整页滚动范围的控件结构。
+    """
+    master = {}            # (class, accId) -> merged（列表行模板归并）
+    order = []             # 保持首次出现顺序
+    scans = []
+    for i in range(scrolls):
+        controls = _scan_once(timeout)
+        if controls is None:
+            break
+        scans.append(controls)
+        fresh = 0
+        for c in controls:
+            key = (c["class"], c["accId"])
+            if key in master:
+                m = master[key]
+                m["count"] += 1
+                # label 记出现最多的（模板 label = 多数行共享的文案）
+                m["_label_cnt"][c["label"]] = m["_label_cnt"].get(c["label"], 0) + 1
+            else:
+                master[key] = {**c, "count": 1, "_label_cnt": {c["label"]: 1}}
+                order.append(key)
+                fresh += 1
+        print(f"  滚动 {i+1}/{scrolls}: {len(controls)} 元素, 本轮新控件类型 {fresh}")
+        if i < scrolls - 1:
+            _api("POST", f"/api/biz/v2/devices/{DEVICE}/command/",
+                 {"action": "scroll_down", "params": {}})
+            time.sleep(3.5)
+    # 模板 label 落地：取出现最多的 label；首次 y 不变
+    for k in order:
+        m = master[k]
+        m["label"] = max(m["_label_cnt"], key=m["_label_cnt"].get)
+        m.pop("_label_cnt", None)
+    # 组装输出（按首次 y 排序，同屏从上到下）
+    merged = [master[k] for k in order]
+    merged.sort(key=lambda c: (c["y"], c["x"]))
+    total_instances = sum(m["count"] for m in merged)
+    _save(page, merged)
+    print(f"✅ 滚动采集完成 {page}: {len(merged)} 种控件类型 / {total_instances} 实例"
+          f"（{scrolls} 次滚动, {len(scans)} 次扫描）→ {os.path.join(OUTDIR, page + '.json')}")
+    return merged
+
+
+def _save(page, controls):
     json_path = os.path.join(OUTDIR, f"{page}.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump({"page": page, "device": DEVICE,
                    "captured": time.strftime("%Y-%m-%d %H:%M:%S"),
-                   "count": len(deduped), "controls": deduped}, f,
+                   "count": len(controls), "controls": controls}, f,
                   ensure_ascii=False, indent=1)
-    write_md(page, deduped)
+    write_md(page, controls)
     write_index()
     write_all()
-    print(f"✅ 采集完成 {page}: {len(deduped)} 控件 → {json_path}")
-    return deduped
 
 
 def write_md(page, controls):
+    has_count = any("count" in c for c in controls)
     lines = [f"# 控件基线地图: {page}", "",
-             f"> 采集 {time.strftime('%Y-%m-%d %H:%M:%S')} | 设备 {DEVICE} | {len(controls)} 控件",
+             f"> 采集 {time.strftime('%Y-%m-%d %H:%M:%S')} | 设备 {DEVICE} | {len(controls)} 控件"
+             + ("类型（含滚动加载实例数）" if has_count else ""),
              "> 用途: 修控件先查此表，不现场猜。TikTok 更新后重采 diff 对照。", "",
-             "| 类名 | accId | x,y | frame | label | 选中 |",
-             "|------|-------|-----|-------|-------|-----|"]
+             "| 类名 | accId | x,y | frame | label | 选中 | 实例 |",
+             "|------|-------|-----|-------|-------|------|------|"]
     for c in controls:
         label = c["label"].replace("|", "\\|") if c["label"] else ""
-        lines.append(f"| `{c['class']}` | `{c['accId']}` | {c['x']},{c['y']} | `{c['frame']}` | {label} | {c['selected']} |")
+        cnt = c.get("count", "")
+        lines.append(f"| `{c['class']}` | `{c['accId']}` | {c['x']},{c['y']} | `{c['frame']}` | {label} | {c['selected']} | {cnt} |")
     with open(os.path.join(OUTDIR, f"{page}.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
@@ -209,8 +269,16 @@ def write_all():
 
 if __name__ == "__main__":
     _login(); _ssh_connect()
-    page = sys.argv[1] if len(sys.argv) > 1 else "current"
-    wait = float(sys.argv[2]) if len(sys.argv) > 2 else 4.0
-    timeout = int(sys.argv[3]) if len(sys.argv) > 3 else 60
-    collect(page, wait, timeout)
+    args = sys.argv[1:]
+    scrolls = None
+    if "--scroll" in args:
+        i = args.index("--scroll")
+        scrolls = int(args[i + 1]); args = args[:i] + args[i + 2:]
+    page = args[0] if args else "current"
+    wait = float(args[1]) if len(args) > 1 else 4.0
+    timeout = int(args[2]) if len(args) > 2 else 60
+    if scrolls:
+        collect_scroll(page, scrolls, timeout)
+    else:
+        collect(page, wait, timeout)
     _ssh.close()

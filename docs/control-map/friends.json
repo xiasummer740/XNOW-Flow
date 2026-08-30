@@ -1,8 +1,8 @@
 {
  "page": "friends",
- "device": "iphone_A6D8F9B4",
- "captured": "2026-08-28 23:05:33",
- "count": 63,
+ "device": "iphone_A8DE7E93",
+ "captured": "2026-08-30 18:05:47",
+ "count": 36,
  "controls": [
   {
    "class": "UIView",
@@ -11,7 +11,8 @@
    "frame": "{16, 30}, {24, 24}",
    "accId": "",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 55
   },
   {
    "class": "BDImageView",
@@ -20,7 +21,8 @@
    "frame": "{16, 30}, {24, 24}",
    "accId": "",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 10
   },
   {
    "class": "TikTokFeedFadeScrollView",
@@ -29,7 +31,8 @@
    "frame": "{164.66666666666666, 20}, {85, 44}",
    "accId": "",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "TikTokFeedTabItemFriendsControl",
@@ -38,7 +41,8 @@
    "frame": "{166.66666666666666, 20}, {81, 44}",
    "accId": "friends",
    "label": "Friends",
-   "selected": "True"
+   "selected": "True",
+   "count": 5
   },
   {
    "class": "AWESearchBar",
@@ -47,7 +51,8 @@
    "frame": "{62, 24}, {290, 36}",
    "accId": "",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "_UISearchBarSearchContainerView",
@@ -56,7 +61,8 @@
    "frame": "{62, 24}, {290, 36}",
    "accId": "",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "UISearchBarTextField",
@@ -65,7 +71,8 @@
    "frame": "{62, 24}, {290, 36}",
    "accId": "",
    "label": "",
-   "selected": "False"
+   "selected": "False",
+   "count": 5
   },
   {
    "class": "TUXSwift.HDRUIImageView",
@@ -74,7 +81,8 @@
    "frame": "{374, 30}, {24, 24}",
    "accId": "",
    "label": "Search",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "UIButton",
@@ -83,7 +91,8 @@
    "frame": "{374, 70}, {30, 30}",
    "accId": "",
    "label": "",
-   "selected": "False"
+   "selected": "False",
+   "count": 15
   },
   {
    "class": "UIView",
@@ -92,7 +101,8 @@
    "frame": "{0, 0}, {414, 197}",
    "accId": "TTKFeedSkylightComponent",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "AWEPublishProgressWrapper",
@@ -101,7 +111,8 @@
    "frame": "{16, 70}, {63, 78}",
    "accId": "TTKFeedPublishComponent",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "AWEPublishProgressDefaultWrapper",
@@ -110,34 +121,8 @@
    "frame": "{12, 84}, {45, 60}",
    "accId": "",
    "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "BDImageView",
-   "x": 54,
-   "y": 117,
-   "frame": "{15, 78}, {78, 78}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "UIButton",
-   "x": 389,
-   "y": 125,
-   "frame": "{374, 110}, {30, 30}",
-   "accId": "",
-   "label": "",
-   "selected": "False"
-  },
-  {
-   "class": "UIView",
-   "x": 54,
-   "y": 131,
-   "frame": "{4, 64}, {100, 133}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "UIScrollView",
@@ -146,7 +131,8 @@
    "frame": "{0, 64}, {414, 133}",
    "accId": "",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "UICollectionView",
@@ -155,7 +141,8 @@
    "frame": "{0, 64}, {414, 133}",
    "accId": "",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "TTKAvatarCommonBadgeView",
@@ -164,34 +151,8 @@
    "frame": "{73, 136}, {20, 20}",
    "accId": "",
    "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "UIView",
-   "x": 83,
-   "y": 146,
-   "frame": "{73, 136}, {20, 20}",
-   "accId": "",
-   "label": "Plus",
-   "selected": "None"
-  },
-  {
-   "class": "UIView",
-   "x": 207,
-   "y": 344,
-   "frame": "{0, 0}, {414, 687}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TUXButton",
-   "x": 207,
-   "y": 349,
-   "frame": "{20, 325}, {374, 48}",
-   "accId": "",
-   "label": "Connect with contacts",
-   "selected": "False"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "AWEMaskWindow",
@@ -200,7 +161,8 @@
    "frame": "{0, 0}, {414, 736}",
    "accId": "AWEMaskWindow",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "UILayoutContainerView",
@@ -209,16 +171,8 @@
    "frame": "{0, 0}, {414, 736}",
    "accId": "",
    "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "UIView",
-   "x": 207,
-   "y": 368,
-   "frame": "{0, 0}, {414, 736}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "AWEFeedSlidingScrollView",
@@ -227,7 +181,8 @@
    "frame": "{0, 0}, {414, 736}",
    "accId": "",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "UIView",
@@ -236,7 +191,8 @@
    "frame": "{0, 0}, {414, 736}",
    "accId": "TTKFeedRootComponent",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "AWENewFeedTableView",
@@ -245,7 +201,8 @@
    "frame": "{0, 0}, {414, 736}",
    "accId": "TTKFeedTableViewService",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "TTKFriendsFeedTableViewCell",
@@ -254,7 +211,8 @@
    "frame": "{0, 0}, {414, 736}",
    "accId": "",
    "label": "feedcells",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "UITableViewCellContentView",
@@ -263,7 +221,8 @@
    "frame": "{0, 0}, {414, 736}",
    "accId": "",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "AWEFeedLiveSkylightCatchView",
@@ -272,7 +231,8 @@
    "frame": "{0, 0}, {414, 736}",
    "accId": "TTKFeedSkylightCatchComponent",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "TTKRelationUserCardCollectionView",
@@ -281,142 +241,38 @@
    "frame": "{0, 64}, {414, 623}",
    "accId": "",
    "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "TUXButton",
    "x": 207,
-   "y": 409,
-   "frame": "{20, 385}, {374, 48}",
+   "y": 376,
+   "frame": "{20, 352}, {374, 48}",
    "accId": "",
    "label": "Connect with Facebook friends",
-   "selected": "False"
-  },
-  {
-   "class": "TUXButton",
-   "x": 207,
-   "y": 469,
-   "frame": "{20, 445}, {374, 48}",
-   "accId": "",
-   "label": "Invite friends",
-   "selected": "False"
+   "selected": "False",
+   "count": 10
   },
   {
    "class": "TTKShareRowCell",
    "x": 44,
-   "y": 536,
-   "frame": "{12, 492.33333333333337}, {64, 87}",
+   "y": 503,
+   "frame": "{12, 459.33333333333331}, {64, 86.999999999999943}",
    "accId": "",
    "label": "My QR code",
-   "selected": "None"
-  },
-  {
-   "class": "UIView",
-   "x": 44,
-   "y": 536,
-   "frame": "{12, 492.33333333333337}, {64, 87}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKShareRowCell",
-   "x": 112,
-   "y": 536,
-   "frame": "{80, 492.33333333333337}, {64, 87}",
-   "accId": "",
-   "label": "SMS",
-   "selected": "None"
-  },
-  {
-   "class": "UIView",
-   "x": 112,
-   "y": 536,
-   "frame": "{80, 492.33333333333337}, {64, 87}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKShareRowCell",
-   "x": 180,
-   "y": 536,
-   "frame": "{148, 492.33333333333337}, {64, 87}",
-   "accId": "",
-   "label": "Copy link",
-   "selected": "None"
-  },
-  {
-   "class": "UIView",
-   "x": 180,
-   "y": 536,
-   "frame": "{148, 492.33333333333337}, {64, 87}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 30
   },
   {
    "class": "TTKShareInviteFriendsRowView",
    "x": 205,
-   "y": 536,
-   "frame": "{-4, 493}, {418, 86}",
+   "y": 503,
+   "frame": "{-4, 460}, {418, 86}",
    "accId": "",
    "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKShareRowCell",
-   "x": 248,
-   "y": 536,
-   "frame": "{216, 492.33333333333337}, {64, 87}",
-   "accId": "",
-   "label": "WA Business",
-   "selected": "None"
-  },
-  {
-   "class": "UIView",
-   "x": 248,
-   "y": 536,
-   "frame": "{216, 492.33333333333337}, {64, 87}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKShareRowCell",
-   "x": 316,
-   "y": 536,
-   "frame": "{284, 492.33333333333337}, {64, 87}",
-   "accId": "",
-   "label": "Facebook",
-   "selected": "None"
-  },
-  {
-   "class": "UIView",
-   "x": 316,
-   "y": 536,
-   "frame": "{284, 492.33333333333337}, {64, 87}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKShareRowCell",
-   "x": 384,
-   "y": 536,
-   "frame": "{352, 492.33333333333337}, {64, 87}",
-   "accId": "",
-   "label": "More",
-   "selected": "None"
-  },
-  {
-   "class": "UIView",
-   "x": 384,
-   "y": 536,
-   "frame": "{352, 492.33333333333337}, {64, 87}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "TTKTabBarButton",
@@ -425,7 +281,8 @@
    "frame": "{0, 687}, {82.799999999999997, 49}",
    "accId": "a11y_vo_home",
    "label": "Home",
-   "selected": "False"
+   "selected": "False",
+   "count": 5
   },
   {
    "class": "TTKTabBarAnimationContentView",
@@ -434,16 +291,8 @@
    "frame": "{0, 687}, {82.799999999999997, 49}",
    "accId": "",
    "label": "Home",
-   "selected": "None"
-  },
-  {
-   "class": "UITabBarButton",
-   "x": 52,
-   "y": 712,
-   "frame": "{2, 688}, {100, 48}",
-   "accId": "",
-   "label": "",
-   "selected": "False"
+   "selected": "None",
+   "count": 20
   },
   {
    "class": "TTKTabBarButton",
@@ -452,25 +301,8 @@
    "frame": "{82.799999999999983, 687}, {82.799999999999983, 49}",
    "accId": "friends",
    "label": "Friends",
-   "selected": "False"
-  },
-  {
-   "class": "TTKTabBarAnimationContentView",
-   "x": 124,
-   "y": 712,
-   "frame": "{82.799999999999983, 687}, {82.799999999999983, 49}",
-   "accId": "",
-   "label": "Friends",
-   "selected": "None"
-  },
-  {
-   "class": "UITabBarButton",
-   "x": 156,
-   "y": 712,
-   "frame": "{106, 688}, {99, 48}",
-   "accId": "",
-   "label": "",
-   "selected": "False"
+   "selected": "False",
+   "count": 5
   },
   {
    "class": "AWETabBarPlusButton",
@@ -479,16 +311,8 @@
    "frame": "{165.59999999999999, 687}, {82.799999999999983, 49}",
    "accId": "",
    "label": "Create",
-   "selected": "False"
-  },
-  {
-   "class": "UITabBarButton",
-   "x": 259,
-   "y": 712,
-   "frame": "{209, 688}, {100, 48}",
-   "accId": "",
-   "label": "",
-   "selected": "False"
+   "selected": "False",
+   "count": 5
   },
   {
    "class": "TTKTabBarButton",
@@ -497,25 +321,8 @@
    "frame": "{248.39999999999995, 687}, {82.799999999999983, 49}",
    "accId": "a11y_vo_inbox",
    "label": "Inbox Button. 1 unread notifications.",
-   "selected": "False"
-  },
-  {
-   "class": "TTKTabBarAnimationContentView",
-   "x": 290,
-   "y": 712,
-   "frame": "{248.39999999999995, 687}, {82.799999999999983, 49}",
-   "accId": "",
-   "label": "Inbox",
-   "selected": "None"
-  },
-  {
-   "class": "UITabBarButton",
-   "x": 363,
-   "y": 712,
-   "frame": "{313, 688}, {99, 48}",
-   "accId": "",
-   "label": "",
-   "selected": "False"
+   "selected": "False",
+   "count": 5
   },
   {
    "class": "TTKTabBarButton",
@@ -524,16 +331,8 @@
    "frame": "{331.19999999999999, 687}, {82.800000000000011, 49}",
    "accId": "a11y_vo_profile",
    "label": "Profile",
-   "selected": "False"
-  },
-  {
-   "class": "TTKTabBarAnimationContentView",
-   "x": 373,
-   "y": 712,
-   "frame": "{331.19999999999999, 687}, {82.800000000000011, 49}",
-   "accId": "",
-   "label": "Profile",
-   "selected": "None"
+   "selected": "False",
+   "count": 5
   },
   {
    "class": "AWEFeedRefreshFooter",
@@ -542,16 +341,8 @@
    "frame": "{0, 736}, {414, 44}",
    "accId": "",
    "label": "No more results",
-   "selected": "None"
-  },
-  {
-   "class": "UIButton",
-   "x": 207,
-   "y": 758,
-   "frame": "{0, 736}, {414, 44}",
-   "accId": "",
-   "label": "",
-   "selected": "False"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "TUXDualBallLoadingIndicator",
@@ -560,7 +351,8 @@
    "frame": "{191, 742}, {32, 32}",
    "accId": "",
    "label": "Loading",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   },
   {
    "class": "YYLabel",
@@ -569,7 +361,8 @@
    "frame": "{16, 736}, {382, 44}",
    "accId": "",
    "label": "No more results",
-   "selected": "None"
+   "selected": "None",
+   "count": 5
   }
  ]
 }

@@ -1,16 +1,16 @@
 {
- "page": "search",
+ "page": "inbox",
  "device": "iphone_A8DE7E93",
- "captured": "2026-08-30 18:15:01",
- "count": 24,
+ "captured": "2026-08-30 18:13:34",
+ "count": 28,
  "controls": [
   {
-   "class": "TUXBarItem",
-   "x": 28,
-   "y": 42,
-   "frame": "{16, 30}, {24, 24}",
+   "class": "TUXDualBallLoadingIndicator",
+   "x": 207,
+   "y": 38,
+   "frame": "{191, 22}, {32, 32}",
    "accId": "",
-   "label": "Back",
+   "label": "Loading",
    "selected": "None",
    "count": 10
   },
@@ -18,70 +18,60 @@
    "class": "UIButton",
    "x": 28,
    "y": 42,
-   "frame": "{16, 30}, {24, 24}",
-   "accId": "",
-   "label": "Back",
-   "selected": "False",
-   "count": 15
-  },
-  {
-   "class": "UIImageView",
-   "x": 68,
-   "y": 42,
-   "frame": "{58, 32}, {20, 20}",
+   "frame": "{6, 20}, {44, 44}",
    "accId": "",
    "label": "",
-   "selected": "None",
-   "count": 5
+   "selected": "False",
+   "count": 20
   },
   {
    "class": "UIView",
-   "x": 223,
+   "x": 225,
    "y": 42,
-   "frame": "{48, 24}, {350, 36}",
+   "frame": "{183.66666666666666, 27}, {82.666666666666657, 30}",
    "accId": "",
    "label": "",
    "selected": "None",
-   "count": 10
+   "count": 60
   },
   {
-   "class": "TUXCustomPlaceholderTextField",
-   "x": 227,
+   "class": "TTKInboxActivityStatusView",
+   "x": 248,
    "y": 42,
-   "frame": "{84, 32}, {286, 20}",
+   "frame": "{236.33333333333334, 34}, {24.000000000000028, 16}",
+   "accId": "",
+   "label": "Status",
+   "selected": "None",
+   "count": 5
+  },
+  {
+   "class": "TTTAttributedLabel",
+   "x": 183,
+   "y": 111,
+   "frame": "{74, 79}, {217, 64}",
+   "accId": "",
+   "label": "",
+   "selected": "None",
+   "count": 5
+  },
+  {
+   "class": "UIControl",
+   "x": 207,
+   "y": 111,
+   "frame": "{8, 79}, {398, 64}",
    "accId": "",
    "label": "",
    "selected": "False",
    "count": 5
   },
   {
-   "class": "UIFieldEditor",
-   "x": 227,
-   "y": 42,
-   "frame": "{84, 32}, {286, 20}",
+   "class": "TUXButton",
+   "x": 336,
+   "y": 111,
+   "frame": "{303, 97}, {65, 28}",
    "accId": "",
-   "label": "",
-   "selected": "None",
-   "count": 5
-  },
-  {
-   "class": "AWESlidingTabButton",
-   "x": 30,
-   "y": 84,
-   "frame": "{3.5527136788005009e-15, 64}, {60, 40}",
-   "accId": "",
-   "label": "All",
-   "selected": "True",
-   "count": 15
-  },
-  {
-   "class": "UIScrollView",
-   "x": 207,
-   "y": 84,
-   "frame": "{0, 64}, {414, 40}",
-   "accId": "",
-   "label": "",
-   "selected": "None",
+   "label": "Invite",
+   "selected": "False",
    "count": 5
   },
   {
@@ -95,34 +85,94 @@
    "count": 5
   },
   {
-   "class": "AWEFeedRefreshFooter",
-   "x": 207,
-   "y": 126,
-   "frame": "{0, 104}, {414, 44}",
+   "class": "TikTokSocialImplSwift.StoryNoteGradientTextView",
+   "x": 28,
+   "y": 181,
+   "frame": "{20, 168.66666666666669}, {16, 24.666666666666657}",
    "accId": "",
-   "label": " ",
+   "label": "",
    "selected": "None",
    "count": 5
   },
   {
-   "class": "TUXDualBallLoadingIndicator",
-   "x": 207,
-   "y": 126,
-   "frame": "{191, 110}, {32, 32}",
+   "class": "TikTokSocialImplSwift.AlwaysCursorPlaceholderTextView",
+   "x": 54,
+   "y": 181,
+   "frame": "{23.333333333333332, 162.33333333333331}, {61.333333333333343, 37.333333333333343}",
+   "accId": "",
+   "label": "",
+   "selected": "None",
+   "count": 5
+  },
+  {
+   "class": "BDImageView",
+   "x": 54,
+   "y": 223,
+   "frame": "{15, 184}, {78, 78}",
+   "accId": "",
+   "label": "",
+   "selected": "None",
+   "count": 5
+  },
+  {
+   "class": "UIImageView",
+   "x": 154,
+   "y": 223,
+   "frame": "{115, 184}, {78, 78}",
+   "accId": "",
+   "label": "",
+   "selected": "None",
+   "count": 5
+  },
+  {
+   "class": "TUXSpinner",
+   "x": 358,
+   "y": 223,
+   "frame": "{346, 211}, {24, 24}",
    "accId": "",
    "label": "Loading",
    "selected": "None",
    "count": 5
   },
   {
-   "class": "YYLabel",
+   "class": "UICollectionView",
    "x": 207,
-   "y": 126,
-   "frame": "{16, 104}, {382, 44}",
+   "y": 236,
+   "frame": "{0, 174}, {414, 123}",
    "accId": "",
-   "label": " ",
+   "label": "",
    "selected": "None",
-   "count": 10
+   "count": 5
+  },
+  {
+   "class": "TTKAvatarCommonBadgeView",
+   "x": 83,
+   "y": 252,
+   "frame": "{73, 242}, {20, 20}",
+   "accId": "",
+   "label": "",
+   "selected": "None",
+   "count": 5
+  },
+  {
+   "class": "TUXCheckbox",
+   "x": -11,
+   "y": 341,
+   "frame": "{-22, 330}, {22, 22}",
+   "accId": "",
+   "label": "",
+   "selected": "None",
+   "count": 15
+  },
+  {
+   "class": "TTKInboxActivityFrameEntranceOrderingCell",
+   "x": 207,
+   "y": 341,
+   "frame": "{0, 305}, {414, 72}",
+   "accId": "",
+   "label": "",
+   "selected": "None",
+   "count": 15
   },
   {
    "class": "AWEMaskWindow",
@@ -155,32 +205,22 @@
    "count": 5
   },
   {
-   "class": "UICollectionView",
+   "class": "TTKWidgetCollectionView",
    "x": 207,
-   "y": 400,
-   "frame": "{0, 64}, {414, 672}",
-   "accId": "",
-   "label": "",
-   "selected": "None",
-   "count": 10
-  },
-  {
-   "class": "AWESlidingScrollView",
-   "x": 207,
-   "y": 420,
-   "frame": "{0, 104}, {414, 632}",
+   "y": 376,
+   "frame": "{0, 64}, {414, 623}",
    "accId": "",
    "label": "",
    "selected": "None",
    "count": 5
   },
   {
-   "class": "TUXStatusView",
+   "class": "YYLabel",
    "x": 207,
-   "y": 420,
-   "frame": "{0, 104}, {414, 632}",
+   "y": 543,
+   "frame": "{16, 521.00999999999999}, {382, 44}",
    "accId": "",
-   "label": "",
+   "label": "No more results",
    "selected": "None",
    "count": 5
   },
