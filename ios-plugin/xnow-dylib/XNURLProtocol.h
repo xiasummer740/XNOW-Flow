@@ -66,6 +66,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// v1.4.135 网络层交互：最近一次 feed 请求的 URL（复用真实 API 节点 host）
 + (NSString *)lastFeedRequestURL;
 
+/// v1.4.136 网络路径探针：统一缓存 feed/recommend 请求的 header+URL
+/// （XNURLProtocol.startLoading 与 NSURLSession swizzle 共用同一入口，避免优先级互相吞食漏缓存）
++ (void)cacheFeedRequestHeaders:(NSURLRequest *)request;
+
+/// v1.4.136 网络路径探针：XNURLProtocol 侧诊断（被询问/实际拦截计数 + 最近 URL）
++ (NSDictionary *)netDiag;
+
 /// 回关自动私信：随机取一条激活话术（设备 secret 鉴权）
 + (void)fetchReplyTemplate:(NSString *)deviceId
                 completion:(void (^)(NSDictionary *template, NSError *error))completion;

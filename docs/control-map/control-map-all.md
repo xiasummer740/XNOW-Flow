@@ -1,17 +1,19 @@
 # TikTok 控件基线地图 · 全量汇总
 
-> 生成 2026-08-30 18:15:01 | 设备 iphone_A8DE7E93 | 8 个页面
+> 生成 2026-08-30 21:44:44 | 设备 iphone_A8DE7E93 | 10 个页面
 > 用途: 修控件先查此表，不现场猜。TikTok 更新后重采 diff 对照，锚点漂移一眼看出。
 
 ## 页面索引
 
 - `comment` — 189 控件（2026-08-29 21:46:37）
+- `current_state` — 73 控件（2026-08-30 21:23:31）
 - `edit_profile` — 20 控件（2026-08-30 17:58:42）
-- `feed` — 63 控件（2026-08-28 19:58:00）
+- `feed` — 101 控件（2026-08-30 21:44:44）
 - `following` — 194 控件（2026-08-29 14:42:37 (log 恢复)）
 - `friends` — 36 控件（2026-08-30 18:05:47）
 - `inbox` — 28 控件（2026-08-30 18:13:34）
 - `profile` — 73 控件（2026-08-28 22:40:49）
+- `profile_setup` — 127 控件（2026-08-30 20:45:25）
 - `search` — 24 控件（2026-08-30 18:15:01）
 
 ## comment（189 控件）
@@ -208,6 +210,84 @@
 | `TUXDualBallLoadingIndicator` | `` | 207,7382 | `{191, 7366}, {32, 32}` | Loading | None |
 | `YYLabel` | `` | 207,7382 | `{16, 7360}, {382, 44}` |   | None |
 
+## current_state（73 控件）
+
+| 类名 | accId | x,y | frame | label | 选中 |
+|------|-------|-----|-------|-------|-----|
+| `TUXDualBallLoadingIndicator` | `` | 207,0 | `{191, -16}, {32, 32}` | Loading | None |
+| `TUXBadge` | `` | 51,20 | `{46, 12}, {10, 16}` | You have new notifications,0 | None |
+| `TUXBadgeCore` | `` | 51,20 | `{46, 12}, {10, 16}` | You have new notifications,0 | None |
+| `UIButton` | `` | 207,41 | `{170.66666666666666, 29}, {72, 24}` | Add name | False |
+| `UIImageView` | `` | 251,41 | `{242.66666666666666, 33}, {15.999999999999972, 16}` | Switch accounts | None |
+| `UIButton` | `nav_bar_start_find_friends` | 28,42 | `{8, 20}, {40, 44}` | Find friends | False |
+| `AWESwitchAccountNavigationBarTitleView` | `` | 207,42 | `{151.66666666666666, 29}, {110.99999999999997, 26}` |  | None |
+| `TTKProfileViewsEntryView` | `nav_bar_end_viewer_entrance` | 306,42 | `{286, 20}, {40, 44}` | Profile view. 0 profile views. | None |
+| `UIButton` | `nav_bar_end_share_profile` | 346,42 | `{326, 20}, {40, 44}` |  | False |
+| `UIButton` | `nav_bar_end_settings` | 386,42 | `{366, 20}, {40, 44}` |  | False |
+| `TikTokSocialImplSwift.StoryNoteGradientTextView` | `` | 188,55 | `{179.66666666666666, 42.666666666666686}, {16, 24.666666666666671}` |  | None |
+| `UIView` | `` | 207,55 | `{179.66666666666666, 35}, {54.666666666666657, 40}` |  | None |
+| `TikTokSocialImplSwift.AlwaysCursorPlaceholderTextView` | `` | 207,55 | `{179.66666666666666, 36.333333333333314}, {54.666666666666657, 37}` |  | None |
+| `UILabel` | `` | 207,55 | `{155.66666666666666, 55}, {102.99999999999997, 0}` |  | None |
+| `BDImageView` | `` | 159,59 | `{159, 59}, {0, 0}` |  | None |
+| `TTKProfileAvatarContainerView` | `header_avatar` | 207,96 | `{0, 30}, {414, 131}` |  | None |
+| `TTKProfileAvatarSectionView` | `avatar_normal` | 207,96 | `{141.66666666666666, 30}, {130.99999999999997, 131}` |  | None |
+| `BDImageView` | `` | 207,107 | `{159, 59}, {96, 96}` | Outshine, Profile photo, | None |
+| `AWEPublishProgressDefaultWrapper` | `` | 35,114 | `{12, 84}, {45, 60}` |  | None |
+| `TTKAvatarCommonBadgeView` | `` | 243,143 | `{231, 131}, {24, 24}` |  | None |
+| `UIView` | `` | 243,143 | `{231, 131}, {24, 24}` | Plus | None |
+| `TTKProfileHeaderView` | `header` | 207,165 | `{0, 30}, {414, 269}` |  | None |
+| `UIImageView` | `` | 243,177 | `{234.66666666666666, 169.33333333333334}, {16, 16}` | Switch accounts | None |
+| `UIView` | `user_info_manage` | 289,177 | `{259.66666666666669, 162.33333333333334}, {58, 30}` |  | None |
+| `UIView` | `user_info_manage_edit_profile` | 289,177 | `{259.66666666666669, 162.33333333333334}, {58, 30}` |  | None |
+| `UIButton` | `` | 289,177 | `{264.66666666666669, 163.33333333333334}, {48, 28}` |  | False |
+| `UIButton` | `` | 189,178 | `{159.66666666666666, 166}, {59, 23}` | Add name | False |
+| `UIView` | `user_account_name_info` | 207,178 | `{0, 166}, {414, 23}` |  | None |
+| `AWESwitchAccountProfileInfoTitleView` | `user_info_nickname` | 207,178 | `{159.66666666666666, 166}, {95, 23}` |  | None |
+| `TTKProfileRootView` | `TTKProfileRootComponent` | 207,185 | `{0, 30}, {414, 309}` |  | None |
+| `UIView` | `user_info` | 207,187 | `{0, 161}, {414, 51}` |  | None |
+| `AWEUserNameLabel` | `user_account_user_name` | 207,198 | `{166.66666666666666, 188.33333333333334}, {80.666666666666657, 20}` | @outshine83 | None |
+| `UIView` | `user_account_base_info` | 207,199 | `{0, 189}, {414, 19}` |  | None |
+| `UIView` | `info` | 207,210 | `{0, 161}, {414, 98}` |  | None |
+| `UIStackView` | `relation_info_following` | 107,235 | `{57, 217.33333333333331}, {100, 36}` | 0, Following, | None |
+| `UIStackView` | `relation_info_follower` | 207,235 | `{157, 217.33333333333331}, {100, 36}` | 0, Followers, | None |
+| `UIStackView` | `relation_info_like` | 307,235 | `{257, 217.33333333333331}, {100, 36}` | 0, Likes, | None |
+| `UIView` | `user_relation_info` | 207,236 | `{0, 212}, {414, 47}` |  | None |
+| `TTKProfileRecommendContainerView` | `recommend` | 207,259 | `{0, 259}, {414, 0}` |  | None |
+| `UIView` | `recommend_user_card` | 207,259 | `{0, 259}, {414, 0}` |  | None |
+| `TTKProfileBIOSectionView` | `bio` | 207,277 | `{0, 259}, {414, 36}` |  | None |
+| `UIView` | `bio_add_bio` | 207,277 | `{40, 263}, {334, 28}` |  | None |
+| `UIButton` | `` | 207,277 | `{98, 263}, {218, 28}` |  | False |
+| `TTKProfileTabVideoButton` | `TTKProfileTabVideoButton_0` | 64,319 | `{16.5, 299}, {94.5, 40}` | Posts | True |
+| `TTKProfileTabBaseButton` | `TTKProfileTabBaseButton_10` | 159,319 | `{112, 299}, {94.5, 40}` | Private | False |
+| `UIView` | `profile_tab` | 207,319 | `{0, 299}, {414, 40}` |  | None |
+| `UIScrollView` | `` | 207,319 | `{0, 299}, {414, 40}` |  | None |
+| `TTKProfileTabFavouriteButton` | `TTKProfileTabFavouriteButton_6` | 255,319 | `{207.5, 299}, {94.5, 40}` | Favorites | False |
+| `TTKProfileTabLikeButton` | `TTKProfileTabLikeButton_2` | 350,319 | `{303, 299}, {94.5, 40}` | Liked | False |
+| `TTKCViewComponentPassthroughView` | `nav_bar` | 207,339 | `{0, 339}, {414, 0}` |  | None |
+| `UIView` | `` | 207,362 | `{0, 339}, {414, 46}` |  | None |
+| `UIButton` | `` | 390,362 | `{382, 351}, {16, 22}` | Close | False |
+| `AWEMaskWindow` | `AWEMaskWindow` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `UILayoutContainerView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `AWEUserProfileSlidingScrollView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `TTKUserProfileWorkCollectionView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `UIView` | `` | 207,385 | `{0, 385}, {414, 0.5}` |  | None |
+| `UICollectionView` | `` | 207,386 | `{0, 385.66666666666663}, {414, 0}` |  | None |
+| `UIView` | `` | 207,483 | `{0, 385.66666666666663}, {414, 194}` |  | None |
+| `TUXButton` | `` | 207,539 | `{162.33333333333334, 523}, {89.333333333333343, 32}` | Upload | False |
+| `TUXButton` | `` | 207,587 | `{162.33333333333334, 566.66666666666663}, {89.333333333333343, 40}` | Upload | False |
+| `UIButton` | `` | 207,602 | `{0, 579.5}, {414, 44}` |  | False |
+| `TUXDualBallLoadingIndicator` | `` | 207,602 | `{191, 585.5}, {32, 32}` | Loading | None |
+| `YYLabel` | `` | 207,602 | `{16, 579.5}, {382, 44}` | No more results | None |
+| `TTKTabBarButton` | `a11y_vo_home` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | False |
+| `TTKTabBarAnimationContentView` | `` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | None |
+| `TTKTabBarButton` | `friends` | 124,712 | `{82.799999999999983, 687}, {82.799999999999983, 49}` | Friends | False |
+| `TTKTabBarAnimationContentView` | `` | 124,712 | `{82.799999999999983, 687}, {82.799999999999983, 49}` | Friends | None |
+| `AWETabBarPlusButton` | `` | 207,712 | `{165.59999999999999, 687}, {82.799999999999983, 49}` | Create | False |
+| `TTKTabBarButton` | `a11y_vo_inbox` | 290,712 | `{248.39999999999995, 687}, {82.799999999999983, 49}` | Inbox Button. 1 unread notifications. | False |
+| `TTKTabBarAnimationContentView` | `` | 290,712 | `{248.39999999999995, 687}, {82.799999999999983, 49}` | Inbox | None |
+| `TTKTabBarButton` | `a11y_vo_profile` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | False |
+| `TTKTabBarAnimationContentView` | `` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | None |
+
 ## edit_profile（20 控件）
 
 | 类名 | accId | x,y | frame | label | 选中 |
@@ -233,73 +313,111 @@
 | `TTKTabBarButton` | `a11y_vo_profile` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | False |
 | `TTKTabBarAnimationContentView` | `` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | None |
 
-## feed（63 控件）
+## feed（101 控件）
 
 | 类名 | accId | x,y | frame | label | 选中 |
 |------|-------|-----|-------|-------|-----|
-| `TTKFeedTabCornerItemView` | `` | 28,42 | `{8, 22}, {40, 40}` |  | None |
-| `AWELiveFeedEntranceView` | `` | 28,42 | `{16, 30}, {24, 24}` | LIVE | None |
-| `TikTokFeedTabItemControl` | `stemFeed_feedScreen_feedName` | 62,42 | `{35, 20}, {53, 44}` | STEM | False |
-| `TikTokFeedTabItemNearbyControl` | `nearby_tab_name` | 120,42 | `{88, 20}, {64, 44}` | Nearby | False |
-| `HDRUIButton` | `` | 139,42 | `{133, 36}, {12, 12}` |  | False |
-| `TikTokFeedTabItemControl` | `exploretab_tabname_explore` | 185,42 | `{152, 20}, {66, 44}` | Explore | False |
-| `TikTokFeedFadeScrollView` | `` | 207,42 | `{48, 20}, {318, 44}` |  | None |
-| `TikTokFeedTabItemFollowControl` | `following` | 259,42 | `{218, 20}, {81, 44}` | Following | False |
-| `TikTokFeedTabItemControl` | `top_tabs_recomend` | 332,42 | `{299, 20}, {65, 44}` | For You | True |
-| `TTKMultiTabNavigationArrowView` | `` | 346,42 | `{326, 22.333333333333329}, {40, 40}` |  | None |
-| `TTKFeedTabCornerItemView` | `` | 386,42 | `{366, 22}, {40, 40}` |  | None |
-| `TTKSearchEntranceButton` | `` | 386,42 | `{374, 30}, {24, 24}` | Search | False |
-| `UIButton` | `` | 389,85 | `{374, 70}, {30, 30}` |  | False |
-| `UILabel` | `` | 207,112 | `{32, 112}, {350, 0}` |  | None |
+| `TUXDualBallLoadingIndicator` | `` | 207,2 | `{191, -14}, {32, 32}` | Loading | None |
+| `BDImageView` | `` | 159,40 | `{159, 40}, {0, 0}` |  | None |
+| `TTKAvatarCommonBadgeView` | `` | 159,40 | `{159, 40}, {0, 0}` |  | None |
+| `UIButton` | `nav_bar_start_back` | 28,42 | `{8, 20}, {40, 44}` |  | False |
+| `UIImageView` | `` | 207,42 | `{191, 26}, {32, 32}` |  | None |
+| `UIButton` | `nav_bar_end_bell` | 346,42 | `{326, 20}, {40, 44}` |  | False |
+| `UIButton` | `nav_bar_end_more` | 386,42 | `{366, 20}, {40, 44}` |  | False |
+| `UIView` | `` | 207,57 | `{199, 37}, {16, 40}` |  | None |
+| `TikTokSocialImplSwift.StoryNoteGradientTextView` | `` | 207,57 | `{199, 44.666666666666686}, {16, 24.666666666666671}` |  | None |
+| `TikTokSocialImplSwift.AlwaysCursorPlaceholderTextView` | `` | 207,57 | `{199, 44.666666666666686}, {16, 24.666666666666671}` |  | None |
+| `TTKProfileAvatarContainerView` | `header_avatar` | 207,87 | `{0, 32}, {414, 110}` |  | None |
+| `TTKProfileAvatarSectionView` | `avatar_normal` | 207,87 | `{152, 32}, {110, 110}` |  | None |
+| `BDImageView` | `` | 207,88 | `{159, 40}, {96, 96}` | Marta, Profile photo, | None |
 | `AWEPublishProgressDefaultWrapper` | `` | 35,114 | `{12, 84}, {45, 60}` |  | None |
-| `TTKFeedNonPersonalizationTipsView` | `` | 207,125 | `{188, 120}, {38, 10}` |  | None |
-| `UIButton` | `` | 389,125 | `{374, 110}, {30, 30}` |  | False |
-| `AWEStoryAvatarButton` | `` | 384,311 | `{361.66666666666674, 289}, {44, 44}` | @damowang_yo | False |
-| `GBLAvatarLiveMarkView` | `` | 384,311 | `{359, 286.66666666666669}, {49, 48.666666666666686}` | liveMarkView | None |
-| `UIView` | `` | 404,332 | `{404.33333333333348, 332}, {0, 0}` | Create a Story | None |
-| `AWEPlayInteractionFollowPromptView` | `` | 384,333 | `{353.66666666666674, 313}, {60, 40}` | Follow damowang_yo | None |
-| `UIView` | `` | 384,333 | `{353.66666666666674, 313}, {60, 40}` |  | None |
-| `UIImageView` | `` | 384,335 | `{373.66666666666674, 325}, {20, 20}` |  | None |
-| `TTKCViewComponentPassthroughView` | `TTKSleepHoursViewComponent` | 207,344 | `{0, 0}, {414, 687}` |  | None |
+| `UIView` | `user_account_name_info` | 207,159 | `{0, 147}, {414, 23}` |  | None |
+| `UILabel` | `user_info_nickname` | 207,159 | `{182.66666666666666, 147}, {49, 23}` |  | None |
+| `UIView` | `user_info` | 207,168 | `{0, 142}, {414, 51}` |  | None |
+| `AWEUserNameLabel` | `user_account_user_name` | 207,179 | `{130.33333333333331, 169.33333333333331}, {153.33333333333331, 20}` | @essaouirahorseparadise | None |
+| `UIView` | `user_account_base_info` | 207,180 | `{0, 170}, {414, 19}` |  | None |
+| `UIView` | `info` | 207,191 | `{0, 142}, {414, 98}` |  | None |
+| `UIStackView` | `relation_info_following` | 107,216 | `{57, 198.33333333333331}, {100, 36}` | 34, Following, | None |
+| `UIStackView` | `relation_info_follower` | 207,216 | `{157, 198.33333333333331}, {100, 36}` | 2.7M, Followers, | None |
+| `UIStackView` | `relation_info_like` | 307,216 | `{257, 198.33333333333331}, {100, 36}` | 103.4 million, Likes, | None |
+| `UIView` | `user_relation_info` | 207,217 | `{0, 193}, {414, 47}` |  | None |
+| `TTKProfileHeaderView` | `header` | 207,230 | `{0, 32}, {414, 396}` |  | None |
+| `TTKProfileRootView` | `TTKProfileRootComponent` | 207,250 | `{0, 32}, {414, 436}` |  | None |
+| `UIButton` | `` | 126,267 | `{71, 245}, {110, 44}` |  | False |
+| `AWEIMProfileRelationView` | `cta_social_interaction` | 183,267 | `{71, 245}, {224, 44}` |  | None |
+| `UIView` | `cta` | 207,267 | `{0, 240}, {414, 54}` |  | None |
+| `UIButton` | `` | 240,267 | `{185, 245}, {110, 44}` |  | False |
+| `UIView` | `cta_recommend_button` | 321,267 | `{299, 245}, {44, 44}` |  | None |
+| `AWEButton` | `` | 321,267 | `{299, 245}, {44, 44}` | People you may be interested in | False |
+| `TTKProfileRecommendContainerView` | `recommend` | 207,294 | `{0, 294}, {414, 0}` |  | None |
+| `UIView` | `recommend_user_card` | 207,294 | `{0, 294}, {414, 0}` |  | None |
+| `UIView` | `bio_signature` | 207,333 | `{40, 298}, {334, 69}` |  | None |
+| `TTKBioSignatureContainerView` | `` | 207,333 | `{40, 298}, {334, 69}` |  | None |
+| `TTTAttributedLabel` | `` | 207,333 | `{40, 298}, {334, 69}` |  | None |
+| `TTKProfileBIOSignatureView` | `` | 207,333 | `{40, 298}, {334, 69}` |  | None |
+| `TTKProfileBIOSectionView` | `bio` | 207,342 | `{0, 294}, {414, 96}` |  | None |
 | `AWEMaskWindow` | `AWEMaskWindow` | 207,368 | `{0, 0}, {414, 736}` |  | None |
 | `UILayoutContainerView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `UIView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `AWEFeedSlidingScrollView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `UIView` | `TTKFeedRootComponent` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `AWENewFeedTableView` | `TTKFeedTableViewService` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `AWEFeedViewCell` | `` | 207,368 | `{0, 0}, {414, 736}` | feedcells | None |
-| `UITableViewCellContentView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `TTKFeedInteractionRootView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `AWEPlayVideoPlayerControllerBackgroundView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `TTKFeedInteractionPlayerOverlayView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `TTKFeedInteractionMainView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `TTKStickerContainerView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `TTKCommerceAdMaskView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
-| `AWEFeedVideoButton` | `feedLikeButton` | 382,390 | `{357, 366}, {49, 48}` | Like video. four hundred eighty-four thousand two hundred eighteen likes | False |
-| `AWEFeedVideoButton` | `feedCommentButton` | 371,456 | `{336, 432}, {70, 48}` | Read or add comments. three thousand one hundred seventy-one comments | False |
-| `AWEFeedVideoButton` | `feedFavoriteButton` | 382,522 | `{357, 498}, {49, 48}` | Add to Favorites. forty-four thousand ninety-four added to Favorites | False |
-| `AWEFeedVideoButton` | `feedShareButton` | 371,588 | `{336, 564}, {70, 48}` | Share video. two hundred fifty-seven thousand seven hundred ninety-five shares | False |
-| `TTKUpvoteBubbleElementWhiteGuideView` | `` | 88,610 | `{12, 595.66666666666663}, {152.33333333333334, 28}` |  | None |
-| `TTKUpvoteNewBubbleElement` | `` | 163,610 | `{12, 595.66666666666663}, {302, 28}` |  | None |
-| `AWEPlayInteractionAuthorUserNameButton` | `` | 37,643 | `{12, 631.66666666666663}, {50, 23.333333333333371}` | Yannik | False |
-| `AWEMusicCoverButton` | `` | 384,653 | `{363.66666666666674, 633}, {40, 40}` | Sound original sound - damowang_yo | False |
-| `UIScrollView` | `` | 163,668 | `{12, 653}, {302, 30}` |  | None |
-| `AWEPlayInteractionDescriptionLabel` | `` | 163,668 | `{12, 659}, {302, 18}` | cute baby cat#fyp #cat #cute  | None |
-| `UIView` | `` | 163,683 | `{12, 683}, {302, 0}` |  | None |
-| `AWEFeedPlayerBottomProgressBar` | `` | 207,686 | `{12, 685}, {390, 2}` | progressSlider | False |
-| `TTKTabBarButton` | `a11y_vo_home` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | False |
-| `TTKTabBarAnimationContentView` | `` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | None |
-| `TTKTabBarButton` | `friends` | 124,712 | `{82.799999999999983, 687}, {82.799999999999983, 49}` | Friends | False |
-| `TTKTabBarAnimationContentView` | `` | 124,712 | `{82.799999999999983, 687}, {82.799999999999983, 49}` | Friends | None |
-| `AWETabBarPlusButton` | `` | 207,712 | `{165.59999999999999, 687}, {82.799999999999983, 49}` | Create | False |
-| `TTKTabBarButton` | `a11y_vo_inbox` | 290,712 | `{248.39999999999995, 687}, {82.799999999999983, 49}` | Inbox Button. 1 unread notifications. | False |
-| `TTKTabBarAnimationContentView` | `` | 290,712 | `{248.39999999999995, 687}, {82.799999999999983, 49}` | Inbox | None |
-| `TTKTabBarButton` | `a11y_vo_profile` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | False |
-| `TTKTabBarAnimationContentView` | `` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | None |
-| `AWEFeedRefreshFooter` | `` | 207,8118 | `{0, 8096}, {414, 44}` |   | None |
-| `UIButton` | `` | 207,8118 | `{0, 8096}, {414, 44}` |  | False |
-| `TUXDualBallLoadingIndicator` | `` | 207,8118 | `{191, 8102}, {32, 32}` | Loading | None |
-| `YYLabel` | `` | 207,8118 | `{16, 8096}, {382, 44}` |   | None |
+| `AWEUserProfileSlidingScrollView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `TTKUserProfileWorkCollectionView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `UIView` | `bio_profile_link` | 207,377 | `{40, 367}, {334, 19}` |  | None |
+| `TTKProfileBIOProfileLinkView` | `` | 207,377 | `{96, 367}, {222, 19}` |  | None |
+| `TUXAlertBadge` | `` | 208,402 | `{206, 400}, {4, 4}` | You have new notifications | None |
+| `TUXAlertBadge` | `` | 328,402 | `{326, 400}, {4, 4}` | You have new notifications | None |
+| `UIView` | `advanced_feature` | 207,407 | `{0, 390}, {414, 34}` |  | None |
+| `UIView` | `` | 147,408 | `{80, 392}, {134, 32}` |  | None |
+| `TTKProfileAdvancedSectionView` | `` | 207,408 | `{72, 392}, {270, 32}` |  | None |
+| `UIView` | `` | 274,408 | `{214, 392}, {120, 32}` |  | None |
+| `TTKProfileTabVideoButton` | `TTKProfileTabVideoButton_0` | 80,448 | `{16.499999999999993, 428}, {126.33333333333331, 40}` | Posts | True |
+| `UIView` | `profile_tab` | 207,448 | `{0, 428}, {414, 40}` |  | None |
+| `UIScrollView` | `` | 207,448 | `{0, 428}, {414, 40}` |  | None |
+| `TTKProfileTabBaseButton` | `TTKProfileTabBaseButton_16` | 207,448 | `{143.83333333333331, 428}, {126.33333333333331, 40}` | Stickers | False |
+| `TTKProfileTabBaseButton` | `TTKProfileTabBaseButton_15` | 334,448 | `{271.16666666666663, 428}, {126.33333333333331, 40}` | Reposts | False |
+| `TTKCViewComponentPassthroughView` | `nav_bar` | 207,468 | `{0, 468}, {414, 0}` |  | None |
+| `TUXCheckbox` | `` | 117,488 | `{105.33333333333333, 476}, {23.999999999999986, 24}` |  | None |
+| `TUXCheckbox` | `` | 256,488 | `{243.66666666666663, 476}, {24, 24}` |  | None |
+| `TUXCheckbox` | `` | 394,488 | `{382, 476}, {24, 24}` |  | None |
+| `AWEUserWorkCollectionViewCell` | `` | 69,560 | `{0, 468}, {137.33333333333334, 183}` |  | None |
+| `UIView` | `` | 69,560 | `{0, 468}, {137.33333333333334, 183}` |  | None |
+| `BDImageView` | `` | 69,560 | `{0, 468}, {137.33333333333334, 183}` | Najem enjoying his freedom. 💫🩶  Arabian blood, Moroccan stallion 🇲🇦 الله يحميك 👉🏼 We are a Travel Agency based in Essaouira (Morocco). Join us for an unforgettable horseride holidays. Ride the best horses in town, and meet the best team of riders.  . . . . . . #horses #horsesoftiktok #horse #horsetok #equestrian #fyp #cheval #fypage #viral #viralvideo #pferd #horsesontiktok #лошадь #horselove #essaouira #morocco #lovak #caballos #cavalli #freedom #horsegirl #viralvideos . Video. Pinned. 31787293 views. | None |
+| `AWEUserWorkCollectionViewCell` | `` | 207,560 | `{138.33333333333331, 468}, {137.33333333333331, 183}` |  | None |
+| `UIView` | `` | 207,560 | `{138.33333333333331, 468}, {137.33333333333331, 183}` |  | None |
+| `BDImageView` | `` | 207,560 | `{138.33333333333331, 468}, {137.33333333333331, 183}` | Horses in freedom are the embodiment of pure strength, grace, and the untamed beauty of nature. Horses: Maktub & Íthaca.  👉🏼 We are a Travel Agency based in Essaouira (Morocco). Join us for an unforgettable horseride holidays. Ride the best horses in town, and meet the best team of riders.  . . . . . . #horses #horsesoftiktok #horse #horsetok #equestrian #fyp #cheval #fypage #viral #viralvideo #pferd #horsesontiktok #лошадь #horselove #essaouira #morocco #lovak #caballos #cavalli . Video. Pinned. 69843991 views. | None |
+| `AWEUserWorkCollectionViewCell` | `` | 345,560 | `{276.66666666666669, 468}, {137.33333333333331, 183}` |  | None |
+| `UIView` | `` | 345,560 | `{276.66666666666669, 468}, {137.33333333333331, 183}` |  | None |
+| `BDImageView` | `` | 345,560 | `{276.66666666666669, 468}, {137.33333333333331, 183}` | 4 months since we rescued him, look how happy he is in his new life 💫 My forever love: Capo 🐎 👉🏼 We are a Travel Agency based in Essaouira (Morocco). Join us for an unforgettable horseride holidays. Ride the best horses in town, and meet the best team of riders.  . . . . . . #horses #horsesoftiktok #horse #horsetok #equestrian #fyp #cheval #fypage #viral #viralvideo #pferd #horsesontiktok #лошадь #horselove #essaouira #morocco #lovak #caballos #cavalli #feedom #power #stallion #brave . Video. Pinned. 309925917 views. | None |
+| `UILabel` | `` | 89,640 | `{24, 629}, {129.33333333333334, 22}` | 31787293 views | None |
+| `UILabel` | `` | 227,640 | `{162.33333333333331, 629}, {129.33333333333331, 22}` | 69843991 views | None |
+| `UILabel` | `` | 365,640 | `{300.66666666666669, 629}, {129.33333333333331, 22}` | 309925917 views | None |
+| `TUXCheckbox` | `` | 117,672 | `{105.33333333333333, 660}, {23.999999999999986, 24}` |  | None |
+| `TUXCheckbox` | `` | 256,672 | `{243.66666666666663, 660}, {24, 24}` |  | None |
+| `TUXCheckbox` | `` | 394,672 | `{382, 660}, {24, 24}` |  | None |
+| `TTKQuickLocateBubbleView` | `` | 330,701 | `{261.66666666666674, 682}, {136.33333333333331, 38}` |  | None |
+| `TTKTabBarButton` | `a11y_vo_home` | -373,712 | `{-414, 687}, {82.800000000000011, 49}` | Home | False |
+| `TTKTabBarAnimationContentView` | `` | -373,712 | `{-414, 687}, {82.800000000000011, 49}` | Home | None |
+| `TTKTabBarButton` | `friends` | -290,712 | `{-331.20000000000005, 687}, {82.800000000000011, 49}` | Friends | False |
+| `TTKTabBarAnimationContentView` | `` | -290,712 | `{-331.20000000000005, 687}, {82.800000000000011, 49}` | Friends | None |
+| `AWETabBarPlusButton` | `` | -207,712 | `{-248.40000000000001, 687}, {82.799999999999983, 49}` | Create | False |
+| `TTKTabBarButton` | `a11y_vo_inbox` | -124,712 | `{-165.60000000000005, 687}, {82.799999999999997, 49}` | Inbox Button. 1 unread notifications. | False |
+| `TTKTabBarAnimationContentView` | `` | -124,712 | `{-165.60000000000005, 687}, {82.799999999999997, 49}` | Inbox | None |
+| `TTKTabBarButton` | `a11y_vo_profile` | -41,712 | `{-82.800000000000011, 687}, {82.799999999999997, 49}` | Profile | False |
+| `TTKTabBarAnimationContentView` | `` | -41,712 | `{-82.800000000000011, 687}, {82.799999999999997, 49}` | Profile | None |
+| `AWEUserWorkCollectionViewCell` | `` | 69,744 | `{0, 652}, {137.33333333333334, 183}` |  | None |
+| `UIView` | `` | 69,744 | `{0, 652}, {137.33333333333334, 183}` |  | None |
+| `BDImageView` | `` | 69,744 | `{0, 652}, {137.33333333333334, 183}` | Capo 💥 . . . . #horse #fyp #horsesoftiktok #horseriding #equestrian . Video. 6924 views. | None |
+| `AWEUserWorkCollectionViewCell` | `` | 207,744 | `{138.33333333333331, 652}, {137.33333333333331, 183}` |  | None |
+| `UIView` | `` | 207,744 | `{138.33333333333331, 652}, {137.33333333333331, 183}` |  | None |
+| `BDImageView` | `` | 207,744 | `{138.33333333333331, 652}, {137.33333333333331, 183}` | Best mornings with Capo ❤️ 👉🏼 We are animal lovers, a stable and Travel Agents based in Morocco. Join us for an unforgettable horseride holidays. Ride the best stallions and meet the best team of riders. . . . . #fyp #horse #horsesoftiktok #horseriding #equestrian . Video. 3859 views. | None |
+| `AWEUserWorkCollectionViewCell` | `` | 345,744 | `{276.66666666666669, 652}, {137.33333333333331, 183}` |  | None |
+| `UIView` | `` | 345,744 | `{276.66666666666669, 652}, {137.33333333333331, 183}` |  | None |
+| `BDImageView` | `` | 345,744 | `{276.66666666666669, 652}, {137.33333333333331, 183}` | Not every day with a horse is a perfect day. 🤎 Franz came to us with trauma. Some days he is absolutely perfect… and some days… he has a lot to say. We don’t have horses that are just machines. They have emotions, memories, good days and bad days. And when a horse has a difficult day, we don’t sell him. We don’t give up on him. We listen. We adapt. We give him time, patience and the space to learn to trust again. Our goal is not to make a horse obey us at all costs. Our goal is to make him feel good with us. 🤎 Franz is still learning. And so are we. ❤️ . . . . . #fyp #horse #horsesoftiktok #horseriding #equestrian . Video. 13794 views. | None |
+| `UILabel` | `` | 89,824 | `{24, 813}, {129.33333333333334, 22}` | 6924 views | None |
+| `UILabel` | `` | 227,824 | `{162.33333333333331, 813}, {129.33333333333331, 22}` | 3859 views | None |
+| `UILabel` | `` | 365,824 | `{300.66666666666669, 813}, {129.33333333333331, 22}` | 13794 views | None |
+| `AWEFeedRefreshFooter` | `` | 207,1961 | `{0, 1939}, {414, 44}` |   | None |
+| `UIButton` | `` | 207,1961 | `{0, 1939}, {414, 44}` |  | False |
+| `TUXDualBallLoadingIndicator` | `` | 207,1961 | `{191, 1945}, {32, 32}` | Loading | None |
+| `YYLabel` | `` | 207,1961 | `{16, 1939}, {382, 44}` |   | None |
 
 ## following（194 控件）
 
@@ -651,6 +769,138 @@
 | `TTKTabBarAnimationContentView` | `` | 290,712 | `{248.39999999999995, 687}, {82.799999999999983, 49}` | Inbox | None |
 | `TTKTabBarButton` | `a11y_vo_profile` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | False |
 | `TTKTabBarAnimationContentView` | `` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | None |
+
+## profile_setup（127 控件）
+
+| 类名 | accId | x,y | frame | label | 选中 |
+|------|-------|-----|-------|-------|-----|
+| `TUXDualBallLoadingIndicator` | `` | 207,0 | `{191, -16}, {32, 32}` | Loading | None |
+| `TUXBadge` | `` | 51,20 | `{46, 12}, {10, 16}` | You have new notifications,0 | None |
+| `TUXBadgeCore` | `` | 51,20 | `{46, 12}, {10, 16}` | You have new notifications,0 | None |
+| `UILabel` | `` | 394,34 | `{386, 26}, {16, 16}` | 1 | None |
+| `UIImageView` | `` | 178,41 | `{173, 36}, {10, 10}` | Add | None |
+| `TUXLabel` | `` | 207,41 | `{170.33333333333334, 29}, {73.666666666666657, 24}` | Outshine | None |
+| `UIButton` | `` | 208,41 | `{172, 29}, {72, 24}` | Add name | False |
+| `UIButtonLabel` | `` | 214,41 | `{185, 34}, {58, 14}` | Add name | None |
+| `UIImageView` | `` | 252,41 | `{244, 33}, {16, 16}` | Switch accounts | None |
+| `UIButton` | `nav_bar_start_find_friends` | 28,42 | `{8, 20}, {40, 44}` | Find friends | False |
+| `UIImageView` | `` | 28,42 | `{16, 30}, {24, 24}` | Add person | None |
+| `AWESwitchAccountNavigationBarTitleView` | `` | 207,42 | `{150.33333333333334, 29}, {113.66666666666666, 26}` |  | None |
+| `TTKProfileViewsEntryView` | `nav_bar_end_viewer_entrance` | 306,42 | `{286, 20}, {40, 44}` | Profile view. 0 profile views. | None |
+| `UIImageView` | `` | 306,42 | `{294, 30}, {24, 24}` | Profile views | None |
+| `UIImageView` | `` | 346,42 | `{334, 30}, {24, 24}` | Share | None |
+| `UIImageView` | `` | 386,42 | `{374, 30}, {24, 24}` | Menu | None |
+| `_UIScrollViewScrollIndicator` | `` | 183,46 | `{181.33333333333334, 28.333333333333371}, {3, 36}` | 垂直滚动条, 1页 | None |
+| `_UIScrollViewScrollIndicator` | `` | 238,46 | `{236.66666666666666, 28.333333333333371}, {3, 36}` | 垂直滚动条, 1页 | None |
+| `AWEInsetsLabel` | `` | 318,48 | `{311.66666666666669, 41}, {11.666666666666686, 13}` | 0 | None |
+| `TikTokSocialImplSwift.StoryNoteGradientTextView` | `` | 179,55 | `{171.33333333333334, 42.666666666666686}, {16, 24.666666666666671}` |  | None |
+| `UIView` | `` | 207,55 | `{171.33333333333334, 35}, {71.333333333333343, 40}` |  | None |
+| `TikTokSocialImplSwift.AlwaysCursorPlaceholderTextView` | `` | 207,55 | `{171.33333333333334, 42.666666666666686}, {71.333333333333343, 24.666666666666671}` |  | None |
+| `UILabel` | `` | 207,55 | `{154.33333333333334, 55}, {105.66666666666666, 0}` |  | None |
+| `BDImageView` | `` | 159,59 | `{159, 59}, {0, 0}` |  | None |
+| `_UIScrollViewScrollIndicator` | `` | 166,63 | `{148.33333333333334, 61.333333333333371}, {36, 3}` | 水平滚动条, 1页 | None |
+| `_UIScrollViewScrollIndicator` | `` | 207,63 | `{174.33333333333334, 61.333333333333371}, {65.333333333333343, 3}` | 水平滚动条, 1页 | None |
+| `TTKProfileAvatarContainerView` | `header_avatar` | 207,96 | `{0, 30}, {414, 131}` |  | None |
+| `TTKProfileAvatarSectionView` | `avatar_normal` | 207,96 | `{141.66666666666666, 30}, {130.99999999999997, 131}` |  | None |
+| `BDImageView` | `` | 207,107 | `{159, 59}, {96, 96}` | Outshine, Profile photo, | None |
+| `UIImageView` | `` | 207,107 | `{187, 87}, {40, 40}` | Camera | None |
+| `TTKAvatarCommonBadgeView` | `` | 243,143 | `{231, 131}, {24, 24}` |  | None |
+| `UIView` | `` | 243,143 | `{231, 131}, {24, 24}` | Plus | None |
+| `UIImageView` | `` | 243,143 | `{231, 131}, {24, 24}` | Add | None |
+| `TTKProfileHeaderView` | `header` | 207,165 | `{0, 30}, {414, 269}` |  | None |
+| `UIImageView` | `` | 184,177 | `{178, 171.33333333333334}, {12, 12}` | Add | None |
+| `UIImageView` | `` | 243,177 | `{234.66666666666666, 169.33333333333334}, {16, 16}` | Switch accounts | None |
+| `UIView` | `user_info_manage` | 289,177 | `{259.66666666666669, 162.33333333333334}, {58, 30}` |  | None |
+| `UIView` | `user_info_manage_edit_profile` | 289,177 | `{259.66666666666669, 162.33333333333334}, {58, 30}` |  | None |
+| `UIButton` | `` | 289,177 | `{264.66666666666669, 163.33333333333334}, {48, 28}` | Edit | False |
+| `UIImageView` | `` | 289,177 | `{281.66666666666669, 170.33333333333334}, {14, 14}` | Edit | None |
+| `UIButton` | `` | 189,178 | `{159.66666666666666, 166}, {59, 23}` | Add name | False |
+| `TUXLabel` | `` | 197,178 | `{159.66666666666666, 166}, {75, 23}` | Outshine | None |
+| `UIButtonLabel` | `` | 199,178 | `{194.33333333333331, 170}, {10, 15}` | Add name | None |
+| `UIView` | `user_account_name_info` | 207,178 | `{0, 166}, {414, 23}` |  | None |
+| `AWESwitchAccountProfileInfoTitleView` | `user_info_nickname` | 207,178 | `{159.66666666666666, 166}, {95, 23}` |  | None |
+| `UIButtonLabel` | `` | 289,178 | `{276.66666666666669, 170}, {24, 15}` | Edit | None |
+| `TTKProfileRootView` | `TTKProfileRootComponent` | 207,185 | `{0, 30}, {414, 309}` |  | None |
+| `UIView` | `user_info` | 207,187 | `{0, 161}, {414, 51}` |  | None |
+| `AWEUserNameLabel` | `user_account_user_name` | 207,198 | `{166, 188.33333333333334}, {82, 20}` | @outshine83 | None |
+| `UIView` | `user_account_base_info` | 207,199 | `{0, 189}, {414, 19}` |  | None |
+| `TUXLabel` | `` | 207,199 | `{166, 189}, {82, 19}` | @outshine83 | None |
+| `UIView` | `info` | 207,210 | `{0, 161}, {414, 98}` |  | None |
+| `TUXLabel` | `` | 107,229 | `{57, 217.33333333333331}, {100, 23.333333333333343}` | 0 | None |
+| `TUXLabel` | `` | 207,229 | `{157, 217.33333333333331}, {100, 23.333333333333343}` | 0 | None |
+| `TUXLabel` | `` | 307,229 | `{257, 217.33333333333331}, {100, 23.333333333333343}` | 0 | None |
+| `UIStackView` | `relation_info_following` | 107,235 | `{57, 217.33333333333331}, {100, 36}` | 0, Following, | None |
+| `UIStackView` | `relation_info_follower` | 207,235 | `{157, 217.33333333333331}, {100, 36}` | 0, Followers, | None |
+| `UIStackView` | `relation_info_like` | 307,235 | `{257, 217.33333333333331}, {100, 36}` | 0, Likes, | None |
+| `UIView` | `user_relation_info` | 207,236 | `{0, 212}, {414, 47}` |  | None |
+| `UILabel` | `` | 107,246 | `{57, 238.66666666666669}, {100, 14.666666666666657}` | Following | None |
+| `UILabel` | `` | 207,246 | `{157, 238.66666666666669}, {100, 14.666666666666657}` | Followers | None |
+| `UILabel` | `` | 307,246 | `{257, 238.66666666666669}, {100, 14.666666666666657}` | Likes | None |
+| `TTKProfileRecommendContainerView` | `recommend` | 207,259 | `{0, 259}, {414, 0}` |  | None |
+| `UIView` | `recommend_user_card` | 207,259 | `{0, 259}, {414, 0}` |  | None |
+| `UIImageView` | `` | 118,277 | `{112, 271}, {12, 12}` | Add | None |
+| `TTKProfileBIOSectionView` | `bio` | 207,277 | `{0, 259}, {414, 36}` |  | None |
+| `UIView` | `bio_add_bio` | 207,277 | `{40, 263}, {334, 28}` |  | None |
+| `UIButton` | `` | 207,277 | `{100, 263}, {214, 28}` | Add bio · ￼ My hobbies are... | False |
+| `UIButtonLabel` | `` | 215,277 | `{128, 269.66666666666663}, {174, 15}` | Add bio · ￼ My hobbies are... | None |
+| `UIImageView` | `` | 58,319 | `{46.833333333333329, 308}, {22, 22}` | Posts | None |
+| `TTKProfileTabVideoButton` | `TTKProfileTabVideoButton_0` | 64,319 | `{16.5, 299}, {94.5, 40}` | Posts | True |
+| `UIImageView` | `` | 75,319 | `{68.833333333333329, 313}, {12, 12}` | Down | None |
+| `TTKProfileTabBaseButton` | `TTKProfileTabBaseButton_10` | 159,319 | `{112, 299}, {94.5, 40}` | Private | False |
+| `UIImageView` | `` | 159,319 | `{128, 299}, {62.666666666666686, 40}` | Lock | None |
+| `UIView` | `profile_tab` | 207,319 | `{0, 299}, {414, 40}` |  | None |
+| `UIScrollView` | `` | 207,319 | `{0, 299}, {414, 40}` |  | None |
+| `TTKProfileTabFavouriteButton` | `TTKProfileTabFavouriteButton_6` | 255,319 | `{207.5, 299}, {94.5, 40}` | Favorites | False |
+| `UIImageView` | `` | 255,319 | `{223.5, 299}, {62.666666666666686, 40}` | Add to Favorites | None |
+| `TTKProfileTabLikeButton` | `TTKProfileTabLikeButton_2` | 350,319 | `{303, 299}, {94.5, 40}` | Liked | False |
+| `UIImageView` | `` | 350,319 | `{319, 299}, {62.666666666666686, 40}` | Like | None |
+| `TTKCViewComponentPassthroughView` | `nav_bar` | 207,339 | `{0, 339}, {414, 0}` |  | None |
+| `UIImageView` | `` | 24,362 | `{16, 354}, {16, 16}` | Story | None |
+| `UILabel` | `` | 178,362 | `{40, 354.66666666666669}, {276, 15}` | View expired Stories in “Your private videos” | None |
+| `UIView` | `` | 207,362 | `{0, 339}, {414, 46}` |  | None |
+| `UIButton` | `` | 390,362 | `{382, 351}, {16, 22}` | Close | False |
+| `UIImageView` | `` | 390,362 | `{382, 354}, {16, 16}` | Close | None |
+| `_UIScrollViewScrollIndicator` | `` | 410,365 | `{408, 346.66666666666663}, {3, 36}` | 垂直滚动条, 1页 | None |
+| `AWEMaskWindow` | `AWEMaskWindow` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `UILayoutContainerView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `AWEUserProfileSlidingScrollView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `TTKUserProfileWorkCollectionView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `UIEditingOverlayGestureView` | `` | 207,368 | `{0, 0}, {414, 736}` |  | None |
+| `UIView` | `` | 207,385 | `{0, 385}, {414, 0.5}` |  | None |
+| `UICollectionView` | `` | 207,386 | `{0, 385.66666666666663}, {414, 0}` |  | None |
+| `UILabel` | `` | 88,410 | `{16, 401.66666666666663}, {143.33333333333334, 16}` | Complete your profile | None |
+| `UIImageView` | `` | 207,458 | `{183, 433.66666666666663}, {48, 48}` | accessibilityLabels_tux_icon_large_album | None |
+| `UIView` | `` | 207,492 | `{0, 385.66666666666663}, {414, 213}` |  | None |
+| `UILabel` | `` | 207,511 | `{91.333333333333329, 491.66666666666663}, {231.33333333333337, 38.333333333333371}` | What are some good photos you’ve taken recently? | None |
+| `TUXButton` | `` | 207,558 | `{162.33333333333334, 542}, {89.333333333333343, 32}` | Upload | False |
+| `UIButtonLabel` | `` | 207,558 | `{183, 550}, {48, 16}` | Upload | None |
+| `TUXButton` | `` | 207,587 | `{162.33333333333334, 566.66666666666663}, {89.333333333333343, 40}` | Upload | False |
+| `UIButtonLabel` | `` | 207,587 | `{183, 578.66666666666663}, {48, 16}` | Upload | None |
+| `UIButton` | `` | 207,621 | `{0, 598.5}, {414, 44}` |  | False |
+| `TUXDualBallLoadingIndicator` | `` | 207,621 | `{191, 604.5}, {32, 32}` | Loading | None |
+| `YYLabel` | `` | 207,621 | `{16, 598.5}, {382, 44}` | No more results | None |
+| `_UIScrollViewScrollIndicator` | `` | 206,683 | `{3, 681}, {405, 3}` | 水平滚动条, 1页 | None |
+| `UILabel` | `` | 166,687 | `{165.59999999999999, 687}, {0, 0}` | Post | None |
+| `UILabel` | `` | 303,697 | `{294.73333333333329, 689}, {16, 16}` | 1 | None |
+| `TTKTabBarButton` | `a11y_vo_home` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | False |
+| `TTKTabBarAnimationContentView` | `` | 41,712 | `{0, 687}, {82.799999999999997, 49}` | Home | None |
+| `UITabBarButton` | `` | 52,712 | `{2, 688}, {100, 48}` |  | False |
+| `TTKTabBarButton` | `friends` | 124,712 | `{82.799999999999983, 687}, {82.799999999999983, 49}` | Friends | False |
+| `TTKTabBarAnimationContentView` | `` | 124,712 | `{82.799999999999983, 687}, {82.799999999999983, 49}` | Friends | None |
+| `UITabBarButton` | `` | 156,712 | `{106, 688}, {99, 48}` |  | False |
+| `TTKTabBar` | `` | 207,712 | `{0, 687}, {414, 49}` | 标签页栏 | None |
+| `AWETabBarPlusButton` | `` | 207,712 | `{165.59999999999999, 687}, {82.799999999999983, 49}` | Create | False |
+| `UITabBarButton` | `` | 259,712 | `{209, 688}, {100, 48}` |  | False |
+| `TTKTabBarButton` | `a11y_vo_inbox` | 290,712 | `{248.39999999999995, 687}, {82.799999999999983, 49}` | Inbox Button. 1 unread notifications. | False |
+| `TTKTabBarAnimationContentView` | `` | 290,712 | `{248.39999999999995, 687}, {82.799999999999983, 49}` | Inbox | None |
+| `UITabBarButton` | `` | 363,712 | `{313, 688}, {99, 48}` |  | False |
+| `TTKTabBarButton` | `a11y_vo_profile` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | False |
+| `TTKTabBarAnimationContentView` | `` | 373,712 | `{331.19999999999999, 687}, {82.800000000000011, 49}` | Profile | None |
+| `UILabel` | `` | 41,725 | `{0, 718.66666666666663}, {82.666666666666671, 13}` | Home | None |
+| `UILabel` | `` | 124,725 | `{82.799999999999983, 718.66666666666663}, {82.666666666666657, 13}` | Friends | None |
+| `UILabel` | `` | 290,725 | `{248.39999999999995, 718.66666666666663}, {82.666666666666657, 13}` | Inbox | None |
+| `UILabel` | `` | 373,725 | `{331.19999999999999, 718.66666666666663}, {82.666666666666686, 13}` | Profile | None |
+| `UIToolbar` | `Toolbar` | 207,761 | `{0, 736}, {414, 49}` | 工具栏 | None |
 
 ## search（24 控件）
 

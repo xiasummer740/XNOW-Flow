@@ -1,133 +1,124 @@
 {
  "page": "feed",
- "device": "iphone_A6D8F9B4",
- "captured": "2026-08-28 19:58:00",
- "count": 63,
+ "device": "iphone_A8DE7E93",
+ "captured": "2026-08-30 21:44:44",
+ "count": 101,
  "controls": [
   {
-   "class": "TTKFeedTabCornerItemView",
-   "x": 28,
-   "y": 42,
-   "frame": "{8, 22}, {40, 40}",
+   "class": "TUXDualBallLoadingIndicator",
+   "x": 207,
+   "y": 2,
+   "frame": "{191, -14}, {32, 32}",
+   "accId": "",
+   "label": "Loading",
+   "selected": "None"
+  },
+  {
+   "class": "BDImageView",
+   "x": 159,
+   "y": 40,
+   "frame": "{159, 40}, {0, 0}",
    "accId": "",
    "label": "",
    "selected": "None"
   },
   {
-   "class": "AWELiveFeedEntranceView",
-   "x": 28,
-   "y": 42,
-   "frame": "{16, 30}, {24, 24}",
+   "class": "TTKAvatarCommonBadgeView",
+   "x": 159,
+   "y": 40,
+   "frame": "{159, 40}, {0, 0}",
    "accId": "",
-   "label": "LIVE",
+   "label": "",
    "selected": "None"
   },
   {
-   "class": "TikTokFeedTabItemControl",
-   "x": 62,
+   "class": "UIButton",
+   "x": 28,
    "y": 42,
-   "frame": "{35, 20}, {53, 44}",
-   "accId": "stemFeed_feedScreen_feedName",
-   "label": "STEM",
-   "selected": "False"
-  },
-  {
-   "class": "TikTokFeedTabItemNearbyControl",
-   "x": 120,
-   "y": 42,
-   "frame": "{88, 20}, {64, 44}",
-   "accId": "nearby_tab_name",
-   "label": "Nearby",
-   "selected": "False"
-  },
-  {
-   "class": "HDRUIButton",
-   "x": 139,
-   "y": 42,
-   "frame": "{133, 36}, {12, 12}",
-   "accId": "",
+   "frame": "{8, 20}, {40, 44}",
+   "accId": "nav_bar_start_back",
    "label": "",
    "selected": "False"
   },
   {
-   "class": "TikTokFeedTabItemControl",
-   "x": 185,
-   "y": 42,
-   "frame": "{152, 20}, {66, 44}",
-   "accId": "exploretab_tabname_explore",
-   "label": "Explore",
-   "selected": "False"
-  },
-  {
-   "class": "TikTokFeedFadeScrollView",
+   "class": "UIImageView",
    "x": 207,
    "y": 42,
-   "frame": "{48, 20}, {318, 44}",
+   "frame": "{191, 26}, {32, 32}",
    "accId": "",
    "label": "",
    "selected": "None"
   },
   {
-   "class": "TikTokFeedTabItemFollowControl",
-   "x": 259,
-   "y": 42,
-   "frame": "{218, 20}, {81, 44}",
-   "accId": "following",
-   "label": "Following",
-   "selected": "False"
-  },
-  {
-   "class": "TikTokFeedTabItemControl",
-   "x": 332,
-   "y": 42,
-   "frame": "{299, 20}, {65, 44}",
-   "accId": "top_tabs_recomend",
-   "label": "For You",
-   "selected": "True"
-  },
-  {
-   "class": "TTKMultiTabNavigationArrowView",
+   "class": "UIButton",
    "x": 346,
    "y": 42,
-   "frame": "{326, 22.333333333333329}, {40, 40}",
-   "accId": "",
+   "frame": "{326, 20}, {40, 44}",
+   "accId": "nav_bar_end_bell",
    "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKFeedTabCornerItemView",
-   "x": 386,
-   "y": 42,
-   "frame": "{366, 22}, {40, 40}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKSearchEntranceButton",
-   "x": 386,
-   "y": 42,
-   "frame": "{374, 30}, {24, 24}",
-   "accId": "",
-   "label": "Search",
    "selected": "False"
   },
   {
    "class": "UIButton",
-   "x": 389,
-   "y": 85,
-   "frame": "{374, 70}, {30, 30}",
-   "accId": "",
+   "x": 386,
+   "y": 42,
+   "frame": "{366, 20}, {40, 44}",
+   "accId": "nav_bar_end_more",
    "label": "",
    "selected": "False"
   },
   {
-   "class": "UILabel",
+   "class": "UIView",
    "x": 207,
-   "y": 112,
-   "frame": "{32, 112}, {350, 0}",
+   "y": 57,
+   "frame": "{199, 37}, {16, 40}",
    "accId": "",
    "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TikTokSocialImplSwift.StoryNoteGradientTextView",
+   "x": 207,
+   "y": 57,
+   "frame": "{199, 44.666666666666686}, {16, 24.666666666666671}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TikTokSocialImplSwift.AlwaysCursorPlaceholderTextView",
+   "x": 207,
+   "y": 57,
+   "frame": "{199, 44.666666666666686}, {16, 24.666666666666671}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileAvatarContainerView",
+   "x": 207,
+   "y": 87,
+   "frame": "{0, 32}, {414, 110}",
+   "accId": "header_avatar",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileAvatarSectionView",
+   "x": 207,
+   "y": 87,
+   "frame": "{152, 32}, {110, 110}",
+   "accId": "avatar_normal",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "BDImageView",
+   "x": 207,
+   "y": 88,
+   "frame": "{159, 40}, {96, 96}",
+   "accId": "",
+   "label": "Marta, Profile photo,",
    "selected": "None"
   },
   {
@@ -140,83 +131,227 @@
    "selected": "None"
   },
   {
-   "class": "TTKFeedNonPersonalizationTipsView",
+   "class": "UIView",
    "x": 207,
-   "y": 125,
-   "frame": "{188, 120}, {38, 10}",
-   "accId": "",
+   "y": 159,
+   "frame": "{0, 147}, {414, 23}",
+   "accId": "user_account_name_info",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 207,
+   "y": 159,
+   "frame": "{182.66666666666666, 147}, {49, 23}",
+   "accId": "user_info_nickname",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 168,
+   "frame": "{0, 142}, {414, 51}",
+   "accId": "user_info",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "AWEUserNameLabel",
+   "x": 207,
+   "y": 179,
+   "frame": "{130.33333333333331, 169.33333333333331}, {153.33333333333331, 20}",
+   "accId": "user_account_user_name",
+   "label": "@essaouirahorseparadise",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 180,
+   "frame": "{0, 170}, {414, 19}",
+   "accId": "user_account_base_info",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 191,
+   "frame": "{0, 142}, {414, 98}",
+   "accId": "info",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIStackView",
+   "x": 107,
+   "y": 216,
+   "frame": "{57, 198.33333333333331}, {100, 36}",
+   "accId": "relation_info_following",
+   "label": "34, Following,",
+   "selected": "None"
+  },
+  {
+   "class": "UIStackView",
+   "x": 207,
+   "y": 216,
+   "frame": "{157, 198.33333333333331}, {100, 36}",
+   "accId": "relation_info_follower",
+   "label": "2.7M, Followers,",
+   "selected": "None"
+  },
+  {
+   "class": "UIStackView",
+   "x": 307,
+   "y": 216,
+   "frame": "{257, 198.33333333333331}, {100, 36}",
+   "accId": "relation_info_like",
+   "label": "103.4 million, Likes,",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 217,
+   "frame": "{0, 193}, {414, 47}",
+   "accId": "user_relation_info",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileHeaderView",
+   "x": 207,
+   "y": 230,
+   "frame": "{0, 32}, {414, 396}",
+   "accId": "header",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileRootView",
+   "x": 207,
+   "y": 250,
+   "frame": "{0, 32}, {414, 436}",
+   "accId": "TTKProfileRootComponent",
    "label": "",
    "selected": "None"
   },
   {
    "class": "UIButton",
-   "x": 389,
-   "y": 125,
-   "frame": "{374, 110}, {30, 30}",
+   "x": 126,
+   "y": 267,
+   "frame": "{71, 245}, {110, 44}",
    "accId": "",
    "label": "",
    "selected": "False"
   },
   {
-   "class": "AWEStoryAvatarButton",
-   "x": 384,
-   "y": 311,
-   "frame": "{361.66666666666674, 289}, {44, 44}",
-   "accId": "",
-   "label": "@damowang_yo",
-   "selected": "False"
-  },
-  {
-   "class": "GBLAvatarLiveMarkView",
-   "x": 384,
-   "y": 311,
-   "frame": "{359, 286.66666666666669}, {49, 48.666666666666686}",
-   "accId": "",
-   "label": "liveMarkView",
-   "selected": "None"
-  },
-  {
-   "class": "UIView",
-   "x": 404,
-   "y": 332,
-   "frame": "{404.33333333333348, 332}, {0, 0}",
-   "accId": "",
-   "label": "Create a Story",
-   "selected": "None"
-  },
-  {
-   "class": "AWEPlayInteractionFollowPromptView",
-   "x": 384,
-   "y": 333,
-   "frame": "{353.66666666666674, 313}, {60, 40}",
-   "accId": "",
-   "label": "Follow damowang_yo",
-   "selected": "None"
-  },
-  {
-   "class": "UIView",
-   "x": 384,
-   "y": 333,
-   "frame": "{353.66666666666674, 313}, {60, 40}",
-   "accId": "",
+   "class": "AWEIMProfileRelationView",
+   "x": 183,
+   "y": 267,
+   "frame": "{71, 245}, {224, 44}",
+   "accId": "cta_social_interaction",
    "label": "",
    "selected": "None"
   },
   {
-   "class": "UIImageView",
-   "x": 384,
-   "y": 335,
-   "frame": "{373.66666666666674, 325}, {20, 20}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKCViewComponentPassthroughView",
+   "class": "UIView",
    "x": 207,
-   "y": 344,
-   "frame": "{0, 0}, {414, 687}",
-   "accId": "TTKSleepHoursViewComponent",
+   "y": 267,
+   "frame": "{0, 240}, {414, 54}",
+   "accId": "cta",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIButton",
+   "x": 240,
+   "y": 267,
+   "frame": "{185, 245}, {110, 44}",
+   "accId": "",
+   "label": "",
+   "selected": "False"
+  },
+  {
+   "class": "UIView",
+   "x": 321,
+   "y": 267,
+   "frame": "{299, 245}, {44, 44}",
+   "accId": "cta_recommend_button",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "AWEButton",
+   "x": 321,
+   "y": 267,
+   "frame": "{299, 245}, {44, 44}",
+   "accId": "",
+   "label": "People you may be interested in",
+   "selected": "False"
+  },
+  {
+   "class": "TTKProfileRecommendContainerView",
+   "x": 207,
+   "y": 294,
+   "frame": "{0, 294}, {414, 0}",
+   "accId": "recommend",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 294,
+   "frame": "{0, 294}, {414, 0}",
+   "accId": "recommend_user_card",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 333,
+   "frame": "{40, 298}, {334, 69}",
+   "accId": "bio_signature",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKBioSignatureContainerView",
+   "x": 207,
+   "y": 333,
+   "frame": "{40, 298}, {334, 69}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTTAttributedLabel",
+   "x": 207,
+   "y": 333,
+   "frame": "{40, 298}, {334, 69}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileBIOSignatureView",
+   "x": 207,
+   "y": 333,
+   "frame": "{40, 298}, {334, 69}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileBIOSectionView",
+   "x": 207,
+   "y": 342,
+   "frame": "{0, 294}, {414, 96}",
+   "accId": "bio",
    "label": "",
    "selected": "None"
   },
@@ -239,307 +374,514 @@
    "selected": "None"
   },
   {
+   "class": "AWEUserProfileSlidingScrollView",
+   "x": 207,
+   "y": 368,
+   "frame": "{0, 0}, {414, 736}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKUserProfileWorkCollectionView",
+   "x": 207,
+   "y": 368,
+   "frame": "{0, 0}, {414, 736}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
    "class": "UIView",
    "x": 207,
-   "y": 368,
-   "frame": "{0, 0}, {414, 736}",
+   "y": 377,
+   "frame": "{40, 367}, {334, 19}",
+   "accId": "bio_profile_link",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileBIOProfileLinkView",
+   "x": 207,
+   "y": 377,
+   "frame": "{96, 367}, {222, 19}",
    "accId": "",
    "label": "",
    "selected": "None"
   },
   {
-   "class": "AWEFeedSlidingScrollView",
+   "class": "TUXAlertBadge",
+   "x": 208,
+   "y": 402,
+   "frame": "{206, 400}, {4, 4}",
+   "accId": "",
+   "label": "You have new notifications",
+   "selected": "None"
+  },
+  {
+   "class": "TUXAlertBadge",
+   "x": 328,
+   "y": 402,
+   "frame": "{326, 400}, {4, 4}",
+   "accId": "",
+   "label": "You have new notifications",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
    "x": 207,
-   "y": 368,
-   "frame": "{0, 0}, {414, 736}",
+   "y": 407,
+   "frame": "{0, 390}, {414, 34}",
+   "accId": "advanced_feature",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 147,
+   "y": 408,
+   "frame": "{80, 392}, {134, 32}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileAdvancedSectionView",
+   "x": 207,
+   "y": 408,
+   "frame": "{72, 392}, {270, 32}",
    "accId": "",
    "label": "",
    "selected": "None"
   },
   {
    "class": "UIView",
+   "x": 274,
+   "y": 408,
+   "frame": "{214, 392}, {120, 32}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKProfileTabVideoButton",
+   "x": 80,
+   "y": 448,
+   "frame": "{16.499999999999993, 428}, {126.33333333333331, 40}",
+   "accId": "TTKProfileTabVideoButton_0",
+   "label": "Posts",
+   "selected": "True"
+  },
+  {
+   "class": "UIView",
    "x": 207,
-   "y": 368,
-   "frame": "{0, 0}, {414, 736}",
-   "accId": "TTKFeedRootComponent",
+   "y": 448,
+   "frame": "{0, 428}, {414, 40}",
+   "accId": "profile_tab",
    "label": "",
    "selected": "None"
-  },
-  {
-   "class": "AWENewFeedTableView",
-   "x": 207,
-   "y": 368,
-   "frame": "{0, 0}, {414, 736}",
-   "accId": "TTKFeedTableViewService",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "AWEFeedViewCell",
-   "x": 207,
-   "y": 368,
-   "frame": "{0, 0}, {414, 736}",
-   "accId": "",
-   "label": "feedcells",
-   "selected": "None"
-  },
-  {
-   "class": "UITableViewCellContentView",
-   "x": 207,
-   "y": 368,
-   "frame": "{0, 0}, {414, 736}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKFeedInteractionRootView",
-   "x": 207,
-   "y": 368,
-   "frame": "{0, 0}, {414, 736}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "AWEPlayVideoPlayerControllerBackgroundView",
-   "x": 207,
-   "y": 368,
-   "frame": "{0, 0}, {414, 736}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKFeedInteractionPlayerOverlayView",
-   "x": 207,
-   "y": 368,
-   "frame": "{0, 0}, {414, 736}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKFeedInteractionMainView",
-   "x": 207,
-   "y": 368,
-   "frame": "{0, 0}, {414, 736}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKStickerContainerView",
-   "x": 207,
-   "y": 368,
-   "frame": "{0, 0}, {414, 736}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKCommerceAdMaskView",
-   "x": 207,
-   "y": 368,
-   "frame": "{0, 0}, {414, 736}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "AWEFeedVideoButton",
-   "x": 382,
-   "y": 390,
-   "frame": "{357, 366}, {49, 48}",
-   "accId": "feedLikeButton",
-   "label": "Like video. four hundred eighty-four thousand two hundred eighteen likes",
-   "selected": "False"
-  },
-  {
-   "class": "AWEFeedVideoButton",
-   "x": 371,
-   "y": 456,
-   "frame": "{336, 432}, {70, 48}",
-   "accId": "feedCommentButton",
-   "label": "Read or add comments. three thousand one hundred seventy-one comments",
-   "selected": "False"
-  },
-  {
-   "class": "AWEFeedVideoButton",
-   "x": 382,
-   "y": 522,
-   "frame": "{357, 498}, {49, 48}",
-   "accId": "feedFavoriteButton",
-   "label": "Add to Favorites. forty-four thousand ninety-four added to Favorites",
-   "selected": "False"
-  },
-  {
-   "class": "AWEFeedVideoButton",
-   "x": 371,
-   "y": 588,
-   "frame": "{336, 564}, {70, 48}",
-   "accId": "feedShareButton",
-   "label": "Share video. two hundred fifty-seven thousand seven hundred ninety-five shares",
-   "selected": "False"
-  },
-  {
-   "class": "TTKUpvoteBubbleElementWhiteGuideView",
-   "x": 88,
-   "y": 610,
-   "frame": "{12, 595.66666666666663}, {152.33333333333334, 28}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "TTKUpvoteNewBubbleElement",
-   "x": 163,
-   "y": 610,
-   "frame": "{12, 595.66666666666663}, {302, 28}",
-   "accId": "",
-   "label": "",
-   "selected": "None"
-  },
-  {
-   "class": "AWEPlayInteractionAuthorUserNameButton",
-   "x": 37,
-   "y": 643,
-   "frame": "{12, 631.66666666666663}, {50, 23.333333333333371}",
-   "accId": "",
-   "label": "Yannik",
-   "selected": "False"
-  },
-  {
-   "class": "AWEMusicCoverButton",
-   "x": 384,
-   "y": 653,
-   "frame": "{363.66666666666674, 633}, {40, 40}",
-   "accId": "",
-   "label": "Sound original sound - damowang_yo",
-   "selected": "False"
   },
   {
    "class": "UIScrollView",
-   "x": 163,
-   "y": 668,
-   "frame": "{12, 653}, {302, 30}",
+   "x": 207,
+   "y": 448,
+   "frame": "{0, 428}, {414, 40}",
    "accId": "",
    "label": "",
    "selected": "None"
   },
   {
-   "class": "AWEPlayInteractionDescriptionLabel",
-   "x": 163,
-   "y": 668,
-   "frame": "{12, 659}, {302, 18}",
+   "class": "TTKProfileTabBaseButton",
+   "x": 207,
+   "y": 448,
+   "frame": "{143.83333333333331, 428}, {126.33333333333331, 40}",
+   "accId": "TTKProfileTabBaseButton_16",
+   "label": "Stickers",
+   "selected": "False"
+  },
+  {
+   "class": "TTKProfileTabBaseButton",
+   "x": 334,
+   "y": 448,
+   "frame": "{271.16666666666663, 428}, {126.33333333333331, 40}",
+   "accId": "TTKProfileTabBaseButton_15",
+   "label": "Reposts",
+   "selected": "False"
+  },
+  {
+   "class": "TTKCViewComponentPassthroughView",
+   "x": 207,
+   "y": 468,
+   "frame": "{0, 468}, {414, 0}",
+   "accId": "nav_bar",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXCheckbox",
+   "x": 117,
+   "y": 488,
+   "frame": "{105.33333333333333, 476}, {23.999999999999986, 24}",
    "accId": "",
-   "label": "cute baby cat#fyp #cat #cute ",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXCheckbox",
+   "x": 256,
+   "y": 488,
+   "frame": "{243.66666666666663, 476}, {24, 24}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXCheckbox",
+   "x": 394,
+   "y": 488,
+   "frame": "{382, 476}, {24, 24}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "AWEUserWorkCollectionViewCell",
+   "x": 69,
+   "y": 560,
+   "frame": "{0, 468}, {137.33333333333334, 183}",
+   "accId": "",
+   "label": "",
    "selected": "None"
   },
   {
    "class": "UIView",
-   "x": 163,
-   "y": 683,
-   "frame": "{12, 683}, {302, 0}",
+   "x": 69,
+   "y": 560,
+   "frame": "{0, 468}, {137.33333333333334, 183}",
    "accId": "",
    "label": "",
    "selected": "None"
   },
   {
-   "class": "AWEFeedPlayerBottomProgressBar",
-   "x": 207,
-   "y": 686,
-   "frame": "{12, 685}, {390, 2}",
+   "class": "BDImageView",
+   "x": 69,
+   "y": 560,
+   "frame": "{0, 468}, {137.33333333333334, 183}",
    "accId": "",
-   "label": "progressSlider",
-   "selected": "False"
+   "label": "Najem enjoying his freedom. 💫🩶  Arabian blood, Moroccan stallion 🇲🇦 الله يحميك 👉🏼 We are a Travel Agency based in Essaouira (Morocco). Join us for an unforgettable horseride holidays. Ride the best horses in town, and meet the best team of riders.  . . . . . . #horses #horsesoftiktok #horse #horsetok #equestrian #fyp #cheval #fypage #viral #viralvideo #pferd #horsesontiktok #лошадь #horselove #essaouira #morocco #lovak #caballos #cavalli #freedom #horsegirl #viralvideos . Video. Pinned. 31787293 views.",
+   "selected": "None"
+  },
+  {
+   "class": "AWEUserWorkCollectionViewCell",
+   "x": 207,
+   "y": 560,
+   "frame": "{138.33333333333331, 468}, {137.33333333333331, 183}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 560,
+   "frame": "{138.33333333333331, 468}, {137.33333333333331, 183}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "BDImageView",
+   "x": 207,
+   "y": 560,
+   "frame": "{138.33333333333331, 468}, {137.33333333333331, 183}",
+   "accId": "",
+   "label": "Horses in freedom are the embodiment of pure strength, grace, and the untamed beauty of nature. Horses: Maktub & Íthaca.  👉🏼 We are a Travel Agency based in Essaouira (Morocco). Join us for an unforgettable horseride holidays. Ride the best horses in town, and meet the best team of riders.  . . . . . . #horses #horsesoftiktok #horse #horsetok #equestrian #fyp #cheval #fypage #viral #viralvideo #pferd #horsesontiktok #лошадь #horselove #essaouira #morocco #lovak #caballos #cavalli . Video. Pinned. 69843991 views.",
+   "selected": "None"
+  },
+  {
+   "class": "AWEUserWorkCollectionViewCell",
+   "x": 345,
+   "y": 560,
+   "frame": "{276.66666666666669, 468}, {137.33333333333331, 183}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 345,
+   "y": 560,
+   "frame": "{276.66666666666669, 468}, {137.33333333333331, 183}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "BDImageView",
+   "x": 345,
+   "y": 560,
+   "frame": "{276.66666666666669, 468}, {137.33333333333331, 183}",
+   "accId": "",
+   "label": "4 months since we rescued him, look how happy he is in his new life 💫 My forever love: Capo 🐎 👉🏼 We are a Travel Agency based in Essaouira (Morocco). Join us for an unforgettable horseride holidays. Ride the best horses in town, and meet the best team of riders.  . . . . . . #horses #horsesoftiktok #horse #horsetok #equestrian #fyp #cheval #fypage #viral #viralvideo #pferd #horsesontiktok #лошадь #horselove #essaouira #morocco #lovak #caballos #cavalli #feedom #power #stallion #brave . Video. Pinned. 309925917 views.",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 89,
+   "y": 640,
+   "frame": "{24, 629}, {129.33333333333334, 22}",
+   "accId": "",
+   "label": "31787293 views",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 227,
+   "y": 640,
+   "frame": "{162.33333333333331, 629}, {129.33333333333331, 22}",
+   "accId": "",
+   "label": "69843991 views",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 365,
+   "y": 640,
+   "frame": "{300.66666666666669, 629}, {129.33333333333331, 22}",
+   "accId": "",
+   "label": "309925917 views",
+   "selected": "None"
+  },
+  {
+   "class": "TUXCheckbox",
+   "x": 117,
+   "y": 672,
+   "frame": "{105.33333333333333, 660}, {23.999999999999986, 24}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXCheckbox",
+   "x": 256,
+   "y": 672,
+   "frame": "{243.66666666666663, 660}, {24, 24}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TUXCheckbox",
+   "x": 394,
+   "y": 672,
+   "frame": "{382, 660}, {24, 24}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "TTKQuickLocateBubbleView",
+   "x": 330,
+   "y": 701,
+   "frame": "{261.66666666666674, 682}, {136.33333333333331, 38}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
   },
   {
    "class": "TTKTabBarButton",
-   "x": 41,
+   "x": -373,
    "y": 712,
-   "frame": "{0, 687}, {82.799999999999997, 49}",
+   "frame": "{-414, 687}, {82.800000000000011, 49}",
    "accId": "a11y_vo_home",
    "label": "Home",
    "selected": "False"
   },
   {
    "class": "TTKTabBarAnimationContentView",
-   "x": 41,
+   "x": -373,
    "y": 712,
-   "frame": "{0, 687}, {82.799999999999997, 49}",
+   "frame": "{-414, 687}, {82.800000000000011, 49}",
    "accId": "",
    "label": "Home",
    "selected": "None"
   },
   {
    "class": "TTKTabBarButton",
-   "x": 124,
+   "x": -290,
    "y": 712,
-   "frame": "{82.799999999999983, 687}, {82.799999999999983, 49}",
+   "frame": "{-331.20000000000005, 687}, {82.800000000000011, 49}",
    "accId": "friends",
    "label": "Friends",
    "selected": "False"
   },
   {
    "class": "TTKTabBarAnimationContentView",
-   "x": 124,
+   "x": -290,
    "y": 712,
-   "frame": "{82.799999999999983, 687}, {82.799999999999983, 49}",
+   "frame": "{-331.20000000000005, 687}, {82.800000000000011, 49}",
    "accId": "",
    "label": "Friends",
    "selected": "None"
   },
   {
    "class": "AWETabBarPlusButton",
-   "x": 207,
+   "x": -207,
    "y": 712,
-   "frame": "{165.59999999999999, 687}, {82.799999999999983, 49}",
+   "frame": "{-248.40000000000001, 687}, {82.799999999999983, 49}",
    "accId": "",
    "label": "Create",
    "selected": "False"
   },
   {
    "class": "TTKTabBarButton",
-   "x": 290,
+   "x": -124,
    "y": 712,
-   "frame": "{248.39999999999995, 687}, {82.799999999999983, 49}",
+   "frame": "{-165.60000000000005, 687}, {82.799999999999997, 49}",
    "accId": "a11y_vo_inbox",
    "label": "Inbox Button. 1 unread notifications.",
    "selected": "False"
   },
   {
    "class": "TTKTabBarAnimationContentView",
-   "x": 290,
+   "x": -124,
    "y": 712,
-   "frame": "{248.39999999999995, 687}, {82.799999999999983, 49}",
+   "frame": "{-165.60000000000005, 687}, {82.799999999999997, 49}",
    "accId": "",
    "label": "Inbox",
    "selected": "None"
   },
   {
    "class": "TTKTabBarButton",
-   "x": 373,
+   "x": -41,
    "y": 712,
-   "frame": "{331.19999999999999, 687}, {82.800000000000011, 49}",
+   "frame": "{-82.800000000000011, 687}, {82.799999999999997, 49}",
    "accId": "a11y_vo_profile",
    "label": "Profile",
    "selected": "False"
   },
   {
    "class": "TTKTabBarAnimationContentView",
-   "x": 373,
+   "x": -41,
    "y": 712,
-   "frame": "{331.19999999999999, 687}, {82.800000000000011, 49}",
+   "frame": "{-82.800000000000011, 687}, {82.799999999999997, 49}",
    "accId": "",
    "label": "Profile",
    "selected": "None"
   },
   {
+   "class": "AWEUserWorkCollectionViewCell",
+   "x": 69,
+   "y": 744,
+   "frame": "{0, 652}, {137.33333333333334, 183}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 69,
+   "y": 744,
+   "frame": "{0, 652}, {137.33333333333334, 183}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "BDImageView",
+   "x": 69,
+   "y": 744,
+   "frame": "{0, 652}, {137.33333333333334, 183}",
+   "accId": "",
+   "label": "Capo 💥 . . . . #horse #fyp #horsesoftiktok #horseriding #equestrian . Video. 6924 views.",
+   "selected": "None"
+  },
+  {
+   "class": "AWEUserWorkCollectionViewCell",
+   "x": 207,
+   "y": 744,
+   "frame": "{138.33333333333331, 652}, {137.33333333333331, 183}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 207,
+   "y": 744,
+   "frame": "{138.33333333333331, 652}, {137.33333333333331, 183}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "BDImageView",
+   "x": 207,
+   "y": 744,
+   "frame": "{138.33333333333331, 652}, {137.33333333333331, 183}",
+   "accId": "",
+   "label": "Best mornings with Capo ❤️ 👉🏼 We are animal lovers, a stable and Travel Agents based in Morocco. Join us for an unforgettable horseride holidays. Ride the best stallions and meet the best team of riders. . . . . #fyp #horse #horsesoftiktok #horseriding #equestrian . Video. 3859 views.",
+   "selected": "None"
+  },
+  {
+   "class": "AWEUserWorkCollectionViewCell",
+   "x": 345,
+   "y": 744,
+   "frame": "{276.66666666666669, 652}, {137.33333333333331, 183}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "UIView",
+   "x": 345,
+   "y": 744,
+   "frame": "{276.66666666666669, 652}, {137.33333333333331, 183}",
+   "accId": "",
+   "label": "",
+   "selected": "None"
+  },
+  {
+   "class": "BDImageView",
+   "x": 345,
+   "y": 744,
+   "frame": "{276.66666666666669, 652}, {137.33333333333331, 183}",
+   "accId": "",
+   "label": "Not every day with a horse is a perfect day. 🤎 Franz came to us with trauma. Some days he is absolutely perfect… and some days… he has a lot to say. We don’t have horses that are just machines. They have emotions, memories, good days and bad days. And when a horse has a difficult day, we don’t sell him. We don’t give up on him. We listen. We adapt. We give him time, patience and the space to learn to trust again. Our goal is not to make a horse obey us at all costs. Our goal is to make him feel good with us. 🤎 Franz is still learning. And so are we. ❤️ . . . . . #fyp #horse #horsesoftiktok #horseriding #equestrian . Video. 13794 views.",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 89,
+   "y": 824,
+   "frame": "{24, 813}, {129.33333333333334, 22}",
+   "accId": "",
+   "label": "6924 views",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 227,
+   "y": 824,
+   "frame": "{162.33333333333331, 813}, {129.33333333333331, 22}",
+   "accId": "",
+   "label": "3859 views",
+   "selected": "None"
+  },
+  {
+   "class": "UILabel",
+   "x": 365,
+   "y": 824,
+   "frame": "{300.66666666666669, 813}, {129.33333333333331, 22}",
+   "accId": "",
+   "label": "13794 views",
+   "selected": "None"
+  },
+  {
    "class": "AWEFeedRefreshFooter",
    "x": 207,
-   "y": 8118,
-   "frame": "{0, 8096}, {414, 44}",
+   "y": 1961,
+   "frame": "{0, 1939}, {414, 44}",
    "accId": "",
    "label": " ",
    "selected": "None"
@@ -547,8 +889,8 @@
   {
    "class": "UIButton",
    "x": 207,
-   "y": 8118,
-   "frame": "{0, 8096}, {414, 44}",
+   "y": 1961,
+   "frame": "{0, 1939}, {414, 44}",
    "accId": "",
    "label": "",
    "selected": "False"
@@ -556,8 +898,8 @@
   {
    "class": "TUXDualBallLoadingIndicator",
    "x": 207,
-   "y": 8118,
-   "frame": "{191, 8102}, {32, 32}",
+   "y": 1961,
+   "frame": "{191, 1945}, {32, 32}",
    "accId": "",
    "label": "Loading",
    "selected": "None"
@@ -565,8 +907,8 @@
   {
    "class": "YYLabel",
    "x": 207,
-   "y": 8118,
-   "frame": "{16, 8096}, {382, 44}",
+   "y": 1961,
+   "frame": "{16, 1939}, {382, 44}",
    "accId": "",
    "label": " ",
    "selected": "None"

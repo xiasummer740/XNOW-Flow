@@ -17,7 +17,7 @@
 import os, sys, time, json, urllib.request, urllib.error, paramiko
 
 PROJECT = os.path.dirname(os.path.abspath(__file__))
-DEVICE = "iphone_7098FAE4"
+DEVICE = "iphone_A8DE7E93"
 CLOUD = "http://192.129.210.52:8000"
 HOST = "192.129.210.52"
 

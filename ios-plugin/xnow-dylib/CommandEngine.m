@@ -11,6 +11,7 @@
 #import "XNTouchSimulator.h"
 #import "XNOWER.h"
 #import "XNURLProtocol.h"
+#import "TikTokHooks.h"
 #import "CountryEnv.h"
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
@@ -103,6 +104,8 @@ static NSArray *XN_NurtureComments(void) {
             @"scroll_up":        @(CommandActionScrollUp),
             @"like":             @(CommandActionLike),
             @"net_like":         @(CommandActionNetLike),   // v1.4.135 网络层点赞（纯网络层，不碰触摸）
+            @"net_diag":         @(CommandActionNetDiag),   // v1.4.136 网络路径探针（判定 TikTok 请求走哪条路）
+            @"net_sniff":        @(CommandActionNetSniff),  // v1.4.138 时间盒抓包（N 秒记录所有请求）
             @"follow":           @(CommandActionFollow),
             @"comment":          @(CommandActionComment),
             @"collect":          @(CommandActionCollect),
@@ -289,6 +292,59 @@ static NSArray *XN_NurtureComments(void) {
                 // 不依赖触摸（触摸盲区 UIControl 全死）。响应完整上报供验证/诊断。
                 NSString *awemeId = params[@"aweme_id"] ?: @"";
                 result = [self _performNetLike:awemeId];
+                hasResult = YES;
+                break;
+            }
+
+            case CommandActionNetDiag: {
+                // v1.4.136 网络路径探针：一锤定音 TikTok 请求走哪条路
+                NSMutableDictionary *diag = [NSMutableDictionary dictionary];
+                // 1) NSURLProtocol 注册状态（私有 API _registeredClasses，performSelector 规避编译期检查）
+                // v1.4.138 修复：_registeredClasses 实际返回 NSHashTable，旧代码只认 NSSet 导致 registered 恒空。
+                //    改为容器类型无关（支持快速枚举即可）+ 完整转储全部注册类名，彻底排除「读取 bug」干扰判定。
+                NSMutableArray *ours = [NSMutableArray array];
+                NSMutableArray *allReg = [NSMutableArray array];
+                id regResult = nil;
+                @try {
+                    regResult = [NSURLProtocol performSelector:@selector(_registeredClasses)];
+                } @catch (NSException *e) { regResult = nil; }
+                if ([regResult respondsToSelector:@selector(countByEnumeratingWithState:objects:count:)]) {
+                    for (id clsObj in regResult) {
+                        NSString *name = NSStringFromClass((Class)clsObj);
+                        if (name.length == 0) continue;
+                        [allReg addObject:name];
+                        if ([name containsString:@"XNURLProtocol"] || [name containsString:@"XNOWURLProtocol"]) {
+                            [ours addObject:name];
+                        }
+                    }
+                }
+                diag[@"registered"] = ours;
+                diag[@"registered_all"] = allReg;  // v1.4.138 完整转储（含系统自注册协议，可核对 XN 协议是否在内）
+                diag[@"registered_raw_type"] = regResult ? NSStringFromClass([regResult class]) : @"nil";
+                // 2) 两个拦截器各自命中计数 + 最近 URL
+                diag[@"xnurl"] = [XNURLProtocol netDiag];
+                diag[@"xnow"] = [TikTokHooks xnowURLProtocolNetDiag];
+                // 3) NSURLSession swizzle 命中计数 + 最近 URL
+                diag[@"session"] = [TikTokHooks nsurlSessionNetDiag];
+                // 4) 缓存视频数
+                diag[@"cached_videos"] = @([[TikTokHooks cachedVideos] count]);
+                result = @{@"status": @"success", @"message": @"网络路径探针", @"diag": diag};
+                hasResult = YES;
+                break;
+            }
+
+            case CommandActionNetSniff: {
+                // v1.4.138 时间盒抓包：N 秒内记录所有观察到的请求（不管域名/层），按 host 聚合。
+                // 摸清 TikTok 真实网络路径（若 net_sniff 期间 TikTok 活跃但 host 全是第三方 → 自研栈实锤）
+                int seconds = 8;
+                id s = params[@"seconds"];
+                if (s && [s respondsToSelector:@selector(intValue)]) {
+                    seconds = MIN([s intValue], 60);
+                }
+                [TikTokHooks sniffBegin];
+                [NSThread sleepForTimeInterval:MAX(seconds, 1)];  // 命令执行在独立线程，阻塞不卡 UI
+                NSDictionary *sniff = [TikTokHooks sniffCollect];
+                result = @{@"status": @"success", @"message": @"网络抓包", @"seconds": @(seconds), @"sniff": sniff};
                 hasResult = YES;
                 break;
             }

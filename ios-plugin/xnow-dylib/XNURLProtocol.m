@@ -13,6 +13,7 @@
 
 #import "XNURLProtocol.h"
 #import "CountryEnv.h"
+#import "TikTokHooks.h"
 
 // ====== 防递归标记（同时兼容 TikTokHooks.m 中的 XNOWURLProtocol） ======
 static NSString *const kXNHandledKey    = @"XN_piggyback_handled";
@@ -33,6 +34,14 @@ static NSDictionary     *gLastFeedVideo = nil;   // 最近一次 feed 响应里�
 static NSDictionary     *gLastFeedHeaders = nil; // 最近一次 feed 请求的 header（v1.4.135 网络层交互复用 app 会话）
 static NSString         *gLastFeedURL = nil;     // 最近一次 feed 请求的 URL（复用真实 API 节点 host）
 static volatile CFAbsoluteTime sLastPing = 0;
+
+// ====== v1.4.136 网络路径探针 ======
+static volatile int64_t  sXNURLAsked   = 0;  // canInitWithRequest 被询问次数（URL Loading System 是否经过）
+static volatile int64_t  sXNURLHandled = 0;  // startLoading 实际拦截次数
+static NSMutableArray    *sRecentURLs  = nil; // 最近 URL 环形缓冲 @[@{t,url,via}]
+// ====== v1.4.138 全局询问计数（XNURLProtocol 侧） ======
+static volatile int64_t  sXNURLGlobalAsked = 0;  // 不管域名被系统问一次 +1 —— 区分「注册成功」vs「从未被询问」
+static NSMutableArray    *sXNURLGlobalURLs = nil; // 全局最近 URL
 
 // ====== 类扩展 ======
 @interface XNURLProtocol ()
@@ -377,13 +386,19 @@ static volatile CFAbsoluteTime sLastPing = 0;
 #pragma mark - NSURLProtocol 拦截判定
 
 + (BOOL)canInitWithRequest:(NSURLRequest *)request {
-    // 防递归（同时兼容 XNOWURLProtocol 的标记）
+    // v1.4.138 全局询问计数：不管域名，被系统问一次 +1 并记录 URL。
+    // global_asked>0 而 TikTok 域 asked==0 → 注册成功但 TikTok 不走 URL Loading System（路线 B）。
+    // global_asked==0 → 从未被系统询问（注册失败/未生效）。
+    sXNURLGlobalAsked++;
+    NSString *url = request.URL.absoluteString;
+    [XNURLProtocol _recordGlobalURL:url];
+    [TikTokHooks sniffRecord:url];  // v1.4.138 net_sniff 时间盒
+
+    // 防递归（同时兼容 XNOWURLProtocol 的标记）——被标记的请求是内部转发，不算 TikTok 真实请求
     if ([NSURLProtocol propertyForKey:kXNHandledKey inRequest:request] ||
         [NSURLProtocol propertyForKey:kXNProcKey inRequest:request]) {
         return NO;
     }
-
-    NSString *url = request.URL.absoluteString;
 
     // 轻量拦截 — feed/recommend（piggyback）拦 tiktok.com/byteoversea.com + tiktokv.com（仅路径级，v1.4.39 全量拦 tiktokv.com 曾闪退已撤）
     // tiktokv.com 是 TikTok iOS 实际 API 域名（feed 请求走这里），不加它 F6 保存视频永远抓不到无水印 URL（v1.4.108 装机实证）
@@ -392,6 +407,11 @@ static volatile CFAbsoluteTime sLastPing = 0;
     BOOL onTikVHost = [url containsString:@"tiktokv.com"];
     BOOL isFeedReq = [url containsString:@"/feed"] || [url containsString:@"/recommend"];
     BOOL isUserReq = [url containsString:@"/user/"];
+    if (onTikHost || onTikVHost) {
+        // v1.4.136 探针：TikTok 域请求是否真的经过 URL Loading System（排除非 TikTok 请求污染计数）
+        sXNURLAsked++;
+        [XNURLProtocol _recordURL:url via:@"xnurl"];
+    }
     if (isUserReq) {
         if (onTikHost || onTikVHost) return YES;
     } else if (isFeedReq) {
@@ -414,16 +434,12 @@ static volatile CFAbsoluteTime sLastPing = 0;
     [NSURLProtocol setProperty:@YES forKey:kXNHandledKey inRequest:forwardReq];
     [NSURLProtocol setProperty:@YES forKey:kXNProcKey    inRequest:forwardReq];
 
+    // [网络路径探针] v1.4.136：实际拦截计数 + 统一缓存 feed 请求（与 NSURLSession swizzle 同一入口）
+    sXNURLHandled++;
+    [XNURLProtocol cacheFeedRequestHeaders:self.request];
+
     // [环境伪装] 若已设置目标国，改写 region/时区/语言/MCC 等 query 参数（与出口IP一致）
     [CountryEnv applyEnvToMutableRequest:forwardReq];
-
-    // [会话缓存] v1.4.135 网络层交互：缓存最近 feed 请求的 header + URL，
-    // 供 net_like 等纯网络层命令复用 app 会话/签名（不依赖触摸）
-    NSString *abs = self.request.URL.absoluteString ?: @"";
-    if ([abs containsString:@"/feed"] || [abs containsString:@"/recommend"]) {
-        gLastFeedHeaders = self.request.allHTTPHeaderFields;
-        gLastFeedURL = abs;
-    }
 
     // [Piggyback] 利用 TikTok 网络栈向后端发心跳（限频）
     [self _maybePingBackend];
@@ -529,6 +545,66 @@ static volatile CFAbsoluteTime sLastPing = 0;
 /// 返回最近一次 feed 请求的 URL（复用真实 API 节点 host）
 + (NSString *)lastFeedRequestURL {
     return gLastFeedURL ?: @"";
+}
+
+#pragma mark - v1.4.136 网络路径探针
+
+/// 统一缓存 feed/recommend 请求的 header+URL（XNURLProtocol.startLoading 与 NSURLSession swizzle 共用）
++ (void)cacheFeedRequestHeaders:(NSURLRequest *)request {
+    if (!request) return;
+    NSString *abs = request.URL.absoluteString ?: @"";
+    if ([abs containsString:@"/feed"] || [abs containsString:@"/recommend"]) {
+        gLastFeedHeaders = request.allHTTPHeaderFields;
+        gLastFeedURL = abs;
+    }
+}
+
+/// v1.4.138 记录全局观察到的 URL（环形缓冲，上限 20）—— 证明协议被系统询问
++ (void)_recordGlobalURL:(NSString *)url {
+    if (url.length == 0) return;
+    @synchronized (self) {
+        if (!sXNURLGlobalURLs) sXNURLGlobalURLs = [NSMutableArray arrayWithCapacity:24];
+        NSDictionary *entry = @{@"t": @(CFAbsoluteTimeGetCurrent()),
+                                @"url": url, @"via": @"xnurl-global"};
+        [sXNURLGlobalURLs insertObject:entry atIndex:0];
+        while (sXNURLGlobalURLs.count > 20) [sXNURLGlobalURLs removeLastObject];
+    }
+}
+
+/// 记录最近观察到的 URL（环形缓冲，上限 10）
++ (void)_recordURL:(NSString *)url via:(NSString *)via {
+    if (url.length == 0) return;
+    @synchronized (self) {
+        if (!sRecentURLs) sRecentURLs = [NSMutableArray arrayWithCapacity:12];
+        NSDictionary *entry = @{@"t": @(CFAbsoluteTimeGetCurrent()),
+                                @"url": url, @"via": via};
+        [sRecentURLs insertObject:entry atIndex:0];
+        while (sRecentURLs.count > 10) [sRecentURLs removeLastObject];
+    }
+}
+
+/// XNURLProtocol 侧诊断（供 net_diag 命令上报）
++ (NSDictionary *)netDiag {
+    NSArray *urls = nil;
+    @synchronized (self) { urls = [sRecentURLs copy] ?: @[]; }
+    NSArray *globalURLs = nil;
+    @synchronized (self) { globalURLs = [sXNURLGlobalURLs copy] ?: @[]; }
+    NSDictionary *feed = nil;
+    if (gLastFeedHeaders.count > 0) {
+        feed = @{@"captured": @YES,
+                 @"host": [NSURL URLWithString:gLastFeedURL].host ?: @"",
+                 @"url": gLastFeedURL ?: @""};
+    } else {
+        feed = @{@"captured": @NO};
+    }
+    return @{
+        @"asked": @(sXNURLAsked),
+        @"handled": @(sXNURLHandled),
+        @"global_asked": @(sXNURLGlobalAsked),
+        @"recent_urls": urls,
+        @"global_recent_urls": globalURLs,
+        @"last_feed": feed,
+    };
 }
 
 #pragma mark - Piggyback: 向后端通信（限频）

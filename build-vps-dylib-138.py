@@ -1,12 +1,10 @@
-#!/usr/bin/env python3
-"""build-vps-dylib-99.py — VPS 交叉编译 xnower.dylib（v1.4.99）
-v1.4.99 修复（open_profile 导航失效，一次收口）：
-1. 头像点击不生效【XNTouchSimulator tapView:】：实测 hitTest 在头像中心返回父级
-   TTKFeedInteractionBackgroundView（头像不在响应链），tapAtPoint 按点命中不到 →
-   UIControl action 分支永不触发 → open_profile/collect_fans 点头像无效。
-   新增 tapView: 直接对已知 view 触发（UIControl action + 手势 state=Ended +
-   合成触摸 touch.view=头像，绕过 hitTest），_performOpenProfile 改用之。
-沿用 v1.4.93：源码即产物（无坏补丁）+ 编译前守卫 XNWindowHelper.h 好版本自检。
+"""build-vps-dylib-138.py — VPS 交叉编译 xnower.dylib（v1.4.137）
+v1.4.137 = 网络层根因修复（installHooks 从未被调用）：
+  根因：net_diag 证实 registered=[] + session hits=0，代码全局 grep 确认 [TikTokHooks installHooks]
+        没有任何调用者 → XNOWURLProtocol 注册 / NSURLSession swizzle / UIViewController·UIScrollView hooks
+        从未安装 → 网络拦截层全灭。
+  修复：XNOWER start() 与 XNStartup +load 双路径调用 installHooks（dispatch_once 幂等），
+        赶在 TikTok 网络请求前安装。同时 vps-inject.py 从输出文件名写 XNOWER_BuildVersion（修浮窗版本号 dev）。
 """
 import paramiko, os, sys
 
@@ -15,6 +13,7 @@ USER = 'root'
 REMOTE = '/root/xnow-build'
 SDK = '/opt/theos/sdks/iPhoneOS16.5.sdk'
 LD = '/usr/lib/llvm-16/bin/ld64.lld'
+VERSION = '138'
 PROJECT = os.path.dirname(os.path.abspath(__file__))
 
 def _load_env():
@@ -59,19 +58,8 @@ for f in os.listdir(src_dir):
 sftp.close()
 print("  uploaded")
 
-# 2. Guard: 确认 VPS 上 XNWindowHelper.h 是好版本（源码即产物）
-print("[2] Guard XNWindowHelper.h (好版本自检)...")
-out, ec = run(f"grep -c 'XN_IS_OVERLAY' {REMOTE}/XNWindowHelper.h", 30)
-ok_good = out.strip() != '0'
-out, ec = run(f"grep -c 'isKeyWindow) return w' {REMOTE}/XNWindowHelper.h", 30)
-ok_notbad = out.strip() == '0'
-if not (ok_good and ok_notbad):
-    print(f"  ❌ XNWindowHelper.h 不是好版本 (好版本={ok_good}, 坏特征串存在={not ok_notbad})")
-    sys.exit(1)
-print("  ✅ 好版本确认（源码即产物）")
-
-# 3. Compile all .m except MinimalTester
-print("[3] Compile...")
+# 2. Compile all .m except MinimalTester
+print("[2] Compile...")
 CFLAGS = f"-target arm64-apple-ios16.5 -isysroot {SDK} -fobjc-arc -O2 -Wno-everything -DNDEBUG -c"
 SRCS = sorted([f for f in os.listdir(src_dir) if f.endswith('.m') and f != 'MinimalTester.m'])
 failed = False
@@ -84,28 +72,29 @@ for src in SRCS:
 if failed:
     print("❌ 编译失败"); sys.exit(1)
 
-# 4. Link
-print("[4] Link...")
+# 3. Link
+print("[3] Link...")
 OBJS = ' '.join([s.replace('.m', '.o') for s in SRCS])
 LINK = (f"cd {REMOTE} && {LD} -arch arm64 -dylib -platform_version ios 16.5 16.5 "
         f"-o xnower.dylib {OBJS} -lSystem -lobjc -framework Foundation -framework UIKit "
         f"-framework CoreGraphics -framework QuartzCore -framework CFNetwork "
-        f"-framework WebKit -framework Security -framework Photos "
+        f"-framework WebKit -framework Security -framework Photos -framework AVFoundation "
+        f"-framework IOKit "
         f"-syslibroot {SDK} -install_name @executable_path/Frameworks/xnower.dylib")
 out, ec = run(LINK, 120)
 if ec != 0:
     print("❌ 链接失败"); sys.exit(1)
 
-# 5. Convert private cmds -> standard
-print("[5] Convert private cmds...")
+# 4. Convert private cmds -> standard
+print("[4] Convert private cmds...")
 sftp = ssh.open_sftp()
 sftp.put(os.path.join(PROJECT, '.tmp-convert_cmds.py'), f"{REMOTE}/convert_cmds.py")
 sftp.close()
 run(f"cd {REMOTE} && python3 convert_cmds.py", 30)
 
-# 6. Download
-print("[6] Download...")
-local_dir = os.path.join(PROJECT, 'build-artifacts-ci', 'xnower-99')
+# 5. Download
+print("[5] Download...")
+local_dir = os.path.join(PROJECT, 'build-artifacts-ci', f'xnower-{VERSION}')
 os.makedirs(local_dir, exist_ok=True)
 local_dylib = os.path.join(local_dir, 'xnower.dylib')
 sftp = ssh.open_sftp()

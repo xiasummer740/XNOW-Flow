@@ -6,17 +6,19 @@
 
 构建和注入 iOS IPA 的脚本集合，含 dylib 注入、证书替换、多版本构建。
 
-## 关键脚本
+## 关键脚本（2026-08-31 清理后现状）
 
-- `build-final.py` — 最终构建
-- `build-inject-*.py` — dylib 注入各版本
-- `build-ipa-v*.py` — IPA 构建各版本
+- `build-vps-dylib-<版本>.py` — VPS clang-16 交叉编译 xnower.dylib（当前：`build-vps-dylib-138.py`）
+- `.tmp-inject-<版本>.py` — 上传 dylib → VPS vps-inject.py 注入 → 打包 IPA（VPS 无 43.7.0 原始包，以 static 最新已注入 IPA 连续注入）
+- `.tmp-poll-netdiag.py` — ssh 查 server.log 拿设备执行结果（前端"执行结果"区不回显时用）
+- `build-bh-ipa.py` — 本地打包（需 TikTok_43.7.0_BH.ipa 原始包，本地无）
 - `fix-dylib.py` — dylib 修复
+- VPS 端：`/opt/xnow-flow/vps-inject.py`（注入）+ 构建产物 `/opt/xnow-flow/static/`
 
 ## 注意
 
-- 构建产物在 `build-artifacts/` 和 `build-artifacts-ci/`
-- 需要 Xcode 工具链环境
+- 构建产物在 `build-artifacts-ci/`（各版本 dylib 子目录）
+- dylib 编译走 VPS 交叉编译（clang-16 arm64-apple-ios16.5），不需要本地 Xcode 工具链
 
 ## 🚦 发版门禁（攒批装机，不单点发版）
 

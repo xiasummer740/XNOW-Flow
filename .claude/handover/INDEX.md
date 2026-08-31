@@ -1,5 +1,8 @@
 # XNOW-Flow 接力开发笔记索引
 
+## 2026-08-31
+- [v1.4.138 网络层 Step 0 决定性探针](2026-08-31-v1.4.138-net-layer-step0.md) — installHooks 根因修复生效确认(session 0→10) + TikTok 主 API 疑似不走 NSURLSession(滑 TikTok 期间零命中) + v1.4.138 已构建待装机(registered 读取修复/全局计数/net_sniff 时间盒)；**待装机 138 → net_sniff/net_diag 一锤定音判路线 C/B/A**
+
 ## 2026-08-27
 - [v1.4.127 攒批修复（7 项假成功/卡死）](2026-08-27-v1.4.127-batch.md) — 备份secure-coded解档/关注/搜索/点赞真验收/退出profile/沉浸态退出+发版门禁装机全量验证硬性落地；装 TikTok_XNOW_v1.4.127_BH.ipa 一次验全批，设备已恢复健康待装机验证
 

@@ -8,6 +8,7 @@
 
 #import "XNOWER.h"
 #import "XNURLProtocol.h"
+#import "TikTokHooks.h"
 #import <pthread.h>
 
 @interface XNStartup : NSObject
@@ -23,6 +24,10 @@
     // 其他 TikTok 请求仍由 TikTokHooks 中的 XNOWURLProtocol 处理
     [NSURLProtocol registerClass:[XNURLProtocol class]];
     NSLog(@"[XNOWER] XNURLProtocol 已注册（piggyback 通信）");
+
+    // v1.4.137 兜底：installHooks（注册 XNOWURLProtocol + NSURLSession swizzle）。
+    // +load 阶段最早安装，赶在 TikTok 网络请求之前；dispatch_once 保证与 start() 只装一次。
+    [TikTokHooks installHooks];
 
     // 路径1: pthread 线程，2秒后用 CFRunLoopPerformBlock 投递到主线程
     static pthread_t thread;

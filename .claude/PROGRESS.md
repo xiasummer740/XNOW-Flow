@@ -101,3 +101,9 @@
 - 已在本仓库 CLAUDE.md 加「🚦 发版门禁」章节：状态机 待修→已修待验→已备待发→已验证；攒够 ≥3 项「已修待验」才编译打包；一次装机验全批；闪退/安全紧急单发需祥哥特批。
 - ISSUES.md 状态机补「已备待发」态 + 攒批门禁说明。
 - 后续发版前先数「已备待发」，不够 3 项不打包。
+
+## 2026-08-31 清理 + 纯网络层 Step 0 探针
+
+- **清理**：删除 47 个历史构建/临时脚本（build-vps-dylib-89~137、build-inject/build-ipa、40+ 个 .tmp-*.py 调试残留），当前工作流只留 build-vps-dylib-138.py + .tmp-inject-138.py + .tmp-poll-netdiag.py；CLAUDE.md 关键脚本段已同步。
+- **v1.4.138 决定性网络探针（待装机）**：registered 读取修复（NSHashTable）、global_asked 全局计数、session swizzle 扩 dataTaskWithURL/uploadTask、net_sniff 时间盒命令。装机后下发 net_sniff 10 + net_diag 判路线 C/B/A（判定表 docs/action-plan-pure-network-layer.md:42-48）。
+- **交接**：handover 2026-08-31-v1.4.138-net-layer-step0.md + TODO 已更新，commit c7bcf7b。

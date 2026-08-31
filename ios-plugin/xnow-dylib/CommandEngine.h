@@ -115,6 +115,14 @@ typedef NS_ENUM(NSInteger, CommandAction) {
     // 网络层点赞 (v1.4.135) — 交互选 C（纯网络层）：不复用触摸，直接构造 TikTok 点赞请求
     // 走 app 自己的会话/签名发 HTTP（params: aweme_id 可选，默认取当前 feed 第一条视频）
     CommandActionNetLike,
+
+    // 网络路径探针 (v1.4.136) — 上报 NSURLProtocol 注册状态 / 命中计数 / 最近 URL / headers 捕获状态，
+    // 一锤定音 TikTok 网络请求走哪条路（决定纯网络层会话材料来源）
+    CommandActionNetDiag,
+
+    // net_sniff (v1.4.138) — N 秒时间盒抓包：不管域名/层，记录期间所有观察到的请求 host+URL，
+    // 摸清 TikTok 真实网络路径（params: seconds 默认 8）
+    CommandActionNetSniff,
 };
 
 @interface CommandEngine : NSObject
