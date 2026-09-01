@@ -123,6 +123,15 @@ typedef NS_ENUM(NSInteger, CommandAction) {
     // net_sniff (v1.4.138) — N 秒时间盒抓包：不管域名/层，记录期间所有观察到的请求 host+URL，
     // 摸清 TikTok 真实网络路径（params: seconds 默认 8）
     CommandActionNetSniff,
+
+    // net_classes (v1.4.139) — 路线 B 内省：dump 内存里网络/请求相关类（类名/父类链/方法/属性），
+    // 定位 TikTok 自研网络层入口（谁在发 feed 请求）；专门完整 dump RepostDiggRequestModel 锚点（params: max 默认 150）
+    CommandActionNetClasses,
+
+    // net_socket (v1.4.140) — 路线 B 突破：fishhook POSIX socket + TLS 双层钩子，
+    // 抓 TikTok 真实请求明文（SwiftNIO 逃不掉 C 层 socket）；TLS 层拿解密后明文（URL/headers/签名参数）
+    // （params: seconds 默认 20，≤25 受命令超时限制）
+    CommandActionNetSocket,
 };
 
 @interface CommandEngine : NSObject

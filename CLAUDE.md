@@ -19,6 +19,8 @@
 
 - 构建产物在 `build-artifacts-ci/`（各版本 dylib 子目录）
 - dylib 编译走 VPS 交叉编译（clang-16 arm64-apple-ios16.5），不需要本地 Xcode 工具链
+- **zsign 重签必须 `-z 9`**（2026-09-01 实测）：zsign 默认 zip_level=0 **不压缩**，重签后包从 374MB 膨胀到 685MB，iPhone 8 Plus (USB 2.0 + iOS 16) 装到 74% 卡死；`-z 9` 回到 ~391MB 正常安装。修复版 zsign 在 `C:\Users\Administrator\Downloads\zsign-src\bin\zsign`（WSL 跑 Linux ELF）
+- **pymobiledevice3 apps install 装大 IPA（700MB+）在 Windows 卡死**（installd 无活动）——大包用爱思助手拖拽安装；爱思安装卡死时杀 i4Tools/i4Service/i4ToolsService 重启（设备 USB 不受影响）
 
 ## 🚦 发版门禁（攒批装机，不单点发版）
 
