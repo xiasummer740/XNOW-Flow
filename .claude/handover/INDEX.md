@@ -2,6 +2,7 @@
 
 ## 2026-09-01
 - [zsign DER 修复 + 装机存活验证](2026-09-01-zsign-DER-fix.md) — zsign 签名 SIGTRAP 根因实锤（DER 264→裸 RSA 256）+ 修复版首次装机存活 + net_socket 探针完整数据；**🔴 zsign 重签必须 -z 9（默认不压缩→685MB 大包装不上）** + 最终产物 _xn_z9.ipa
+- [v1.4.142 141 闪退根因修复](2026-09-01-v1.4.142-crash-fix.md) — 根因=TikTok Swift 私有类名明文触发反 hook SIGTRAP 自杀；修复=XOR(0x5A)混淆 + **🔴 clang -O2 常量折叠会把解码结果写回 __literals 明文常量池，必须 noinline+volatile 三重防折叠** + XNRequestHooks 改名；142 IPA 已注入上传待装机，装机后验①启动不闪退②net_request 抓包
 
 ## 2026-08-31
 - [v1.4.138 网络层 Step 0 决定性探针](2026-08-31-v1.4.138-net-layer-step0.md) — installHooks 根因修复生效确认(session 0→10) + TikTok 主 API 疑似不走 NSURLSession(滑 TikTok 期间零命中) + v1.4.138 已构建待装机(registered 读取修复/全局计数/net_sniff 时间盒)；**待装机 138 → net_sniff/net_diag 一锤定音判路线 C/B/A**
