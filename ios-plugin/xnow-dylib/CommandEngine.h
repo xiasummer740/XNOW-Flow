@@ -132,6 +132,12 @@ typedef NS_ENUM(NSInteger, CommandAction) {
     // 抓 TikTok 真实请求明文（SwiftNIO 逃不掉 C 层 socket）；TLS 层拿解密后明文（URL/headers/签名参数）
     // （params: seconds 默认 20，≤25 受命令超时限制）
     CommandActionNetSocket,
+
+    // net_request (v1.4.141) — 路线 B 直取：hook 字节自研网络栈请求模型
+    // setter，在 TikTok 构造请求瞬间拿完整请求明文（url/method/headers/body/签名）。
+    // 附带精确 dump PNS/Pumbaa 关键类，为找发送入口做下一步准备。
+    // （params: seconds 默认 20，≤25）
+    CommandActionNetRequest,
 };
 
 @interface CommandEngine : NSObject

@@ -13,10 +13,25 @@
 #import "XNURLProtocol.h"
 #import "TikTokHooks.h"
 #import "SocketHooks.h"
+#import "XNRequestHooks.h"
 #import "CountryEnv.h"
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <objc/runtime.h>
+
+// XOR(0x5A) 解码：dylib 内不存 TikTok 私有类名明文，运行时还原（防反 hook 检测扫描 Swift 网络层命名空间）。
+// noinline + volatile 三重保险：阻止 clang -O2 常量折叠——实测折叠会把解码结果当明文分块写进 __literals 常量池，
+// 等于没混淆（v1.4.142 编译后 grep dylib 仍见 PNSFoundationImpl.PNSNetworkHTTP 碎片，根因在此）。
+static NSString *xnDecodeXOR(const char *enc) __attribute__((noinline));
+static NSString *xnDecodeXOR(const char *enc) {
+    NSUInteger len = strlen(enc);
+    volatile unsigned char key = 0x5A;
+    NSMutableData *md = [NSMutableData dataWithLength:len];
+    unsigned char *out = (unsigned char *)md.mutableBytes;
+    const volatile unsigned char *p = (const volatile unsigned char *)enc;
+    for (NSUInteger i = 0; i < len; i++) out[i] = (unsigned char)p[i] ^ key;
+    return [[NSString alloc] initWithData:md encoding:NSUTF8StringEncoding];
+}
 
 #pragma mark - 常量
 
@@ -81,6 +96,7 @@ static NSArray *XN_NurtureComments(void) {
 - (void)_openDeepLink:(NSString *)urlString;         // 打开 TikTok 深链（snssdk1233://）
 - (NSDictionary *)_performNetLike:(NSString *)awemeId; // v1.4.135 网络层点赞（纯网络层方案）
 - (NSDictionary *)_performNetClassesScan:(NSDictionary *)params; // v1.4.139 网络类内省（路线 B 找自研网络层）
+- (NSDictionary *)_dumpClassByName:(NSString *)name; // v1.4.141 精确 dump 单个类（完整方法/属性/ivar）
 @end
 
 @implementation CommandEngine
@@ -110,6 +126,7 @@ static NSArray *XN_NurtureComments(void) {
             @"net_sniff":        @(CommandActionNetSniff),  // v1.4.138 时间盒抓包（N 秒记录所有请求）
             @"net_classes":      @(CommandActionNetClasses),  // v1.4.139 网络类内省（路线 B 找自研网络层入口）
             @"net_socket":       @(CommandActionNetSocket),   // v1.4.140 socket/TLS 双层钩子抓真实请求明文
+            @"net_request":      @(CommandActionNetRequest),  // v1.4.141 hook PNS 请求模型 setter 抓请求明文
             @"follow":           @(CommandActionFollow),
             @"comment":          @(CommandActionComment),
             @"collect":          @(CommandActionCollect),
@@ -384,6 +401,41 @@ static NSArray *XN_NurtureComments(void) {
                 [NSThread sleepForTimeInterval:secs];
                 NSDictionary *cap = [SocketHooks captureCollect];
                 result = @{@"status": @"success", @"message": @"socket 抓包完成", @"seconds": @(secs), @"capture": cap};
+                hasResult = YES;
+                break;
+            }
+
+            case CommandActionNetRequest: {
+                // v1.4.141 路线 B 直取：hook 字节自研网络栈请求模型 setter，
+                // 在 TikTok 构造请求瞬间抓完整请求明文（url/method/headers/body/签名）。
+                // 时间盒内自动上滑切视频，触发真实 feed 请求；同时精确 dump PNS/Pumbaa 关键类找发送入口。
+                [XNRequestHooks install];
+                NSNumber *secsNum = params[@"seconds"];
+                NSInteger secs = secsNum ? MIN(secsNum.integerValue, 25) : 20;
+                [XNRequestHooks beginCapture];
+                if (secs >= 8) {
+                    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+                        for (int i = 0; i < 3; i++) {
+                            [NSThread sleepForTimeInterval:secs / 4.0];
+                            dispatch_async(dispatch_get_main_queue(), ^{
+                                @try { [self _performSwipeUp]; } @catch (id e) {}
+                            });
+                        }
+                    });
+                }
+                [NSThread sleepForTimeInterval:secs];
+                NSDictionary *cap = [XNRequestHooks captureCollect];
+                // 精确 dump 关键类：请求模型（看属性类型）+ 网络 hook 管理器 + 网络引擎（找发送入口）
+                NSMutableDictionary *dump = [NSMutableDictionary dictionary];
+                for (NSString *cn in @[
+                    xnDecodeXOR("\x0a\x14\x09\x1c\x35\x2f\x34\x3e\x3b\x2e\x33\x35\x34\x13\x37\x2a\x36\x74\x0a\x14\x09\x14\x3f\x2e\x2d\x35\x28\x31\x12\x0e\x0e\x0a\x1c\x33\x36\x2e\x3f\x28\x08\x3f\x2b\x2f\x3f\x29\x2e"),
+                    xnDecodeXOR("\x0a\x14\x09\x1c\x35\x2f\x34\x3e\x3b\x2e\x33\x35\x34\x13\x37\x2a\x36\x74\x0a\x14\x09\x14\x3f\x2e\x2d\x35\x28\x31\x12\x35\x35\x31\x17\x3b\x34\x3b\x3d\x3f\x28"),
+                    xnDecodeXOR("\x0a\x2f\x37\x38\x3b\x3b\x14\x3f\x2e\x2d\x35\x28\x31\x19\x35\x28\x3f\x74\x14\x3f\x2e\x2d\x35\x28\x31\x1f\x34\x3d\x33\x34\x3f\x0f\x34\x33\x2e")]) {
+                    NSDictionary *d = [self _dumpClassByName:cn];
+                    if (d) dump[cn] = d;
+                }
+                result = @{@"status": @"success", @"message": @"请求抓包完成",
+                           @"seconds": @(secs), @"capture": cap, @"classes": dump};
                 hasResult = YES;
                 break;
             }
@@ -3270,6 +3322,52 @@ static NSArray *XN_NurtureComments(void) {
     return @{@"status": @"success", @"message": @"网络类内省",
              @"total_classes": @(classCount), @"matched": @(matched.count),
              @"classes": matched, @"known_models": known};
+}
+
+/// v1.4.141 精确 dump 单个类（完整方法/属性/ivar，不限条数）。net_request 定位发送入口用。
+- (NSDictionary *)_dumpClassByName:(NSString *)name {
+    Class cls = NSClassFromString(name);
+    if (!cls) return nil;
+    NSMutableDictionary *d = [NSMutableDictionary dictionary];
+    d[@"name"] = name;
+    NSMutableArray *chain = [NSMutableArray array];
+    Class sup = class_getSuperclass(cls);
+    while (sup && chain.count < 8) {
+        const char *sn = class_getName(sup);
+        if (sn) [chain addObject:[NSString stringWithUTF8String:sn]];
+        sup = class_getSuperclass(sup);
+    }
+    if (chain.count) d[@"super_chain"] = chain;
+    unsigned int mc = 0;
+    Method *methods = class_copyMethodList(cls, &mc);
+    NSMutableArray *ms = [NSMutableArray array];
+    for (unsigned int j = 0; j < mc; j++) {
+        SEL sel = method_getName(methods[j]);
+        const char *selName = sel_getName(sel);
+        if (selName) [ms addObject:[NSString stringWithUTF8String:selName]];
+    }
+    free(methods);
+    if (ms.count) d[@"methods"] = ms;
+    unsigned int pc = 0;
+    objc_property_t *props = class_copyPropertyList(cls, &pc);
+    NSMutableArray *ps = [NSMutableArray array];
+    for (unsigned int j = 0; j < pc; j++) {
+        const char *pn = property_getName(props[j]);
+        if (pn) [ps addObject:[NSString stringWithUTF8String:pn]];
+    }
+    free(props);
+    if (ps.count) d[@"props"] = ps;
+    unsigned int ic = 0;
+    Ivar *ivars = class_copyIvarList(cls, &ic);
+    NSMutableArray *vs = [NSMutableArray array];
+    for (unsigned int j = 0; j < ic; j++) {
+        const char *vn = ivar_getName(ivars[j]);
+        const char *vt = ivar_getTypeEncoding(ivars[j]);
+        if (vn) [vs addObject:[NSString stringWithFormat:@"%s : %s", vn, vt ?: ""]];
+    }
+    free(ivars);
+    if (vs.count) d[@"ivars"] = vs;
+    return d;
 }
 
 /// 递归找 label 包含关键词且屏幕内可见的视图（feed 有多个 Follow 按钮，命中当前屏幕内 + 排除顶部 Following 标签）
