@@ -262,10 +262,13 @@
 ### [待修] like/follow 回归失败（2026-09-02 143c 装机回归暴露，非 143c 引入）
 - **现象**：六命令回归 like/follow ❌ 未生效；手动复测 like 仍败且 `duration=0` 秒回
 - **铁证非 143c 回归**：143c git diff 仅 CommandEngine.h/.m 加 cookie_dump case + net_like extra_headers，**零触碰 like/follow 代码**
-- **like 根因初步**：`_performLikeSafe` duration=0 = 红心控件没找到直接 return NO——acc_id kAccLike 和 PlayInteractionLikeView 容器兜底**都找不到** → 疑似 TikTok 43.7.0 UI 控件结构漂移（红心控件改名/移层级）
-- **follow 初步**：点击前后按钮 label 均 'Follow david.run1996' 未变 → 点击未生效（同样疑似控件定位/布局漂移）
-- **待修方向**：按控件基线地图规则——先 `python collect-control-map.py feed/profile` 重采对照 `docs/control-map/`，看 like 红心/follow 按钮 acc_id/坐标是否漂移，再修定位
-- **影响面**：like/follow 是互动养号核心命令，修复前不发版（门禁 ❌ 核心项）
+- **🎯 根因实锤（2026-09-02 零安装远程诊断，非控件漂移）**：like/follow 失败 = **回归前置 `open_tab profile` 让设备停在 profile 页，后续 like/follow 在 profile 页找不到红心/关注按钮**。单独 like 真机 6/6 成功（feed 页）；profile→home→like 5/5 失败。控件没漂移（profile 页现场 ui_scan 有 `TTKProfileTabLikeButton` 但那是"我赞过的视频"列表按钮，非 feed 红心）。
+- **open_tab home 假成功链**：`_tapTab:home`（CommandEngine.m:3708-3731，v1.4.132 的 `not_home_tap_then_deeplink` 分支）——设备在非 feed tab 时：① 合成触摸 tap home tab（`TTKTabBarButton` 纯手势 UITapGestureRecognizer，touch_diag 实测 `target_actions` 空 → **合成触摸永远触发不了**，v1.4.92 已知）② 异步 `dispatch_after 1.2s` 深链 snssdk1233://feed 兜底 ③ **命令立即返回 success**（不等待深链结果）= **假成功**。实测深链在 profile tab 页也被忽略（v1.4.132 注释：profile 页 4 scheme 全被忽略）。
+- **go_home 假成功链**：`_gotoHomeFeed`（5365）4 轮全败返回 NO，但 `CommandActionGoHome`（738）**丢弃返回值**，result 走默认 success。实测 go_home duration=28s（4 轮耗尽）后 ui_scan 仍 PROFILE。
+- **设备卡死叠加态**：@outshine83 账号在 profile tab 的 "Add name" 引导态，tap home tab/acc_click/go_home/open_tab home/deep link **全部无效**（零安装远程恢复 3+ 次失败止损）。
+- **修复方向（下一版攒批，非控件漂移）**：① `CommandActionGoHome` 用 `_gotoHomeFeed` 返回值——NO 时 result 标 failed（不再假成功）；② `_tapTab:home` 假成功分支改**同步验证 + 多轮真回**（参照回归里 open_search→go_home 能成功 = 深链对推入页有效，对 profile **tab** 页无效——需先 pop 推入页再用深链）；③ 回归脚本 CHECKS 顺序调优：open_tab profile 后加真验证，like/follow 前确保在 feed。
+- **影响面**：like/follow 是互动养号核心命令，修复前不发版（门禁 ❌ 核心项）。**修复本身要改 dylib → 攒批下一版装机，不单独重装**（祥哥 2026-09-02 指示）。
+- **✅ 设备恢复验证（2026-09-02 14:43）**：祥哥手动重启 TikTok → 回 feed（红心 @382,390 屏内可见，无 profile 残留）→ **单独 like 3/3 全绿**（红心点亮验证通过）。证明控件没漂移，故障仅在「open_tab profile 前置 + home 假成功」导航链。
 
 
 
