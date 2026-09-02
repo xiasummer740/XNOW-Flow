@@ -259,6 +259,14 @@
 
 **结论与方向**：我们指令侧已确认不崩（今天所有指令通过）；闪退主因是 TikTok 自身 bug + 低内存设备压力，**无法从注入侧根治**（栈在人家二进制里）。可选项：①swizzle objc_exception_throw 吞掉此异常（高风险，布局引擎可能已损坏，需祥哥拍板）②崩溃自愈已具备（TikTok 重启→dylib 自动重注入→设备回线）③不主动反复刷新内存重的页面
 
+### [待修] like/follow 回归失败（2026-09-02 143c 装机回归暴露，非 143c 引入）
+- **现象**：六命令回归 like/follow ❌ 未生效；手动复测 like 仍败且 `duration=0` 秒回
+- **铁证非 143c 回归**：143c git diff 仅 CommandEngine.h/.m 加 cookie_dump case + net_like extra_headers，**零触碰 like/follow 代码**
+- **like 根因初步**：`_performLikeSafe` duration=0 = 红心控件没找到直接 return NO——acc_id kAccLike 和 PlayInteractionLikeView 容器兜底**都找不到** → 疑似 TikTok 43.7.0 UI 控件结构漂移（红心控件改名/移层级）
+- **follow 初步**：点击前后按钮 label 均 'Follow david.run1996' 未变 → 点击未生效（同样疑似控件定位/布局漂移）
+- **待修方向**：按控件基线地图规则——先 `python collect-control-map.py feed/profile` 重采对照 `docs/control-map/`，看 like 红心/follow 按钮 acc_id/坐标是否漂移，再修定位
+- **影响面**：like/follow 是互动养号核心命令，修复前不发版（门禁 ❌ 核心项）
+
 
 
 > **根因方向（v1.4.129 实锤，升级为「全按钮盲区」专项）**：XNTouchSimulator 合成触摸对 TikTok 主要交互按钮**全部不生效**——搜索/关注/头像/like 四个核心按钮都验证不响应（129 like 真实失败实锤；128 like「通过」是崩溃误回执假阳性）。touch_diag 显示 tapAtPoint 坐标正确命中（AWEFeedVideoButton/TTKSearchEntranceButton），hitTest 命中正确，但 UIControlEventTouchUpInside 不被触发。**假设**：TikTok 这些控件要求真实触摸事件链（UIEvent+多个 UITouch + 正确 timestamp/phase 序列），合成 tap 只发单个 touch 不够。**方向（下批专修）**：XNTouchSimulator 升级——①用 IOHIDEvent/私有 API 注入真实触摸事件 ②发完整 touch 序列（Began→Moved→Ended，带正确 timestamp）③或 sendActionsForControlEvents:UIControlEventAllEvents 全事件广播。**此专项是 like/follow/search/头像/follow_user 全部功能的前置解锁，优先度最高。**
