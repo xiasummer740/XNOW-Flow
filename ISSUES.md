@@ -352,3 +352,6 @@
   ② `net_like` 支持 params.`extra_headers`（dict）：合并后端预生成签名头（X-Argus 家族），extra 优先覆盖同名 + Cookie 用 extra 的保证签签一致；附 `sign_headers_used` 诊断
 - **验证流程（装 143c 后）**：① 下发 `cookie_dump` 拿真实 Cookie/install_id → ② VPS douyin-sign 用真实凭据生成四件套（aid 试 1233/1128）→ ③ 下发 net_like 带 extra_headers → ④ 看 200 空 body 是否变业务响应
 - **判据**：200 空 body 变化（有业务 JSON/错误码）→ 签名有效，接入后端正式签名链路；仍空 → iOS 组装差异/更深风控，**签名复刻正式止损** → 转 UI 模拟点赞收口（见④定论）
+- **143c 装机实测（2026-09-02）**：cookie_dump 回传 cookie 724 字符/cookie_count=9/install_id 真实 ✅ → douyin-sign 四件套生成（aid=1233 + 真实 cookie/install_id + UA 伪装）→ net_like 带签名头 `sign_headers_used=1`（确认合并生效）→ **仍 HTTP 200 + 空 body**
+- **止损定论（证据）**：douyin-sign 常量（SIMON key/gorgon_table/sign_key）为**抖音 Android** 版；TikTok iOS 43.7.0 Metasec 常量不同 → 服务端用 TikTok key 解不开抖音系签名 → 判非法拦截。**现成库（douyin-sign/armxe）均无 TikTok iOS 43.7.0 常量**；要有效必须逆向 TikTok iOS Metasec 提取常量（数天级 + 每次更新维护）。**签名复刻路线正式止损** → 网络层点赞任意视频的「网络层出路」关闭，自动化点赞回落到 UI 模拟（acc_click 复用 TikTok 自身签名，赞屏上视频）
+- **遗留资产**：143c 的 cookie_dump + net_like extra_headers 保留（若未来拿到 TikTok iOS 常量或接入第三方签名服务可直接复用）；cookie_dump 会回传 cookie 值到 server.log，调试期用，商业化前需移除/收紧
