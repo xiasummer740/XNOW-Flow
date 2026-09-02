@@ -291,3 +291,64 @@
 
 ### [待修] 触摸盲区：头像按钮不导航
 - feed 头像（AWEStoryAvatarButton）合成触摸不导航；open_profile 深链也失败 → 远程进别人主页不可达（影响 follow_user/collect_fans 等依赖别人主页的功能）
+
+## v1.4.143 攒批（网络层点赞第一波 + 免卡密 + TLS 探针，2026-09-01）
+
+> **背景**：祥哥拍板方向 1→3→2（①net_like 会话凭据构造 → ③TLS 栈诊断探针 → ②SwiftNIO 请求层深挖）。
+> **net_like 基石证伪（2026-08-31 实测）**：`feed_headers_captured: 0` + 无 aweme_id——feed 走 SwiftNIO 自研栈，完全不经过 URLProtocol/NSURLSession，header 缓存全空 → 原方案依赖的 feed header 数据源不存在。
+> **改造数据源（2026-08-31 dump_login 实证）**：设备已登录（`isLoggedIn=True method=cookie`），NSHTTPCookieStorage 有 `.tiktokv.com/.tiktok.com/.tiktokw.us` 等 6 域 cookies：`install_id`/`msToken`/`odin_tt`/`ttreq`/`store-idc`/`store-country-code=us`；`uid_tt` 当前为空。
+> **TLS 探针动机（方向3）**：SSL_write/SSL_read fishhook 0 命中（BoringSSL 静态链接推断）→ dlsym 探针定事实。
+
+### [已修待验] ① net_like 改造：真实 host + 会话 Cookie + UA 伪装 + 端点纠正（v1.4.143b）
+- **改了什么**（CommandEngine.m `_performNetLike:`）：
+  ① diggHost 默认 `api.tiktokv.com` → **`api16-normal-useast5.tiktokv.us`**（net_socket SNI 实锤真实主 API 节点）
+  ② headers 不再依赖空 feed header：新增 `_captureTikTokCookieHeader`（NSHTTPCookieStorage .tiktok 域全量拼 Cookie header，含 install_id/msToken/odin_tt）+ `_tiktokAppUserAgent` 伪装 UA
+  ③ 结果附诊断：`cookie_count`（拼了几个 cookie）+ `feed_headers_captured`
+- **143 装机实测（2026-09-01）**：`cookie_count=9` ✅ 会话 Cookie 提取成功；HTTP 200 到达 TikTok 服务器；但返回 `status_code:1 "Url does not match"` → **端点错误**。查证真实 digg 端点是 `/aweme/v1/commit/item/digg/`（非旧 `/aweme/v1/aweme/digg/`），参数 `type=1&channel_id=0&enter_from=homepage_hot`（非 `digg_type`）→ **143b 纠正**
+- **验收**：feed 下发 `net_like`（带/不带 aweme_id）→ `status=success` 且 response `status_code=0` = 真成功；若仍失败看是「参数错误」还是「签名拒」（区分业务层/签名层）
+- **已知风险**：TikTok 签名通常还需 X-Bogus/_signature（msToken 只是签名链一环），纯 Cookie 可能仍被拒 → 拒了就归入方向②（SwiftNIO 请求层深挖）
+
+### [代码+部署已验证→无卡端到端留待] ② 后端调试期免卡密开关（licenses.py，2026-09-01）
+- **改了什么**：`check_device_license` 加环境变量开关 `XNOW_LICENSE_DEBUG_FREE`——`true` 时直接返回 `licensed:true plan=debug`（365 天），跳过查库
+- **控制权在服务端**：用户绕过不了（设备端无感知），商业化时关掉环境变量即恢复卡密
+- **部署验证（2026-09-01）**：✅ licenses.py 上传 VPS + systemd 加 `Environment=XNOW_LICENSE_DEBUG_FREE=true` + 重启 active + **进程环境变量确认注入**（/proc/PID/environ 见 XNOW_LICENSE_DEBUG_FREE=true）+ 设备 poll/授权检查 200 OK 正常
+- **已知限制**：当前设备 DB 有旧卡（7YDYWY rebind），端到端「无卡设备不输卡密直接激活」需无卡设备验证——留待新设备/商业化前清卡后测（免卡密代码在 DB 查询前 return，优先级最高，逻辑确定）
+
+### [已验证→方向②定路] ③ TLS 栈诊断探针（SocketHooks `tlsProbe`，v1.4.143）
+- **改了什么**：新增 `+[SocketHooks tlsProbe]`——`dlsym(RTLD_DEFAULT, "SSL_write"/"SSL_read"/"SSL_get_fd"/"SSLWrite"/"SSLRead")` 查符号是否在动态符号表 + `orig_SSL_write` 是否重绑成功 + 定性 note；net_socket 结果附 `tls_probe`
+- **143 装机实测（2026-09-01）**：`SSL_write=0x102b58d08`（**非 NULL，在动态符号表**）+ `orig_SSL_write=SET`（fishhook 已重绑）但 0 命中 → **note 定性：调用点不走 PLT，TikTok 主二进制内部 BL 直调**
+- **结论更新**：❌ 旧假设「BoringSSL 静态链接未导出，fishhook 够不着」被推翻 → ✅ 真相反而是符号导出 + fishhook 重绑成功但**同二进制内部直接 BL 调用不经 GOT/PLT** → fishhook 只改表改不到直调点。SSL 明文层 fishhook 路线终结，**方向②（SwiftNIO 请求层内嵌/请求模型深挖）为唯一剩路**
+- **附带证据**：net_socket 时间盒抓到真实连接（146.75.94.73=p19-common 签名服务、unknown 3.6MB/23.211.177.233 2.4MB=媒体流），SSL body 密文，SNI 明文可读
+
+### 143 装机验证清单（逐项实测记 真成功/假成功/崩溃）
+1. **net_like**：feed 下发 → **实测（143）**：`cookie_count=9` Cookie 提取成功 + HTTP 200 到达服务器 + `status_code:1 "Url does not match"` = **端点错** → 143b 纠正为 `/aweme/v1/commit/item/digg/` + `type=1&channel_id=0&enter_from` 参数 → **143b 待装复验**
+2. **免卡密**：设备重装（i4Tools 清空重装模拟新设备）→ 不再输卡密直接激活。**143 实测**：部署+进程 env 确认+授权 200 OK ✅（无卡端到端留待新设备，见上方限制）
+3. **net_socket**：下发 → **实测（143）**：`tls_probe SSL_write=0x102b58d08` 非 NULL + orig SET = 内部 BL 直调不走 PLT（方向3 完成，结论更新见上）
+4. **dump_login**：**实测（143）✅**：cookies 完整（install_id/msToken/odin_tt/ttreq 多域）+ total_keys 284 + login 正常，与 net_like cookie_count=9 交叉一致，无回归
+
+### [已验证→三层封死，方向②探到尽头] ④ 方向2 SwiftNIO 请求层深挖（net_classes，2026-09-02）
+> **背景**：方向 1 net_like 纯手写到签名层边界（HTTP 200 空 body），方向 3 证明 BoringSSL 静态 BL 直调 fishhook 够不着。方向 2 = 深挖 SwiftNIO/Pumbaa 请求层，找主请求模型，目标「能抓完整请求（含签名）就复刻，或直接复用它的发送」。
+> **探查手段**：下发 `net_classes` 命令 dump 网络相关类结构（props/methods/ivars），两次全量 150 类。
+
+- **net_classes 全量结果（150 类，2026-09-02 设备实测）**：
+  - **PumbaaNetworkCore 主引擎 6 类**（`NetworkEngineUnit`/`NetworkSandboxUnit`/`NetworkModifyAction`/`NetworkDropAction`/`NetworkTaskStatusLog`/`NetworkPerformanceTrack`）→ props=[] methods=(空) **全纯 Swift**
+  - **业务 NetworkService 全部**（`TikTokExploreImpl.ExploreNetworkService`/`ExploreSearchNetworkService`/`TikTokPOIImpl.POIReviewsNetworkService`/`TikTokRaven.RavenNetworkImpl`/`TikTokUserCenterImpl.ReportProblemNetworkService`/`TikTokCLAImpl.C24yNetworkService`/PIPOWallet*NetworkService 等）→ props=[] methods=(空) **全纯 Swift**
+  - **NIO 底层**（`NIOPosix.Socket`/`NIORawSocketBootstrap`/`NIOHTTP1.HTTPRequestEncoder`/`NIOCore.NIONetworkInterface` 等）→ **全纯 Swift**
+  - **唯一 ObjC 暴露完整请求模型 = `PNSFoundationImpl.PNSNetworkHTTPFilterRequest`**（props: `httpMethod`/`url`/`httpBody`/`allHTTPHeaderFields` + 11 个 @objc 方法）→ 但此前实测 calls=0（**非主路径**，PNS filter 仅插件化过滤机制用）
+- **方向②结论（三层纵深，注入面全部切断）**：
+  1. 业务层 NetworkService（ObjC runtime 可见类名但 props/methods 空）→ **纯 Swift 非 @objc 动态派发，method swizzle/KVC 全无效**
+  2. 传输引擎 PumbaaNetworkCore + SwiftNIO → 同上，纯 Swift 不可 swizzle
+  3. TLS 层 BoringSSL → 静态编译 + 内部 BL 直调（方向③已证），fishhook 明文层不可达
+  → **「抓 TikTok 完整请求明文 / 复用其发送」的设备端注入路线 = ObjC 注入面 + fishhook 注入面双封死**，方向②探到技术尽头
+- **net_like 网络层物理极限（三方向汇合定论）**：纯手写请求（net_like）在 TikTok 签名层（X-Bogus 族）被拦截（HTTP 200 空 body）是**注入面能到的极限**；想过签名层只剩两条路：**离线复刻签名算法**（后端/本地实现 X-Bogus，风险=43.7.0 可能已升级签名体系）或 **UI 模拟真实点赞链路**（acc_click 屏内点击复用 TikTok 自身签名，但只能赞当前屏上视频，非任意 aweme_id）
+
+### [进行中→待装复验] ⑤ 签名复刻第一测（祥哥拍板后端签名复刻，v1.4.143c）
+> **前置侦察（2026-09-02 WebSearch）**：TikTok 双签名管道——**Web 管道=X-Bogus**（浏览器用），**Mobile 管道=Metasec 四件套 X-Argus/X-Gorgon/X-Ladon/X-Khronos**（App 用）。我们的 digg 走 `api16-normal-useast5.tiktokv.us` = **Mobile 管道** → 缺的不是 X-Bogus 而是 **X-Argus 家族**（旧 ISSUES 假设「缺 X-Bogus」需纠正）。
+> **现成库侦察**：douyin-sign（纯 Python，SIMON/AES/RC4 全家桶 + nightly CI 提常量）/ armxe-tiktok-api（Metasec 四件套，2026-03 更新）——**两者都是 Android 组装**（douyin 硬编码 app_id=1128 + googleplay 渠道 + SM-G973N 示例），**iOS 43.7.0 无现成签名实现**。
+> **预实验（VPS，2026-09-02）**：douyin-sign 四件套生成成功（X-Khronos/X-SS-STUB/X-Gorgon/X-Argus），但**假设备身份 + 数据中心 IP + 无 cookie** 发 digg = HTTP 200 空 body（与无签名一致）→ 预期内，无法区分「算法无效」vs「缺真实设备身份」。
+
+- **143c 改了什么**（CommandEngine.m/.h，2026-09-02）：
+  ① 新命令 `cookie_dump`：回传 `_captureTikTokCookieHeader` 全串 + install_id/msToken 值（签名实验取真实设备凭据，debug 用）
+  ② `net_like` 支持 params.`extra_headers`（dict）：合并后端预生成签名头（X-Argus 家族），extra 优先覆盖同名 + Cookie 用 extra 的保证签签一致；附 `sign_headers_used` 诊断
+- **验证流程（装 143c 后）**：① 下发 `cookie_dump` 拿真实 Cookie/install_id → ② VPS douyin-sign 用真实凭据生成四件套（aid 试 1233/1128）→ ③ 下发 net_like 带 extra_headers → ④ 看 200 空 body 是否变业务响应
+- **判据**：200 空 body 变化（有业务 JSON/错误码）→ 签名有效，接入后端正式签名链路；仍空 → iOS 组装差异/更深风控，**签名复刻正式止损** → 转 UI 模拟点赞收口（见④定论）

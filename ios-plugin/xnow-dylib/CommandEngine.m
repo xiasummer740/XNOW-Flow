@@ -94,7 +94,7 @@ static NSArray *XN_NurtureComments(void) {
 @property (nonatomic, assign) int nurtureMode;       // 当前养号模式 1/2
 - (NSDictionary *)_tapTab:(NSString *)tab;          // v1.4.106 返回诊断 dict（含 home 深链兜底）
 - (void)_openDeepLink:(NSString *)urlString;         // 打开 TikTok 深链（snssdk1233://）
-- (NSDictionary *)_performNetLike:(NSString *)awemeId; // v1.4.135 网络层点赞（纯网络层方案）
+- (NSDictionary *)_performNetLike:(NSString *)awemeId extraHeaders:(NSDictionary *)extra; // v1.4.135 网络层点赞（纯网络层方案）；v1.4.143c extra=后端签名头
 - (NSDictionary *)_performNetClassesScan:(NSDictionary *)params; // v1.4.139 网络类内省（路线 B 找自研网络层）
 - (NSDictionary *)_dumpClassByName:(NSString *)name; // v1.4.141 精确 dump 单个类（完整方法/属性/ivar）
 @end
@@ -122,6 +122,7 @@ static NSArray *XN_NurtureComments(void) {
             @"scroll_up":        @(CommandActionScrollUp),
             @"like":             @(CommandActionLike),
             @"net_like":         @(CommandActionNetLike),   // v1.4.135 网络层点赞（纯网络层，不碰触摸）
+            @"cookie_dump":      @(CommandActionCookieDump),  // v1.4.143c 调试：回传会话 Cookie 值（签名第一测取真实凭据）
             @"net_diag":         @(CommandActionNetDiag),   // v1.4.136 网络路径探针（判定 TikTok 请求走哪条路）
             @"net_sniff":        @(CommandActionNetSniff),  // v1.4.138 时间盒抓包（N 秒记录所有请求）
             @"net_classes":      @(CommandActionNetClasses),  // v1.4.139 网络类内省（路线 B 找自研网络层入口）
@@ -311,8 +312,29 @@ static NSArray *XN_NurtureComments(void) {
             case CommandActionNetLike: {
                 // v1.4.135 网络层点赞：纯网络层方案，直接构造 TikTok 点赞请求走 app 会话，
                 // 不依赖触摸（触摸盲区 UIControl 全死）。响应完整上报供验证/诊断。
+                // v1.4.143c 签名第一测：params 可带 extra_headers（后端 douyin-sign 预生成的 X-Argus 家族签名头），合并进请求
                 NSString *awemeId = params[@"aweme_id"] ?: @"";
-                result = [self _performNetLike:awemeId];
+                NSDictionary *extra = params[@"extra_headers"];
+                result = [self _performNetLike:awemeId extraHeaders:extra];
+                hasResult = YES;
+                break;
+            }
+
+            case CommandActionCookieDump: {
+                // v1.4.143c 调试命令：回传 TikTok 会话 Cookie 全串 + install_id/msToken 值（签名复刻实验取真实设备凭据）
+                NSString *cookie = [self _captureTikTokCookieHeader];
+                NSString *installId = @"", *msToken = @"";
+                NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+                for (NSHTTPCookie *c in storage.cookies) {
+                    if (![c.domain.lowercaseString containsString:@"tiktok"]) continue;
+                    if ([c.name isEqualToString:@"install_id"] && c.value.length > 0) installId = c.value;
+                    if ([c.name isEqualToString:@"msToken"] && msToken.length == 0 && c.value.length > 0) msToken = c.value;
+                }
+                result = @{@"status": @"success", @"message": @"cookie dump（调试，含值）",
+                           @"cookie": cookie ?: @"",
+                           @"install_id": installId,
+                           @"ms_token": msToken,
+                           @"cookie_count": @(cookie.length > 0 ? [cookie componentsSeparatedByString:@";"].count : 0)};
                 hasResult = YES;
                 break;
             }
@@ -400,7 +422,11 @@ static NSArray *XN_NurtureComments(void) {
                 }
                 [NSThread sleepForTimeInterval:secs];
                 NSDictionary *cap = [SocketHooks captureCollect];
-                result = @{@"status": @"success", @"message": @"socket 抓包完成", @"seconds": @(secs), @"capture": cap};
+                // v1.4.143 附 TLS 栈探针：验证 SSL_* 符号是否可被 dlsym 解析（方向3，定 BoringSSL 静态链接事实）
+                NSDictionary *probe = [SocketHooks tlsProbe];
+                NSMutableDictionary *payload = [cap mutableCopy] ?: [NSMutableDictionary dictionary];
+                payload[@"tls_probe"] = probe;
+                result = @{@"status": @"success", @"message": @"socket 抓包完成", @"seconds": @(secs), @"capture": payload};
                 hasResult = YES;
                 break;
             }
@@ -3133,7 +3159,7 @@ static NSArray *XN_NurtureComments(void) {
 /// 不复用触摸点红心，直接构造 TikTok 点赞请求走 app 自身会话（feed 拦截到的 header 全量复用，
 /// 含 Cookie/device_id/x-tt-token 等），经 NSURLSession 发出。响应 status_code==0 才算成功。
 /// params.aweme_id 缺省时取最近一次 feed 捕获的第一条视频。响应 body 截断上报供验证/诊断。
-- (NSDictionary *)_performNetLike:(NSString *)awemeId {
+- (NSDictionary *)_performNetLike:(NSString *)awemeId extraHeaders:(NSDictionary *)extra {
     [self _logStep:@"net_like"];
     NSDictionary *feedHeaders = [XNURLProtocol lastFeedRequestHeaders];
     NSString *feedURL = [XNURLProtocol lastFeedRequestURL];
@@ -3147,25 +3173,48 @@ static NSArray *XN_NurtureComments(void) {
                  @"feed_headers_captured": @(feedHeaders.count > 0)};
     }
 
-    // 复用 feed 请求的 host（TikTok 真实 API 节点），路径换 aweme/digg
-    NSString *diggHost = @"api.tiktokv.com", *scheme = @"https";
+    // v1.4.143 改造（net_socket SNI 实锤 + net_like 实测 feed_headers_captured=0）：
+    // ① host 用真实 API 节点 api16-normal-useast5.tiktokv.us，不再拼默认 api.tiktokv.com
+    // ② feed header 抓不到（feed 走 SwiftNIO 自研栈，绕过系统 URLProtocol/NSURLSession）→ 改用真实会话 Cookie 构造
+    NSString *diggHost = @"api16-normal-useast5.tiktokv.us", *scheme = @"https";
     if (feedURL.length > 0) {
         NSURL *u = [NSURL URLWithString:feedURL];
         if (u.host.length > 0) diggHost = u.host;
         if (u.scheme.length > 0) scheme = u.scheme;
     }
-    NSString *diggURL = [NSString stringWithFormat:@"%@://%@/aweme/v1/aweme/digg/", scheme, diggHost];
+    // v1.4.143 端点纠正：TikTok 真实 digg 是 /aweme/v1/commit/item/digg/（旧 /aweme/v1/aweme/digg/ 返回 "Url does not match"）
+    NSString *diggURL = [NSString stringWithFormat:@"%@://%@/aweme/v1/commit/item/digg/", scheme, diggHost];
 
-    // body（application/x-www-form-urlencoded）
-    NSString *bodyStr = [NSString stringWithFormat:@"aweme_id=%@&digg_type=1&repost=false", awemeId];
+    // body（application/x-www-form-urlencoded）— TikTok 真实 digg 参数（type=1 非 digg_type=1）
+    NSString *bodyStr = [NSString stringWithFormat:@"aweme_id=%@&type=1&channel_id=0&enter_from=homepage_hot", awemeId];
 
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:diggURL]];
     req.HTTPMethod = @"POST";
     req.HTTPBody = [bodyStr dataUsingEncoding:NSUTF8StringEncoding];
-    NSMutableDictionary *h = [feedHeaders mutableCopy] ?: [NSMutableDictionary dictionary];
+
+    // headers：feed header（若有则复用）+ 真实会话 Cookie（NSHTTPCookieStorage .tiktok 域，含 install_id/msToken/odin_tt）+ UA 伪装
+    NSMutableDictionary *h = [NSMutableDictionary dictionary];
+    if (feedHeaders.count > 0) [h addEntriesFromDictionary:feedHeaders];
+    NSString *cookieStr = [self _captureTikTokCookieHeader];
+    if (cookieStr.length > 0) h[@"Cookie"] = cookieStr;
+    h[@"User-Agent"] = [self _tiktokAppUserAgent];
+    h[@"Accept"] = @"application/json";
+    h[@"Accept-Language"] = @"en-US,en;q=0.9";
+    h[@"Accept-Encoding"] = @"gzip, deflate, br";
+    h[@"Content-Type"] = @"application/x-www-form-urlencoded";
     [h removeObjectForKey:@"Content-Length"];   // body 已变，length 由系统重算
     [h removeObjectForKey:@"Host"];             // 由 URL 决定
-    h[@"Content-Type"] = @"application/x-www-form-urlencoded";
+    // v1.4.143c 签名第一测：合并后端预生成签名头（X-Argus 家族），extra 优先覆盖同名；
+    // 后端用 cookie_dump 的真实 Cookie 串算 X-Gorgon，故 extra 若带 Cookie 则用 extra 的（保证签名与发送一致）
+    if (extra.count > 0) {
+        for (NSString *k in extra) {
+            if (k.length == 0) continue;
+            NSString *lk = k.lowercaseString;
+            if ([lk isEqualToString:@"host"] || [lk isEqualToString:@"content-length"]) continue;
+            id v = extra[k];
+            if ([v isKindOfClass:[NSString class]] && ((NSString *)v).length > 0) h[k] = v;
+        }
+    }
     req.allHTTPHeaderFields = h;
 
     __block NSDictionary *result = nil;
@@ -3200,7 +3249,32 @@ static NSArray *XN_NurtureComments(void) {
     }];
     [task resume];
     dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC));
-    return result ?: @{@"status": @"failed", @"message": @"点赞请求超时（20s）", @"aweme_id": awemeId};
+
+    // 统一附加会话诊断（v1.4.143）：cookie 数量 + feed header 是否捕获；v1.4.143c 加签名头使用标记
+    NSMutableDictionary *final = result ? [result mutableCopy] : [NSMutableDictionary dictionary];
+    final[@"cookie_count"] = @(cookieStr.length > 0 ? [cookieStr componentsSeparatedByString:@";"].count : 0);
+    final[@"feed_headers_captured"] = @(feedHeaders.count > 0);
+    final[@"sign_headers_used"] = @(extra.count > 0);
+    return final;
+}
+
+/// v1.4.143 提取 TikTok 域所有 cookie 拼 HTTP Cookie header（含 install_id/msToken/odin_tt 会话凭据）
+- (NSString *)_captureTikTokCookieHeader {
+    NSMutableArray *parts = [NSMutableArray array];
+    NSHTTPCookieStorage *storage = [NSHTTPCookieStorage sharedHTTPCookieStorage];
+    for (NSHTTPCookie *cookie in storage.cookies) {
+        NSString *domain = cookie.domain.lowercaseString;
+        if ([domain containsString:@"tiktok"] && cookie.name.length > 0) {
+            NSString *pair = [NSString stringWithFormat:@"%@=%@", cookie.name, cookie.value ?: @""];
+            if (![parts containsObject:pair]) [parts addObject:pair];
+        }
+    }
+    return parts.count > 0 ? [parts componentsJoinedByString:@"; "] : @"";
+}
+
+/// v1.4.143 TikTok iOS app 伪装 UA（部分端点校验客户端标识）
+- (NSString *)_tiktokAppUserAgent {
+    return @"TikTok 43.7.0 rv:437100 (iPhone; iOS 16.7.16; en_US) Cronet/129.0.0.0";
 }
 
 /// v1.4.139 网络类内省（路线 B 第一步）：dump 内存里网络/请求相关类，定位 TikTok 自研网络层入口。

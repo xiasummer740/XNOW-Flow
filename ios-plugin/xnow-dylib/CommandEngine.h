@@ -116,6 +116,9 @@ typedef NS_ENUM(NSInteger, CommandAction) {
     // 走 app 自己的会话/签名发 HTTP（params: aweme_id 可选，默认取当前 feed 第一条视频）
     CommandActionNetLike,
 
+    // cookie_dump (v1.4.143c) — 调试用：回传 TikTok 会话 Cookie 串 + install_id/msToken 值（签名第一测取真实凭据）
+    CommandActionCookieDump,
+
     // 网络路径探针 (v1.4.136) — 上报 NSURLProtocol 注册状态 / 命中计数 / 最近 URL / headers 捕获状态，
     // 一锤定音 TikTok 网络请求走哪条路（决定纯网络层会话材料来源）
     CommandActionNetDiag,
