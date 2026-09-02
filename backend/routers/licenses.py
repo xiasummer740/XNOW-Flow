@@ -7,6 +7,7 @@
 import secrets
 import string
 import logging
+import os
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -262,6 +263,10 @@ def check_device_license(
     from routers.ws import _verify_device_auth
     if not _verify_device_auth(device_id, secret):
         raise HTTPException(status_code=401, detail="设备密钥无效")
+    # 调试期免卡密开关（v1.4.143）：服务端环境变量控制，调试阶段直接放行，商业化开卡密时关掉即可
+    if os.getenv("XNOW_LICENSE_DEBUG_FREE", "false").lower() in ("true", "1", "yes"):
+        return {"licensed": True, "status": "active", "plan": "debug",
+                "expires_at": None, "days_left": 365}
     from sqlalchemy import or_
     lic = db.query(License).filter(
         or_(
