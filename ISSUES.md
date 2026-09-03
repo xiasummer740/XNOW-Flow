@@ -398,3 +398,30 @@
 12. **edit_profile 改名+确认弹窗**（126 修复并入 127 未专项验）：改名弹「Update name?」自动点 Confirm + 签名不覆盖昵称框
 13. **device_id 漂移自动重绑**（后端 8-25 部署）：本次重装若 device_id 变化 → 输卡密自动重绑不再 400
 
+### 144 装机实测（2026-09-03，A8DE7E93，清单逐项判定）
+
+| # | 项 | 结果 |
+|---|----|------|
+| 1 | open_tab profile | ✅ setSelectedIndex before:0 after:3 |
+| 1 | **open_tab home（144 核心）** | ✅ **diag `home_setIndex_nonfeed before:3 after:0` = 从 profile 真切回 feed** |
+| 1 | go_home | ✅ 「已真实验证在首页(feed)」（真验证，不再 28s 假成功） |
+| 1 | **like** | ✅ **真成功「红心点亮验证通过」**（144 修导航后 feed 上点亮，143c 时滞留 profile 找不到红心） |
+| 1 | open_search | ✅ 坐标 386,42 命中 Search |
+| 1 | **follow** | ❌ **存量 HID 根因（见下方新待修）**，非 144 回归 |
+| 1 | backup_account | ✅ 已备份账号 #1 |
+| 2 | like/follow profile→feed 真成功 | like ✅；follow ❌（144 导航修复本身成功已证：回 feed + like 点亮） |
+| 3 | go_home 诚实失败 | ✅ 代码已改（4 轮耗尽→failed）；正常路径真验证通过；极端失败场景难自动触发，逻辑审查确认 |
+| 11 | net_like 复验 | ✅ **143c 止损定论确认**：`feed_headers_captured:0` 符合基石证伪（feed 走 SwiftNIO 不经 URLProtocol），无 aweme_id 即 failed；装机清单该项引用 143b 旧信息，已过时 |
+| 13 | device_id 漂移 | ✅ **未漂移**（重装后仍 A8DE7E93，免疫免重绑） |
+| 6/12 | save_video / edit_profile | ⏳ addLog 只进设备浮窗不上报后端，需祥哥手机确认 |
+
+### [待修·新增] follow feed 点不动 = 存量 HID ContextID 根因（2026-09-03 144 装机暴露）
+- **现象**：feed 上 FollowPromptView（label `Follow tinyoddpets`）tap 两次 before==after 不变 → failed「关注未生效（按钮状态未变化）」
+- **证据链**：
+  1. **触摸走 KVC 回退**：`hid_diag ctx_probe ctx:0` + `tap_ctx_zero` **179 次全 0** —— IOHIDEvent 注入（v1.4.130 根治盲区方案）**自引入起在该设备从未成功**（符号 OK 但 ContextID 取不到 digitizer 服务），非 144 回归
+  2. **FollowPromptView 纯手势**：is_control=False，祖先链无 UIControl 可 sendActions；KVC 合成触摸打不穿其内部真实触摸校验
+  3. **acc_click 也 failed**：accessibilityActivate 返回 NO（activated_class 空，未实现 activate）
+  4. **`_performFollowVerified` 真实验收 log 历史 0 次** —— feed 上「按钮状态验证通过」从没成功过
+  5. like 逃过 = feedLikeButton 是 UIControl（sendActions 不吃 HID）；**导航 bug 掩盖 follow**：143c 滞留 profile tab 找不到按钮秒失败，144 修好导航后暴露纯手势点不动
+- **修复方向（待祥哥拍板）**：A 修 HID ContextID 获取（IOHIDEventSystemClient 匹配不到 digitizer 服务的根因深挖，根治 follow/头像导航等全部纯手势按钮；iOS 16 可能系统级限制，不确定性高）；B tapView 手势 invoke 补 iOS14+ UIAction `_handlers` 触发（现只遍历 `_targets`，手势若用 UIAction 则漏，小改可试，但 handler 真实性校验可能仍拦）；C 网络层 follow —— 143c 签名止损，不可行
+
