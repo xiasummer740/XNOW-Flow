@@ -733,10 +733,15 @@ static NSArray *XN_NurtureComments(void) {
             case CommandActionGoBack:
                 [self _performGoBack];
                 break;
-            case CommandActionGoHome:
-                // 走 _gotoHomeFeed（a11y点击 + deep link 兜底 + 真实验证在 feed）
-                [self _gotoHomeFeed];
+            case CommandActionGoHome: {
+                // v1.4.144: 用 _gotoHomeFeed 返回值判成败——4 轮耗尽仍失败则标 failed
+                //（2026-09-02 实锤：原丢返回值 → 28s 假成功，设备滞留 profile tab 致 like/follow 找不到红心）
+                BOOL onFeed = [self _gotoHomeFeed];
+                result = onFeed ? @{@"status": @"success", @"message": @"已真实验证在首页(feed)"}
+                                : @{@"status": @"failed", @"message": @"无法切回首页(4轮耗尽)，请手动回到首页再操作"};
+                hasResult = YES;
                 break;
+            }
             case CommandActionOpenTab: {
                 NSString *tab = params[@"tab"] ?: @"home";
                 // v1.4.106: _tapTab 返回诊断 dict，随 result 回传后端（server.log 可见，定位 setSelectedIndex:0 失效根因）
@@ -3706,6 +3711,22 @@ static NSArray *XN_NurtureComments(void) {
         //    非 feed 页先真实触摸 tap home tab（profile 页 tab bar 可见，a11y_vo_home @(41,712)），
         //    HID 注入解锁后真切换；tap 后 1.2s 异步复验，未落位再深链兜底。
         if ([tab isEqualToString:@"home"] && ![self _isHomeFeedUsable]) {
+            // 【v1.4.144】根修回归失败导航链（2026-09-02 实锤 ISSUES）：129 起此分支只试 tap+深链——
+            // tap 对 TTKTabBarButton 纯手势合成触摸无效(v1.4.92 已知)、深链对 profile tab 页被忽略(v1.4.132 实测)，
+            // 且无条件 return 短路了下文 setSelectedIndex 稳定路径 → open_tab home/go_home 假成功，
+            // 设备滞留 profile tab → like/follow 找不到红心假失败。先走 setSelectedIndex:0（运行时直接切 tab，
+            // 不依赖触摸；v1.4.125 稳定路径），成功即返回（调用方 _gotoHomeFeed 会 sleep 后真验证）。
+            UITabBarController *tabC0 = [self _findTabBarControllerInWindow:window];
+            if (tabC0 && tabC0.selectedIndex != 0) {
+                NSInteger beforeSel = tabC0.selectedIndex;
+                if ([self _selectTabByViewControllerClass:tabC0 classString:@"AWEFeedRootViewController"] &&
+                    tabC0.selectedIndex == 0) {
+                    NSLog(@"[XNOWER] tapTab:home 非 feed 状态 setSelectedIndex %ld→0 切回 feed", (long)beforeSel);
+                    diag = @{@"method": @"home_setIndex_nonfeed", @"before": @(beforeSel), @"after": @(0)};
+                    self->_currentPage = @"home";
+                    return;
+                }
+            }
             UIView *homeTab = [self _findViewWithAccessibilityIdentifier:@"a11y_vo_home" inView:window];
             if (homeTab) {
                 CGPoint c = [homeTab.superview convertPoint:homeTab.center toView:nil];

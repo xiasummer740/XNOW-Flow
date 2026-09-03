@@ -10,7 +10,7 @@
 // 4. 时间盒模式：beginCapture 清空记录开始，captureCollect 停止并返回序列。
 // 5. 记录上限 200 条防爆；value 截断控体积。
 
-#import "PnsRequestHooks.h"
+#import "XNRequestHooks.h"
 #import <objc/runtime.h>
 
 // XOR(0x5A) 解码：dylib 内不存 TikTok 私有类名明文，运行时还原（防反 hook 检测扫描 Swift 网络层命名空间）。

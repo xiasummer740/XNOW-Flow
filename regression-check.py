@@ -141,11 +141,13 @@ def verdict(name, log):
 
 CHECKS = [
     ("open_tab",     {"tab": "profile"},  "open_tab profile（128 不再崩溃，diag 有返回）"),
-    ("open_tab",     {"tab": "home"},     "open_tab home（128 深链兜底回 feed）"),
-    ("like",         {},                  "like（红心点亮真验收）"),
+    ("open_tab",     {"tab": "home"},     "open_tab home（144: setSelectedIndex 优先，真回 feed）"),
+    # 144: go_home 提前到 like/follow 前——open_tab home 后真验证+兜底，保证 like/follow 在 feed 上测
+    #     （2026-09-02 实锤：open_tab home 假成功滞留 profile tab → like 找不到红心假失败）
+    ("go_home",      {},                  "go_home（144 前置：真验证回首页，like 前置保证）"),
+    ("like",         {},                  "like（红心点亮真验收，须在 feed）"),
     ("open_search",  {},                  "open_search（坐标 386,42 命中搜索按钮）"),
     ("follow",       {},                  "follow（按钮状态真验收）"),
-    ("go_home",      {},                  "go_home（回首页，沉浸态也能退出）"),
     # 注意：设备端 action 是 backup_account，不是 backup（backup 无 handler 只回默认 OK）
     ("backup_account", {},                "backup_account（识别登录态并备份，验收关键字「已备份账号」）"),
 ]

@@ -371,4 +371,30 @@
 
 | 状态 | 问题 | 来源 | 上次更新 |
 |------|------|------|---------|
-| 待修 | **XNRequestHooks.m:13 `#import "PnsRequestHooks.h"` 文件名过时（潜伏构建炸弹）**：类已改名 `XNRequestHooks`（v1.4.142），但第 13 行仍 import 旧文件名。该头文件本地/git 历史均不存在，能编译通过仅因 VPS `/root/xnow-build/` 残留 9月1日的同名旧文件（构建脚本只 mkdir 不清理远程目录，残留物兜底 include）。**一旦清空 VPS 构建目录，下次构建 XNRequestHooks.m 立即 file not found 失败**。修复=第 13 行改 `#import "XNRequestHooks.h"`（本地存在，接口一致），改后清 VPS 目录重编验证一次。证据：VPS ls 见 PnsRequestHooks.h/m/o 残留（Sep 1）+ 本地/find/git log 均无该文件 | 2026-09-02 开发文档调研 | 2026-09-02 |
+| 已验证 | **XNRequestHooks.m:13 `#import "PnsRequestHooks.h"` 文件名过时（潜伏构建炸弹）**：类已改名 `XNRequestHooks`（v1.4.142），但第 13 行仍 import 旧文件名。该头文件本地/git 历史均不存在，能编译通过仅因 VPS `/root/xnow-build/` 残留 9月1日的同名旧文件。**v1.4.144 已修复**：第 13 行改 `#import "XNRequestHooks.h"`（本地存在，接口一致）+ 构建脚本新增 `rm -rf /root/xnow-build/*` 清目录步骤 → **2026-09-03 清目录后 18 源文件全编译 OK（XNRequestHooks.m 无残留兜底编过）实锤拆除** | 2026-09-02 开发文档调研 | 2026-09-03 |
+
+## v1.4.144 攒批（like/follow 导航 bug 修复批，2026-09-03）
+
+> **背景**：143c 装机回归 like/follow ❌ 根因实锤 = 导航 bug 非控件漂移（见上「like/follow 回归失败」段 2026-09-02 分析）。祥哥 2026-09-03 拍板全量开工 144：修 bug + 攒批打包一次装机验全批。
+> **装机前提**：回归清单 go_home 已前置到 like/follow 前（regression-check.py CHECKS 重排），like/follow 须在 feed 上测。
+
+### 本次修复（v1.4.144，代码已改待装机）
+1. **CommandActionGoHome 用返回值**：`_gotoHomeFeed` 4 轮耗尽仍失败 → result 标 failed「无法切回首页」，不再 28s 假成功（CommandEngine.m CommandActionGoHome case）
+2. **_tapTab:home 非 feed 状态先走 setSelectedIndex:0**：129 短路逻辑在 profile tab 页只试 tap（TTKTabBarButton 合成触摸无效）+深链（profile tab 页被忽略）→ 无条件 return 短路下方稳定路径 → 设备滞留 profile tab → like/follow 找不到红心。144 修复：先 `_selectTabByViewControllerClass:feed` setSelectedIndex:0（v1.4.125 稳定路径），成功即 return；tap/深链降为兜底（diag=home_setIndex_nonfeed）
+3. **XNRequestHooks.m:13 构建炸弹修复**：`#import "PnsRequestHooks.h"`（本地/git 均不存在，靠 VPS 残留兜底）→ `#import "XNRequestHooks.h"`。144 构建脚本**新增清 VPS 目录步骤**（rm -rf /root/xnow-build/*）实锤验证——清后能编过 = 炸弹拆除
+
+### 装机验证清单（逐项实测记 真成功/假成功/崩溃）
+1. **回归六命令全过**（144 修复核心）：open_tab profile→home / go_home / like / open_search / follow / backup_account
+2. **like/follow 从 profile 回 feed 后真成功**：`open_tab profile` → `open_tab home`（diag 应 home_setIndex_nonfeed/after:0）→ 设备真回 feed → like 红心点亮
+3. **go_home 诚实失败**：极端情况回不了 feed 应返回 failed（不假成功）
+4. **secret header 传输**（v1.4.108 已修待验）：设备命令带 X-Device-Secret header，server.log 不再见 URL 明文 secret
+5. **F16 口令入口已移除**（108）：私信页菜单无「设置口令」
+6. **F6/B16 保存视频**（108）：save_video 下载无水印存相册 + 上传后台
+7. **B10 发现页按钮已删**（108）：control.html 无「发现页」按钮
+8. **F13 直播重复入口已删**（108）：直播页菜单无「开始采集」
+9. **F27 快捷入口已加**（108）：search/friends 分支有「打开搜索」「回首页」
+10. **B41 切换账号真切换**（108）：目标账号下拉 → 真切换（快照恢复+Token/Cookies 注入）
+11. **net_like 端点纠正复验**（143b）：feed 下发 → status_code:0（非 143「Url does not match」）
+12. **edit_profile 改名+确认弹窗**（126 修复并入 127 未专项验）：改名弹「Update name?」自动点 Confirm + 签名不覆盖昵称框
+13. **device_id 漂移自动重绑**（后端 8-25 部署）：本次重装若 device_id 变化 → 输卡密自动重绑不再 400
+
