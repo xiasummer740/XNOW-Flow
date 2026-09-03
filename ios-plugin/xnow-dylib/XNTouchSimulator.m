@@ -297,6 +297,26 @@ static uint32_t s_hidCtx = 0;
                 }
             }
             if (acts.count) d[@"actions"] = acts;
+            // v1.4.145 iOS14+ UIAction 诊断：addAction:forState: 的手势存 _handlers（含 _action/_handler），
+            //   现仅此可确认 FollowPromptView 等盲区按钮是否 UIAction 接线（_targets 空即疑似）
+            @try {
+                NSArray *handlers = [gr valueForKey:@"_handlers"];
+                NSMutableArray *uiacts = [NSMutableArray array];
+                for (id h in handlers) {
+                    id haction = [h valueForKey:@"_action"];
+                    NSString *ident = @"";
+                    if ([haction respondsToSelector:@selector(identifier)]) {
+                        ident = [haction valueForKey:@"identifier"] ?: @"";
+                    }
+                    [uiacts addObject:[NSString stringWithFormat:@"%@:%@",
+                                       NSStringFromClass([h class]),
+                                       ident.length ? ident : @"<nil-action>"]];
+                }
+                if (uiacts.count) d[@"uiActions"] = uiacts;
+                d[@"handlersCount"] = @(handlers.count);
+            } @catch (NSException *e) {
+                d[@"handlersErr"] = e.reason ?: @"read_fail";
+            }
             [info addObject:d];
         }
     } @catch (NSException *e) {}
@@ -436,6 +456,26 @@ static uint32_t s_hidCtx = 0;
                     if (sel && target && [target respondsToSelector:sel]) {
                         [target performSelector:sel withObject:gr];
                     }
+                }
+                // v1.4.145 iOS14+ UIAction handler（_handlers）触发：addAction:forState: 注册的
+                // 手势 target 存 _handlers 而非 _targets——只遍历 _targets 会漏（FollowPromptView
+                // 关注按钮盲区直接缺陷：touch_diag 显示手势无 actions，即 _targets 空）。
+                // 直接调 _handler block（state 已置 Ended），传挂载的 UIAction 防 handler 解引用 nil。
+                @try {
+                    NSArray *handlers = [gr valueForKey:@"_handlers"];
+                    for (id h in handlers) {
+                        id handlerBlock = [h valueForKey:@"_handler"];
+                        if (!handlerBlock) continue;
+                        id haction = [h valueForKey:@"_action"];
+                        @try {
+                            void (^uiactionHandler)(id) = (void (^)(id))handlerBlock;
+                            uiactionHandler(haction);
+                        } @catch (NSException *e) {
+                            NSLog(@"[XNTouch] UIAction handler 异常: %@", e.reason);
+                        }
+                    }
+                } @catch (NSException *e) {
+                    NSLog(@"[XNTouch] _handlers 读取失败: %@", e.reason);
                 }
                 [gr setValue:@(origState) forKey:@"_state"];
             } @catch (NSException *e) {
