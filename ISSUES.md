@@ -366,3 +366,9 @@
 - **143c 装机实测（2026-09-02）**：cookie_dump 回传 cookie 724 字符/cookie_count=9/install_id 真实 ✅ → douyin-sign 四件套生成（aid=1233 + 真实 cookie/install_id + UA 伪装）→ net_like 带签名头 `sign_headers_used=1`（确认合并生效）→ **仍 HTTP 200 + 空 body**
 - **止损定论（证据）**：douyin-sign 常量（SIMON key/gorgon_table/sign_key）为**抖音 Android** 版；TikTok iOS 43.7.0 Metasec 常量不同 → 服务端用 TikTok key 解不开抖音系签名 → 判非法拦截。**现成库（douyin-sign/armxe）均无 TikTok iOS 43.7.0 常量**；要有效必须逆向 TikTok iOS Metasec 提取常量（数天级 + 每次更新维护）。**签名复刻路线正式止损** → 网络层点赞任意视频的「网络层出路」关闭，自动化点赞回落到 UI 模拟（acc_click 复用 TikTok 自身签名，赞屏上视频）
 - **遗留资产**：143c 的 cookie_dump + net_like extra_headers 保留（若未来拿到 TikTok iOS 常量或接入第三方签名服务可直接复用）；cookie_dump 会回传 cookie 值到 server.log，调试期用，商业化前需移除/收紧
+
+## 🔧 构建隐患（2026-09-02 调研发现，非设备端功能）
+
+| 状态 | 问题 | 来源 | 上次更新 |
+|------|------|------|---------|
+| 待修 | **XNRequestHooks.m:13 `#import "PnsRequestHooks.h"` 文件名过时（潜伏构建炸弹）**：类已改名 `XNRequestHooks`（v1.4.142），但第 13 行仍 import 旧文件名。该头文件本地/git 历史均不存在，能编译通过仅因 VPS `/root/xnow-build/` 残留 9月1日的同名旧文件（构建脚本只 mkdir 不清理远程目录，残留物兜底 include）。**一旦清空 VPS 构建目录，下次构建 XNRequestHooks.m 立即 file not found 失败**。修复=第 13 行改 `#import "XNRequestHooks.h"`（本地存在，接口一致），改后清 VPS 目录重编验证一次。证据：VPS ls 见 PnsRequestHooks.h/m/o 残留（Sep 1）+ 本地/find/git log 均无该文件 | 2026-09-02 开发文档调研 | 2026-09-02 |

@@ -1,0 +1,459 @@
+<title>XNOW 云控技术纵览</title>
+<style>
+  :root{
+    color-scheme: light;
+    --bg:#f2f5f7; --surface:#ffffff; --surface2:#e9eef2;
+    --text:#14202b; --muted:#5a6a77; --faint:#8ba0ad;
+    --line:#d7e0e6; --line2:#c6d2da;
+    --accent:#08738a; --accent-ink:#04414f; --accent-soft:#e1f0f4;
+    --good:#1b7a46; --good-bg:#e4f4ea; --good-line:#bfe2cd;
+    --warn:#a26208; --warn-bg:#fbf0da; --warn-line:#ecd8a8;
+    --crit:#b0342a; --crit-bg:#fae6e3; --crit-line:#edc8c2;
+    --chip-bg:#e8edf1; --shadow:0 1px 2px rgba(15,30,42,.05), 0 6px 18px rgba(15,30,42,.06);
+    --mono:"Cascadia Code","SF Mono",Consolas,Menlo,monospace;
+    --sans:system-ui,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --bg:#0a1117; --surface:#101b24; --surface2:#15232d;
+      --text:#dce6ec; --muted:#93a7b3; --faint:#5f7583;
+      --line:#22343f; --line2:#2e4653;
+      --accent:#3ec7d9; --accent-ink:#a5e8f0; --accent-soft:#102a33;
+      --good:#58cd8b; --good-bg:#0e2b1a; --good-line:#23523a;
+      --warn:#e0a83e; --warn-bg:#2e2410; --warn-line:#5a4520;
+      --crit:#ef7769; --crit-bg:#331617; --crit-line:#5c2a26;
+      --chip-bg:#1c2b35; --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --bg:#0a1117; --surface:#101b24; --surface2:#15232d;
+    --text:#dce6ec; --muted:#93a7b3; --faint:#5f7583;
+    --line:#22343f; --line2:#2e4653;
+    --accent:#3ec7d9; --accent-ink:#a5e8f0; --accent-soft:#102a33;
+    --good:#58cd8b; --good-bg:#0e2b1a; --good-line:#23523a;
+    --warn:#e0a83e; --warn-bg:#2e2410; --warn-line:#5a4520;
+    --crit:#ef7769; --crit-bg:#331617; --crit-line:#5c2a26;
+    --chip-bg:#1c2b35; --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} }
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--sans); line-height:1.7; font-size:15px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px; margin:0 auto; padding:0 22px 90px}
+  /* ---- header ---- */
+  header{background:var(--surface); border-bottom:1px solid var(--line)}
+  .headinner{max-width:1180px; margin:0 auto; padding:26px 22px 22px}
+  .kicker{font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); font-weight:600}
+  h1{font-size:30px; line-height:1.2; margin:6px 0 10px; font-weight:750; letter-spacing:-.01em; text-wrap:balance}
+  .sub{color:var(--muted); max-width:64ch; margin:0 0 16px}
+  .chips{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+  .chip{display:inline-flex; align-items:center; gap:6px; background:var(--chip-bg); border:1px solid var(--line);
+    border-radius:999px; padding:3px 11px; font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums}
+  .chip b{color:var(--text); font-weight:650}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block}
+  /* ---- layout ---- */
+  .layout{display:grid; grid-template-columns:226px minmax(0,1fr); gap:34px; align-items:start; padding-top:26px}
+  nav.toc{position:sticky; top:18px; font-size:13px}
+  .toc .t{font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--faint); font-weight:650; margin:0 0 8px 4px}
+  .toc a{display:block; color:var(--muted); text-decoration:none; padding:4px 8px; border-radius:6px; border-left:2px solid transparent}
+  .toc a:hover{color:var(--accent-ink); background:var(--accent-soft)}
+  .toc a::before{content:attr(data-n); display:inline-block; width:20px; color:var(--faint); font-variant-numeric:tabular-nums}
+  @media (max-width:880px){
+    .layout{grid-template-columns:1fr}
+    nav.toc{position:static; display:none}
+  }
+  main{min-width:0}
+  /* ---- sections ---- */
+  section{margin:0 0 42px; scroll-margin-top:16px}
+  .shead{display:flex; gap:12px; align-items:baseline; border-bottom:1px solid var(--line); padding-bottom:10px; margin-bottom:16px}
+  .num{font-family:var(--mono); font-size:13px; color:var(--accent); font-weight:700; min-width:34px}
+  h2{font-size:21px; margin:0; font-weight:730; letter-spacing:-.01em}
+  .lede{color:var(--muted); margin:0 0 18px; max-width:80ch}
+  p{color:var(--text); max-width:88ch}
+  code{font-family:var(--mono); font-size:.86em; background:var(--surface2); border:1px solid var(--line);
+    padding:1px 5px; border-radius:5px; color:var(--accent-ink)}
+  pre{background:var(--surface2); border:1px solid var(--line); border-radius:10px; padding:14px 16px;
+    overflow-x:auto; font-family:var(--mono); font-size:13px; line-height:1.55; color:var(--text)}
+  pre code{border:none; background:none; padding:0; color:inherit}
+  /* ---- cards & tables ---- */
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow);
+    overflow:hidden; margin:0 0 14px}
+  .card .ctitle{display:flex; align-items:center; gap:8px; padding:10px 16px; font-size:13px; font-weight:650;
+    color:var(--muted); border-bottom:1px solid var(--line); background:var(--surface)}
+  .card .ctitle .tbadge{font-family:var(--mono); font-size:10.5px; padding:1px 8px; border-radius:999px; background:var(--accent-soft); color:var(--accent-ink)}
+  .scroll{overflow-x:auto; -webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse; width:100%; font-size:13.5px}
+  th{background:var(--surface2); color:var(--muted); text-align:left; font-weight:650; font-size:12px;
+    letter-spacing:.04em; padding:9px 14px; border-bottom:1px solid var(--line); white-space:nowrap}
+  td{padding:9px 14px; border-bottom:1px solid var(--line); vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:color-mix(in srgb, var(--accent) 4%, transparent)}
+  td.cmd, td.k{white-space:nowrap; font-family:var(--mono); font-size:12.5px; color:var(--accent-ink)}
+  td.cmd b, td.k b{color:var(--text)}
+  /* status pills */
+  .pill{display:inline-block; padding:1px 9px; border-radius:999px; font-size:11.5px; font-weight:650; white-space:nowrap; border:1px solid transparent}
+  .pill.good{color:var(--good); background:var(--good-bg); border-color:var(--good-line)}
+  .pill.warn{color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line)}
+  .pill.crit{color:var(--crit); background:var(--crit-bg); border-color:var(--crit-line)}
+  .pill.mute{color:var(--faint); background:var(--chip-bg)}
+  .pill.acc{color:var(--accent-ink); background:var(--accent-soft); border-color:var(--line)}
+  .note{border:1px solid var(--line); border-left:3px solid var(--accent); background:var(--surface);
+    border-radius:8px; padding:12px 16px; margin:14px 0; font-size:13.5px}
+  .note.warn{border-left-color:var(--warn); background:var(--warn-bg); border-color:var(--warn-line)}
+  .note.crit{border-left-color:var(--crit); background:var(--crit-bg); border-color:var(--crit-line)}
+  .note b:first-child{display:block; margin-bottom:2px}
+  /* pipeline diagram */
+  .pipe{display:grid; gap:10px}
+  .pleg{display:flex; justify-content:space-between; align-items:center; gap:14px; background:var(--surface);
+    border:1px solid var(--line); border-left:4px solid var(--accent); border-radius:10px; padding:12px 16px}
+  .pleg .pt{font-weight:700; font-size:14.5px}
+  .pleg .pd{color:var(--muted); font-size:12.5px; margin-top:1px}
+  .pleg .pright{flex-shrink:0; font-family:var(--mono); font-size:11.5px; color:var(--faint)}
+  .parrow{text-align:center; color:var(--faint); font-size:13px; line-height:1}
+  .parrow svg{vertical-align:middle}
+  /* version timeline */
+  .ver{position:relative; padding-left:20px}
+  .ver .vrow{display:grid; grid-template-columns:118px minmax(0,1fr); gap:14px; padding:9px 0; border-bottom:1px dashed var(--line)}
+  .ver .vrow:last-child{border-bottom:none}
+  .ver .vtag{font-family:var(--mono); font-weight:700; color:var(--accent); font-size:13px; font-variant-numeric:tabular-nums}
+  .ver .vdesc{color:var(--text); font-size:13.5px}
+  @media (max-width:640px){ .ver .vrow{grid-template-columns:1fr; gap:2px} }
+  .kv{display:grid; grid-template-columns:170px minmax(0,1fr); gap:10px 18px; font-size:13.5px}
+  .kv .k2{color:var(--muted); font-weight:600}
+  .kv .v2{min-width:0}
+  ul,ol{color:var(--text); max-width:86ch; padding-left:22px; margin:8px 0}
+  li{margin:3px 0}
+  a{color:var(--accent-ink)}
+  .grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; margin:14px 0}
+  footer{border-top:1px solid var(--line); margin-top:50px; padding-top:16px; color:var(--faint); font-size:12.5px}
+  .hl{background:linear-gradient(transparent 60%, color-mix(in srgb, var(--accent) 28%, transparent) 60%); font-weight:650}
+  ::selection{background:color-mix(in srgb, var(--accent) 30%, transparent)}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px}
+</style>
+
+<div class="wrap">
+  <div class="layout">
+    <nav class="toc" aria-label="目录">
+      <p class="t">目录</p>
+      <a href="#s1" data-n="1.">一句话</a>
+      <a href="#s2" data-n="2.">系统全景</a>
+      <a href="#s3" data-n="3.">iOS 注入层</a>
+      <a href="#s4" data-n="4.">后端</a>
+      <a href="#s5" data-n="5.">网页后台</a>
+      <a href="#s6" data-n="6.">构建 → 装机</a>
+      <a href="#s7" data-n="7.">控件基线地图</a>
+      <a href="#s8" data-n="8.">踩坑精华</a>
+      <a href="#s9" data-n="9.">工具脚本</a>
+      <a href="#s10" data-n="10.">版本史</a>
+      <a href="#s11" data-n="11.">文档索引</a>
+    </nav>
+    <main>
+      <section id="s1">
+        <div class="shead"><span class="num">01</span><h2>一句话说明</h2></div>
+        <p>XNOW-Flow 是一个 <span class="hl">TikTok iOS 云控系统</span>：把自研的 <code>xnower.dylib</code> 注入 TikTok iOS 包（BH 版 43.7.0），让每台 iPhone 成为「云控设备」。网页后台通过 WebSocket/HTTP 下发指令，dylib 在手机端<strong>模拟真实用户操作</strong>（点赞/关注/评论/私信/养号/采集），并把结果回传。</p>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>端</th><th>位置</th><th>技术栈</th><th>职责</th></tr></thead>
+            <tbody>
+              <tr><td><span class="pill acc">iOS 注入层</span></td><td class="k">ios-plugin/xnow-dylib/</td><td>Objective-C / dylib 注入</td><td>跑在手机里：执行命令、模拟操作、抓包</td></tr>
+              <tr><td><span class="pill acc">后端</span></td><td class="k">backend/</td><td>Python FastAPI / SQLAlchemy / SQLite</td><td>下发命令、账号体系、任务调度、鉴权</td></tr>
+              <tr><td><span class="pill acc">网页后台</span></td><td class="k">login/ + backend/static/</td><td>React 19 + Vite 8 / TS</td><td>操作界面：设备控制、账号库、数据看板</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>构建链路：<strong>VPS 交叉编译 dylib → 注入 IPA → zsign 重签 → 装机验证</strong>。</p>
+      </section>
+
+      <section id="s2">
+        <div class="shead"><span class="num">02</span><h2>系统全景</h2></div>
+        <div class="pipe">
+          <div class="pleg">
+            <div><div class="pt">网页后台（浏览器）</div><div class="pd">React SPA（登录/设备控制/账号库/看板）· 轻量静态页（control.html 设备控制）</div></div>
+            <div class="pright">login/ · backend/static/</div>
+          </div>
+          <div class="parrow"><svg width="16" height="10" viewBox="0 0 16 10"><path d="M8 0v7M4 5l4 4 4-4" stroke="currentColor" fill="none" stroke-width="1.6"/></svg></div>
+          <div class="pleg">
+            <div><div class="pt">后端 FastAPI</div><div class="pd">JWT 用户鉴权 + X-Device-Secret 设备鉴权 · 26 个 API 路由组 · WS 长连 + HTTP 轮询双通道 · SQLite 落库</div></div>
+            <div class="pright">backend/ · VPS 192.129.210.52</div>
+          </div>
+          <div class="parrow"><svg width="16" height="10" viewBox="0 0 16 10"><path d="M8 0v7M4 5l4 4 4-4" stroke="currentColor" fill="none" stroke-width="1.6"/></svg></div>
+          <div class="pleg">
+            <div><div class="pt">iOS 设备 × N（BH 版 TikTok + xnower.dylib）</div><div class="pd">+load 双层启动建连 · CommandEngine 执行命令 · 三层网络拦截（ObjC swizzle / NSURLProtocol / fishhook）</div></div>
+            <div class="pright">iPhone 8P 等</div>
+          </div>
+        </div>
+        <div class="note"><b>命令下发链路</b>
+          <span style="font-family:var(--mono);font-size:12.5px">后台点「点赞」→ device_commands API → ConnectionManager → 设备在线？WS 推送：HTTP 轮询取走 → 设备执行 → 结果回传 → 落 task_executions</span></div>
+      </section>
+
+      <section id="s3">
+        <div class="shead"><span class="num">03</span><h2>iOS 注入层</h2></div>
+        <p class="lede">Objective-C dylib，注入到 TikTok 主二进制，负责一切设备端动作。核心是 <strong>CommandEngine</strong>（命令引擎，~5600 行）与 <strong>三层网络拦截</strong>。</p>
+
+        <div class="card"><div class="ctitle">文件地图 <span class="tbadge">ios-plugin/xnow-dylib/</span></div>
+          <div class="scroll"><table>
+            <thead><tr><th style="min-width:210px">文件</th><th>职责</th></tr></thead>
+            <tbody>
+              <tr><td class="cmd">XNStartup.m</td><td>入口：<code>+load</code> 双层启动，保证必装</td></tr>
+              <tr><td class="cmd">XNOWER.m</td><td>主控制器：配置读取、命令分发、浮窗面板</td></tr>
+              <tr><td class="cmd">CommandEngine.m</td><td><b>命令引擎（~5600 行）</b>：60+ 命令的动作执行</td></tr>
+              <tr><td class="cmd">XNFloatingPanel.m</td><td>屏幕悬浮菜单（手动触发命令/看状态）</td></tr>
+              <tr><td class="cmd">WsClient.m</td><td>WebSocket 客户端：连后端、收发 JSON、心跳</td></tr>
+              <tr><td class="cmd">TikTokHooks.m</td><td><b>第一层</b>：ObjC runtime swizzle + NSURLProtocol</td></tr>
+              <tr><td class="cmd">XNURLProtocol.m</td><td>NSURLProtocol：拦 TikTok 请求 / piggyback 通信</td></tr>
+              <tr><td class="cmd">SocketHooks.m + fishhook.c</td><td><b>第二层</b>：fishhook 重绑 socket C 符号</td></tr>
+              <tr><td class="cmd">XNRequestHooks.m</td><td><b>第三层</b>：hook PNS 请求模型 setter 抓 Swift 自研栈明文</td></tr>
+              <tr><td class="cmd">Account* / CountryEnv</td><td>账号管理/切换/池/快照 · 环境伪装</td></tr>
+              <tr><td class="cmd">DeviceIdentity / DeviceStatus</td><td>设备身份（UDID）/ 设备状态</td></tr>
+              <tr><td class="cmd">XNTouchSimulator.m</td><td>合成触摸：IOHIDEvent 真实事件注入</td></tr>
+              <tr><td class="cmd">XNWindowHelper.m</td><td>窗口/视图查找辅助</td></tr>
+              <tr><td class="cmd">Config.plist</td><td>构建时嵌入：服务器地址、心跳、开关</td></tr>
+              <tr><td class="cmd">Makefile</td><td><span class="pill crit">已过时</span> 真实构建走 VPS 脚本（见 §6）</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+
+        <div class="card"><div class="ctitle">命令全集 <span class="tbadge">CommandEngine.m</span></div>
+          <p style="padding:8px 16px 0;margin:0;color:var(--muted)">三类：操作类 / 采集类 / 调试网络类。</p>
+          <div class="scroll"><table>
+            <thead><tr><th style="min-width:120px">命令</th><th>动作</th><th style="min-width:120px">命令</th><th>动作</th></tr></thead>
+            <tbody>
+              <tr><td class="cmd">like · net_like</td><td>点赞（UI 模拟 / 纯网络层）</td><td class="cmd">follow</td><td>关注</td></tr>
+              <tr><td class="cmd">comment</td><td>评论</td><td class="cmd">collect</td><td>收藏</td></tr>
+              <tr><td class="cmd">go_home / go_back / open_tab</td><td>回首页 / 返回 / 切 Tab</td><td class="cmd">open_profile / open_search / open_user / open_video</td><td>页面跳转</td></tr>
+              <tr><td class="cmd">switch_account / logout / register</td><td>账号切/登出/注册</td><td class="cmd">send_dm / send_card / share_live</td><td>私信 / 卡片 / 直播分享</td></tr>
+              <tr><td class="cmd">post_video / save_video / share</td><td>发 / 存 / 分享视频</td><td class="cmd">edit_profile</td><td>改资料</td></tr>
+              <tr><td class="cmd">batch_like/follow/comment</td><td>批量操作</td><td class="cmd">smart_browse / nurture_tick/stop</td><td>智能浏览 / 养号</td></tr>
+              <tr><td class="cmd">refresh · check_health · tap · screenshot</td><td>刷新 / 健康 / 坐标点击 / 截图</td><td class="cmd">collect_fans / videos / comments / live_users / likes</td><td>采集五件套</td></tr>
+            </tbody>
+          </table></div>
+          <div class="card" style="box-shadow:none;border:none;border-top:1px solid var(--line);border-radius:0"><div class="ctitle">调试 / 网络层命令 <span class="tbadge">v1.4.135 → 143c</span></div>
+          <div class="scroll"><table>
+            <thead><tr><th style="min-width:130px">命令</th><th>版本</th><th>用途</th></tr></thead>
+            <tbody>
+              <tr><td class="cmd">net_diag</td><td>v1.4.136</td><td>网络路径探针（请求走哪条路）</td></tr>
+              <tr><td class="cmd">net_sniff</td><td>v1.4.138</td><td>时间盒抓包（N 秒记录所有请求）</td></tr>
+              <tr><td class="cmd">net_classes</td><td>v1.4.139</td><td>网络类内省</td></tr>
+              <tr><td class="cmd">net_socket</td><td>v1.4.140</td><td>socket/TLS 双层钩子抓真实请求明文</td></tr>
+              <tr><td class="cmd">net_request</td><td>v1.4.141</td><td>hook PNS 请求模型 setter 抓明文</td></tr>
+              <tr><td class="cmd">cookie_dump</td><td>v1.4.143c</td><td>回传会话 Cookie（签名复刻实验取凭据）</td></tr>
+              <tr><td class="cmd">ui_scan</td><td>—</td><td>扫描当前页控件（控件基线地图数据源）</td></tr>
+            </tbody>
+          </table></div></div>
+        </div>
+
+        <div class="card"><div class="ctitle">三层网络拦截原理 <span class="tbadge">本系统核心创新</span></div>
+          <div style="padding:6px 16px 14px">
+          <p>TikTok 请求分两种路径，拦截必须分层：</p>
+          <pre>   TikTok API 请求
+     │
+     ├─ 路径 A：系统 URL Loading System（NSURLSession）
+     │    └→ XNOWURLProtocol 注册 → 能拿到 HTTP 明文
+     │
+     └─ 路径 B：Swift 自研网络栈（Pumbaa/PNSFoundation，字节自家）
+          └→ TLS 层不透出明文（net_socket 实锤）
+              └→ 退路：hook 请求模型 setter IMP → 构造请求瞬间
+                 拿 URL / method / headers / body（net_request）</pre>
+          <ul>
+            <li><strong>第一层 ObjC swizzle</strong>（TikTokHooks.m）：替换 NSURLSession 相关方法 + 注册 NSURLProtocol。</li>
+            <li><strong>第二层 NSURLProtocol</strong>：XNOWURLProtocol（拦 TikTok API）+ XNURLProtocol（piggyback 通信）。</li>
+            <li><strong>第三层 fishhook</strong>（SocketHooks + fishhook.c）：重绑 socket 层 C 符号。</li>
+            <li><strong>第四层兜底</strong>（XNRequestHooks.m）：hook 请求模型 setter，构造瞬间拿明文。</li>
+          </ul>
+          </div>
+        </div>
+
+        <div class="note crit"><b>网络安全铁律（v1.4.142 起）</b>
+        TikTok 私有类名<strong>禁止明文写进 dylib</strong>——明文会触发反 hook 检测 SIGTRAP 闪退（v1.4.141 闪退根因）。类名必须 <strong>XOR 运行时解码</strong> + <code>noinline</code> + <code>volatile</code> 防 clang 常量折叠。新增 hook 代码同样处理。</div>
+
+        <div class="note warn"><b>已知问题：XNRequestHooks.m 潜伏构建炸弹</b>
+        <code>XNRequestHooks.m:13</code> 的 <code>#import "PnsRequestHooks.h"</code> 是旧文件名（类已改名 XNRequestHooks），本地与 git 历史均无此文件，能编译过只因 VPS <code>/root/xnow-build/</code> 残留 9 月 1 日同名旧文件兜底。清空 VPS 构建目录后下次构建立刻失败。应改为 <code>#import "XNRequestHooks.h"</code>（已登记 ISSUES 待修）。另外 <code>SocketHooks.m / fishhook.c / fishhook.h</code> 尚未 git 跟踪，改代码勿漏提交。</div>
+      </section>
+
+      <section id="s4">
+        <div class="shead"><span class="num">04</span><h2>后端</h2></div>
+        <p class="lede">FastAPI + SQLAlchemy + SQLite。网页后台用户走 JWT，iOS 设备走 X-Device-Secret header 鉴权。</p>
+
+        <div class="card"><div class="ctitle">结构</div>
+          <div class="scroll"><table>
+            <thead><tr><th style="min-width:200px">路径</th><th>内容</th></tr></thead>
+            <tbody>
+              <tr><td class="cmd">main.py</td><td>入口：注册 26 路由组 + SPA 兜底 + 启动 tick</td></tr>
+              <tr><td class="cmd">routers/</td><td>26 个 API 路由组（见下）</td></tr>
+              <tr><td class="cmd">models/ · schemas/</td><td>SQLAlchemy 20+ 表 · Pydantic 校验</td></tr>
+              <tr><td class="cmd">connection_manager.py</td><td>设备连接管理（WS 长连 + HTTP 轮询双通道）</td></tr>
+              <tr><td class="cmd">dependencies.py · crypto.py</td><td>鉴权依赖 · 加解密</td></tr>
+              <tr><td class="cmd">static/</td><td>轻量前端产物（control.html 设备控制）</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+
+        <div class="card"><div class="ctitle">鉴权双轨 + API 路由组（26）</div>
+          <div class="scroll"><table>
+            <thead><tr><th style="min-width:200px">对象</th><th>鉴权方式</th></tr></thead>
+            <tbody>
+              <tr><td class="cmd">网页后台用户</td><td>JWT（/api/auth/login）</td></tr>
+              <tr><td class="cmd">iOS 设备</td><td><code>X-Device-Secret</code> header + UUID 校验，恒定时间比较；SECRET_KEY 无默认值</td></tr>
+            </tbody>
+          </table></div>
+          <p style="padding:0 16px;margin:10px 0 4px;font-size:13px;color:var(--muted)">auth · devices · dashboard · accounts · tasks · task_executions · timed_tasks · device_commands · feedback · announcements · reply_templates · media · collected_data · execution_stats · materials · video_posts · dm_tasks · nurture · quick_commands · licenses · udid · ws · public_users · proxy_nodes · translate · adverts</p>
+        </div>
+
+        <div class="note"><b>已落地安全改进</b>
+        SECRET_KEY 无默认值 · 上传 10MB + 拒 SVG · 任务/定时任务非 admin 校验设备归属（防跨租户）· 设备 secret 走 header 不进 URL。<br>
+        <span class="pill crit">待修</span> uvicorn:8000 公网明文无 TLS → 需 nginx 443 + 设备改 https。</div>
+      </section>
+
+      <section id="s5">
+        <div class="shead"><span class="num">05</span><h2>网页后台</h2></div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th style="min-width:130px">入口</th><th>位置</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td><span class="pill acc">React SPA</span></td><td class="cmd">login/</td><td>完整管理后台：20+ 页面。构建产物 <code>login/dist</code>，后端 SPA 兜底服务</td></tr>
+              <tr><td><span class="pill acc">静态页</span></td><td class="cmd">backend/static/</td><td><code>control.html</code> 设备控制 · <code>install.html</code> 装机引导 · <code>ws-test.html</code> 测试。免构建直接改</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:13px;color:var(--muted)">注：<code>login/xnow-login/</code> 是嵌套重复副本（疑似历史误提交），以 <code>login/</code> 为准，确认无用应清理。</p>
+        <div class="card" style="margin-top:12px"><div class="ctitle">SPA 页面（login/src/pages/）</div>
+          <p style="padding:0 16px;margin:8px 0;font-size:13.5px">设备管理 · <strong>设备控制</strong>（逐设备下发命令/养号开关）· 账号管理 · 公共用户库 · 任务列表 · 定时任务 · 任务日志 · 执行统计 · 素材库 · 卡片管理 · 媒体管理 · 视频管理 · 采集数据 · 反馈 · 回复配置 · 公告 · 广告 · 用户管理 · 设置 · 使用指南</p>
+          <div class="note warn" style="margin:0 16px 16px"><b>前端改动铁律</b>
+          React 19 + Vite 8 + TS ~6.0，<strong>无 axios</strong>（原生 fetch）、<strong>无 router 库</strong>（手写状态）。<code>Button/Card/Input</code> 等组件必须定义在<strong>模块顶层</strong>（组件函数体外）——曾因定义在组件体内导致每次渲染重挂、输入框丢字符/按钮跳动（v1.4.119 血证）。</div>
+        </div>
+      </section>
+
+      <section id="s6">
+        <div class="shead"><span class="num">06</span><h2>构建 → 注入 → 装机</h2></div>
+
+        <div class="card"><div class="ctitle">① 编译 dylib <span class="tbadge">build-vps-dylib-143c.py</span></div>
+          <pre>本地源码 ios-plugin/xnow-dylib/
+  → SFTP → VPS /root/xnow-build/
+  → clang-16 交叉编译（arm64-apple-ios16.5 · -fobjc-arc · -Wno-everything）
+      编所有 .m（除 MinimalTester）+ 所有 .c → 逐个 .o，任一 error 即停
+  → ld64.lld 链接 → xnower.dylib
+  → convert_cmds.py（私有命令转标准）
+  → 下载回 build-artifacts-ci/xnower-143c/</pre>
+          <div class="note warn" style="margin:0 16px 16px"><b>两个坑</b>
+          VPS 构建目录 <code>/root/xnow-build/</code> 只 <code>mkdir</code> 不清理——残留旧文件会掩盖改名问题（见 §3 已知问题）。改文件后建议清目录重编一次。<br>
+          <code>Makefile</code> 已过时（缺 SocketHooks/fishhook），<strong>不要用 Makefile</strong>。</div>
+        </div>
+
+        <div class="card"><div class="ctitle">② 注入 <span class="tbadge">.tmp-inject-143c.py</span></div>
+          <pre>xnower dylib → 上传 /root/xnow-build/
+  → vps-inject.py 注入 LC_LOAD_DYLIB
+      （VPS 无 43.7.0 原始包，以 static 最新已注入 IPA 连续注入）
+  → zsign 重签（必须 -z 9！）→ 下载 TikTok_XNOW_v1.4.143c_BH.ipa</pre>
+          <div class="note crit" style="margin:0 16px 16px"><b>zsign 必须 -z 9</b>
+          默认 zip_level=0 不压缩 → 包 374MB 膨胀 685MB → iPhone 8 Plus 装 74% 卡死。<code>-z 9</code> 回 ~391MB。修复版 zsign 在 <code>C:\Users\Administrator\Downloads\zsign-src\bin\zsign</code>（WSL 跑 Linux ELF）。</div>
+        </div>
+
+        <div class="card"><div class="ctitle">③ 装机</div>
+          <div class="scroll"><table>
+            <thead><tr><th style="min-width:150px">方式</th><th>场景</th></tr></thead>
+            <tbody>
+              <tr><td class="cmd">爱思助手拖拽</td><td>主力。pymobiledevice3 装 700MB+ 大包在 Windows 会卡死（installd 无活动）</td></tr>
+              <tr><td class="cmd">爱思卡死</td><td>杀 i4Tools/i4Service/i4ToolsService 重启（USB 不受影响）</td></tr>
+              <tr><td class="cmd">装机验证</td><td>一次装机验全批：按「装机验证清单」逐项下发实测，记 <span class="pill good">✅真成功</span> / <span class="pill warn">❌假成功</span> / <span class="pill crit">🚨崩溃</span></td></tr>
+            </tbody>
+          </table></div>
+        </div>
+
+        <div class="note"><b>发版门禁（攒批）</b>
+        修复阶段不打包，攒够 <strong>≥3 项「已修待验」</strong> 才编译打包；装机 = 全量验证（不许只验当前 bug）；发版前必跑 <code>python regression-check.py all</code>（open_tab / like / open_search / follow / go_home / backup 六条，三态验收），任一 <span class="pill crit">🚨</span> 或 <span class="pill warn">❌</span> 核心项 → 不发版先修。</div>
+      </section>
+
+      <section id="s7">
+        <div class="shead"><span class="num">07</span><h2>控件基线地图</h2></div>
+        <p class="lede">根治「锚点靠猜」：修任何控件问题前，先查 <code>docs/control-map/</code>（ui_scan 采集的 accId / label / 坐标）。</p>
+        <ul>
+          <li>覆盖页面：feed / comment / edit_profile / following / profile / search 等 8 页（<code>.md</code> 人读 + <code>.json</code> 机读）</li>
+          <li>TikTok 更新后：<code>python collect-control-map.py &lt;页面&gt;</code> 重采，对照 diff 看锚点漂移</li>
+          <li>历史教训：like/follow 曾误判「控件漂移」，实为<strong>假成功导航链 + 触摸盲区</strong>——修问题先确认根因，别急着归因控件漂移</li>
+        </ul>
+      </section>
+
+      <section id="s8">
+        <div class="shead"><span class="num">08</span><h2>踩坑精华（血证集）</h2></div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th style="width:36px">#</th><th>坑</th><th>对策</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>zsign 重签不压缩 → 包 685MB → 装 74% 卡死</td><td class="k">-z 9 回到 ~391MB</td></tr>
+              <tr><td>2</td><td>pymobiledevice3 装大 IPA（700MB+）Windows 卡死</td><td class="k">爱思助手拖拽安装</td></tr>
+              <tr><td>3</td><td>TikTok 私有类名明文 → 反 hook SIGTRAP 闪退</td><td class="k">XOR 解码 + noinline + volatile（v1.4.142）</td></tr>
+              <tr><td>4</td><td>dispatch_sync 主线程嵌套 → watchdog 杀进程</td><td class="k">外层别再包 dispatch_sync（修过 3 处）</td></tr>
+              <tr><td>5</td><td>合成触摸对 TTKTabBarButton 无效（target_actions 空）</td><td class="k">切 Tab 用 setSelectedIndex / 按 VC 类选</td></tr>
+              <tr><td>6</td><td>open_tab home 非 feed 页假成功（异步深链被忽略）</td><td class="k">确认页面到达再报成功，别急返回</td></tr>
+              <tr><td>7</td><td>React 组件定义在组件体内 → 每次渲染重挂</td><td class="k">组件移到模块顶层（v1.4.119 血证）</td></tr>
+              <tr><td>8</td><td>设备 secret 走 URL → 明文进日志</td><td class="k">改走 X-Device-Secret header</td></tr>
+              <tr><td>9</td><td>iOS 16.7 dyld3 不调用 constructor</td><td class="k">启动用 +load / 双层启动机制</td></tr>
+              <tr><td>10</td><td>VPS 构建目录不清理 → 残留掩盖改名</td><td class="k">清 /root/xnow-build/ 重编验证一次</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="s9">
+        <div class="shead"><span class="num">09</span><h2>常用工具脚本（仓库根）</h2></div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th style="min-width:240px">脚本</th><th>用途</th></tr></thead>
+            <tbody>
+              <tr><td class="cmd">build-vps-dylib-143c.py</td><td>VPS 交叉编译 dylib</td></tr>
+              <tr><td class="cmd">.tmp-inject-143c.py</td><td>上传 dylib → vps-inject → 打包 → 下载</td></tr>
+              <tr><td class="cmd">.tmp-poll-netdiag.py</td><td>ssh 查 server.log 拿设备执行结果（前端不回显时）</td></tr>
+              <tr><td class="cmd">collect-control-map.py</td><td>ui_scan 采集控件基线地图</td></tr>
+              <tr><td class="cmd">regression-check.py</td><td>发版前六条命令三态回归</td></tr>
+              <tr><td class="cmd">fix-dylib.py · build-bh-ipa.py</td><td>dylib 修复 · 本地打包（需原始包，本地无）</td></tr>
+              <tr><td class="cmd">VPS 端 /opt/xnow-flow/</td><td>vps-inject.py 注入 + 产物 static/</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="s10">
+        <div class="shead"><span class="num">10</span><h2>版本史要点</h2></div>
+        <p class="lede">v1.4.90 → v1.4.143c。近期主线：UI 模拟稳定性 → 触摸盲区根治 → 网络层探索 → 签名复刻止损。</p>
+        <div class="ver">
+          <div class="vrow"><div class="vtag">v1.4.108~117</div><div class="vdesc">设备 secret 走 header · 设备标识根治（Keychain→IDFV→硬件 UDID，重装不漂移不再重输卡密）· 备份账号真实提取 + 国家字段修复</div></div>
+          <div class="vrow"><div class="vtag">v1.4.119~125</div><div class="vdesc">React 组件顶层化 · 智能浏览闪退根治（dispatch_sync 嵌套）· 修改资料输入框（UITextView + 子页流程）· edit_profile 崩溃根因 = 主线程嵌套自锁，修 3 处</div></div>
+          <div class="vrow"><div class="vtag">v1.4.127~129</div><div class="vdesc">攒批修 7 项假成功/卡死 · 发版门禁装机全量验证硬性落地 · open_tab 崩溃根治（全树遍历卡死 → 轻量深链）</div></div>
+          <div class="vrow"><div class="vtag">v1.4.130~133</div><div class="vdesc">触摸盲区根治：XNTouchSimulator IOHIDEvent 真实事件注入 · 设备 id Keychain 根治</div></div>
+          <div class="vrow"><div class="vtag">v1.4.134</div><div class="vdesc">无障碍点击 acc_click 路线证死（5 项全 ok=false）→ 触摸盲区转向定论</div></div>
+          <div class="vrow"><div class="vtag">v1.4.135~140</div><div class="vdesc">网络层第一步 net_like · 探针系列 net_diag → net_sniff → net_classes → net_socket · zsign DER 修复</div></div>
+          <div class="vrow"><div class="vtag">v1.4.141~142</div><div class="vdesc">141 闪退根因实锤（Swift 私有类名明文 → SIGTRAP）+ XOR 防折叠修复 · net_request 抓到自研栈请求明文</div></div>
+          <div class="vrow"><div class="vtag">v1.4.143c</div><div class="vdesc">签名复刻第一测：cookie_dump + net_like extra_headers 合并 X-Argus 头 · <b>止损</b>：douyin-sign 抖音常量解不开 TikTok iOS 43.7.0 签名 → 网络层出路关闭，回落 UI 模拟点赞</div></div>
+        </div>
+        <div class="note warn" style="margin-top:14px"><b>当前攻关方向</b>
+        验证 141 闪退修复（142 待装机）· like/follow 回归根因（假成功导航链，非控件漂移）· 移除 cookie_dump 调试回传（商业化前）。</div>
+      </section>
+
+      <section id="s11">
+        <div class="shead"><span class="num">11</span><h2>文档索引</h2></div>
+        <div class="scroll">
+          <table>
+            <thead><tr><th style="min-width:300px">文档</th><th>内容</th></tr></thead>
+            <tbody>
+              <tr><td class="cmd">docs/TK云控系统-完整项目实施计划书.md</td><td>旧版完整规划（PPT 对照，功能全量）</td></tr>
+              <tr><td class="cmd">docs/云控功能清单.md</td><td>功能清单</td></tr>
+              <tr><td class="cmd">docs/control-map/</td><td>控件基线地图（8 页）</td></tr>
+              <tr><td class="cmd">docs/action-plan-*.md</td><td>网络层攻关行动方案</td></tr>
+              <tr><td class="cmd">ISSUES.md</td><td>问题清单（发版门禁依据，状态机管理）</td></tr>
+              <tr><td class="cmd">根目录审计报告</td><td>DEV-REVIEW / SYSTEM-AUDIT / TEST-REPORT 等</td></tr>
+              <tr><td class="cmd">CLAUDE.md</td><td>项目规则：发版门禁 / 铁律 / 装机验证</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer>XNOW-Flow 技术纵览 · 整理 2026-09-02 · 对应构建 v1.4.143c · 源文件 docs/XNOW-Flow-开发文档.md</footer>
+    </main>
+  </div>
+</div>
