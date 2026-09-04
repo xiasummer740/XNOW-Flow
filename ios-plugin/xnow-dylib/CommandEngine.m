@@ -1503,7 +1503,126 @@ static NSArray *XN_NurtureComments(void) {
         if (verified) return YES;
         // 未验收 → 下一轮重找按钮重试（防 UI 重建后旧引用失效；重试轮已关注则直接成功）
     }
+    // v1.4.148: 两轮 feed 尝试失败 → profile UIControl 路径。
+    //   feed FollowPromptView = TikTok AWE 自研交互框架纯手势按钮，合成触发不可达
+    //   （145/146/147 三次实锤：UIAction 空、_action KVC nil、_sendActionWithGestureRecognizer 不响应）。
+    //   like 已证 UIControl 可 sendActions 点动 → 深链 snssdk1233://user/xxx 进作者主页，
+    //   profile 页 follow 按钮（TUXButton/UIControl）走 UIControl 触发。
+    if (beforeLabel.length > 0) {
+        BOOL viaProfile = [self _followViaProfileFromLabel:beforeLabel];
+        if (viaProfile) return YES;
+    }
     return NO;
+}
+
+/// v1.4.148 方向 D：profile UIControl 路径——feed AWE FollowPromptView 点不动时，深链进作者主页用 UIControl follow。
+/// 返回 BOOL（不假成功），验收结果上报 state_diag。
+- (BOOL)_followViaProfileFromLabel:(NSString *)label {
+    // 1. 提取用户名（label 形如 "Follow tinyoddpets" / "Follow @tinyoddpets" → tinyoddpets）
+    NSArray *parts = [label componentsSeparatedByString:@" "];
+    NSString *username = parts.count >= 2 ? parts.lastObject : @"";
+    username = [username stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (username.length == 0) return NO;
+    // 深链 snssdk1233://user/xxx 不接受 @ 前缀，剥掉
+    if ([username hasPrefix:@"@"]) username = [username substringFromIndex:1];
+    if (username.length == 0) return NO;
+    [self _logStep:@"follow_via_profile"];
+    NSLog(@"[XNOWER] follow_via_profile: user=%@ from=%@", username, label);
+    // 2. 深链进作者主页（snssdk1233://user/xxx，绕开纯手势头像点击）
+    [self _performOpenProfile:username];
+    // 3. 等 profile_other 加载（最多 ~5s）
+    BOOL onOther = NO;
+    for (int i = 0; i < 5; i++) {
+        [NSThread sleepForTimeInterval:1.0];
+        __block BOOL onProfileOther = NO;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            if ([self _isOnProfilePageOnMain] && ![self _isMyProfileOnMain]) onProfileOther = YES;
+        });
+        if (onProfileOther) { onOther = YES; break; }
+    }
+    if (!onOther) {
+        [self _reportFollowVerify:NO before:label after:@"<profile未到达>"];
+        return NO;
+    }
+    [NSThread sleepForTimeInterval:0.8];  // 等 Follow 按钮渲染
+    // 4. profile_other 找 follow 按钮（accId follow → label Follow → 关注），UIControl sendActions
+    __block BOOL clicked = NO;
+    __block BOOL alreadyOk = NO;
+    __block NSString *btnClass = @"";
+    __block NSString *before2 = @"";
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        __strong UIView *fv = nil;
+        [self _findVisibleViewWithAccId:kAccFollow inView:window screen:screen depth:0 result:&fv];
+        if (!fv) [self _findVisibleViewWithLabel:@"Follow" inView:window screen:screen depth:0 result:&fv];
+        if (!fv) [self _findVisibleViewWithLabel:@"关注" inView:window screen:screen depth:0 result:&fv];
+        if (fv) {
+            before2 = fv.accessibilityLabel ?: @"";
+            // 已关注防护：按钮已是 Following/已关注（feed 两轮其实点成功但验收超时误判）→ 直接判成功，不再点（防取消）
+            if ([before2 rangeOfString:@"Following" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+                [before2 rangeOfString:@"已关注" options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                alreadyOk = YES;
+                return;
+            }
+            __strong UIView *btn = fv;
+            UIView *cur = fv.superview;
+            while (cur && cur != window) {
+                if ([cur isKindOfClass:[UIControl class]] && !cur.hidden && cur.alpha > 0.02) { btn = cur; break; }
+                cur = cur.superview;
+            }
+            btnClass = NSStringFromClass(btn.class);
+            CGPoint center = [btn.superview convertPoint:btn.center toView:nil];
+            if ([btn isKindOfClass:[UIControl class]]) {
+                [(UIControl *)btn sendActionsForControlEvents:UIControlEventTouchUpInside];
+            }
+            [self _safeTapAtPoint:center];
+            clicked = YES;
+        }
+    });
+    [self _logStep:[NSString stringWithFormat:@"profile_click %@ btn=%@ before=%@",
+                    alreadyOk ? @"already" : (clicked ? @"ok" : @"none"), btnClass, before2]];
+    // 已关注 → 直接判成功（profile 按钮已是 Following/已关注，无按钮点击，跳过验收）
+    if (alreadyOk) {
+        [self _reportFollowVerify:YES before:label after:before2];
+        if (before2.length > 0) [self _autoReplyAfterFollowWithLabel:label];
+        return YES;
+    }
+    if (!clicked) {
+        [self _reportFollowVerify:NO before:label after:@"<profile无follow按钮>"];
+        return NO;
+    }
+    // 5. 验收：2s 后读按钮状态（Follow → Following/已关注，或按钮消失）
+    __block BOOL verified = NO;
+    __block NSString *after2 = @"";
+    dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2.0 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        UIWindow *window = XN_ActiveWindow();
+        CGSize screen = [UIScreen mainScreen].bounds.size;
+        __strong UIView *fv = nil;
+        [self _findVisibleViewWithAccId:kAccFollow inView:window screen:screen depth:0 result:&fv];
+        if (!fv) [self _findVisibleViewWithLabel:@"Follow" inView:window screen:screen depth:0 result:&fv];
+        if (!fv) [self _findVisibleViewWithLabel:@"Following" inView:window screen:screen depth:0 result:&fv];
+        if (!fv) [self _findVisibleViewWithLabel:@"已关注" inView:window screen:screen depth:0 result:&fv];
+        if (!fv) {
+            after2 = @"<gone>";
+            verified = YES;  // follow 按钮消失 = 关注成功
+        } else {
+            after2 = fv.accessibilityLabel ?: @"";
+            BOOL nowFollowing = [after2 rangeOfString:@"Following" options:NSCaseInsensitiveSearch].location != NSNotFound
+                              || [after2 rangeOfString:@"已关注" options:NSCaseInsensitiveSearch].location != NSNotFound;
+            BOOL labelChanged = after2.length > 0 && ![after2 isEqualToString:before2];
+            BOOL wasFollow = [before2 rangeOfString:@"Follow" options:NSCaseInsensitiveSearch].location != NSNotFound
+                          || [before2 rangeOfString:@"关注" options:NSCaseInsensitiveSearch].location != NSNotFound;
+            verified = labelChanged && nowFollowing && wasFollow;
+        }
+        dispatch_semaphore_signal(sema);
+    });
+    dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 2.8 * NSEC_PER_SEC));
+    [self _reportFollowVerify:verified before:label after:after2];
+    if (verified) [self _autoReplyAfterFollowWithLabel:label];
+    return verified;
 }
 
 /// 回关自动私信：关注成功后，从后端随机取一条话术，向刚关注的用户发私信

@@ -430,7 +430,29 @@
 - **ctx_probe servicesCount:1**——CopyServices 返回 1 个 digitizer 服务 → 非沙盒拿不到服务的猜想**证伪**：服务在，是 ContextID 属性没读到（key/读法问题），方向 A 非死路
 - 手势无 delegate（146 补报字段确认）
 
-#### [已修待验] 147 修复（2026-09-04 代码已改待装机）：`_sendActionWithGestureRecognizer:` 触发
-- **改法**（XNTouchSimulator.m tapView 手势触发段）：遍历 `_targets` 时优先对 target 元素调 iOS 私有方法 `_sendActionWithGestureRecognizer:`（系统标准分发路径，自持 action 类型怎么发——正确处理 Swift/TikTok element target）；手动 KVC 解析降级兜底；gr_fire 加 `sentBySystem` 上报（装机后区分主/兜底路径命中）
-- **装机验证**：follow 真成功（红心验收关键字）+ 回归六命令全过
+#### [已证伪] 147 修复装机验证失败（2026-09-04）：`_sendActionWithGestureRecognizer:` 不响应 → 方向 D 转 profile UIControl
+- **147 装机实测**：follow 仍 failed；gr_fire 上报 targetsCount=4 但 **`sentBySystem` 全 False**——`_sendActionWithGestureRecognizer:` 在 Swift/TikTok element target 上不响应（target 不是标准 `_UIGestureRecognizerTarget`，或 iOS16 方法已变）。手动 KVC 兜底同前（`_action` nil）→ 合成触发第三次证伪（UIAction 空/`_action` nil/系统分发不响应）
+- **祥哥 2026-09-04 拍板方向 D：profile UIControl 路径**——feed FollowPromptView = AWE 自研纯手势 element 合成触发不可达死角；like 已证 UIControl 可 sendActions 点动 → 不再死磕 feed 手势，改深链进作者主页走 profile 按钮（UIControl 体系）
+- **装机验证**：follow 真成功 + 回归六命令全过
+
+## v1.4.148 攒批（follow 方向 D：profile UIControl，2026-09-04）
+
+> **已备待发**：`TikTok_XNOW_v1.4.148_BH.ipa` 已编译打包上传（374.3 MB，基础 IPA=v1.4.147 连续注入）。待祥哥装机验证 follow。
+
+### [已备待发] follow 方向 D 实现（CommandEngine.m，2026-09-04）
+- **改法**：`_performFollowVerified` 两轮 feed 尝试失败后 → `_followViaProfileFromLabel:` 兜底——
+  ① 从 feed label "Follow xxx" 提取 username（剥 @ 前缀）
+  ② `_performOpenProfile:` 深链 `snssdk1233://user/<username>` 进作者主页（collect_fans 同链路验证过）
+  ③ 轮询 `_isOnProfilePageOnMain && !_isMyProfileOnMain` 等 profile_other 加载（最多 5s）
+  ④ 找 follow 按钮（accId kAccFollow="follow" → label "Follow" → "关注"）→ 向上找 UIControl 祖先 → sendActions + `_safeTapAtPoint:`（like 已验证 UIControl 可点）
+  ⑤ **已关注防护**：profile 按钮已是 Following/已关注 → 直接判成功（防 feed 已点成功但验收超时误判后再点变取消）
+  ⑥ dispatch_after 2s 验收：label 变 Following/已关注 或按钮消失 → `_reportFollowVerify:before:after:` 上报 → 成功后 `_autoReplyAfterFollowWithLabel:` 回关私信
+- **btnClass/clicked/profile_click 上报 state_diag**——装机后看 btnClass 是 TUXButton（UIControl）还是别的，区分命中路径
+
+### 148 装机验证清单（逐项实测记 真成功/假成功/崩溃）
+1. **follow 真成功（核心）**：feed 上发 follow → 观察链路：feed 两轮点不动 → 深链进作者主页 → profile Follow 按钮点动 → 验收 label 变 Following/已关注 → result success「已关注（按钮状态验证通过）」。若 failed，看上报 after 是 `<profile未到达>`（深链/页面判定问题）还是 `<profile无follow按钮>`（按钮没找到）还是按钮状态（点了没生效）
+2. **不误关注已关注账号**：对已关注作者发 follow → 应直接判已关注成功（不取消不重复点）
+3. **回归六命令**：open_tab profile→home / go_home / like / open_search / backup_account 全过（follow 改 profile 深链后确认回 feed 正常、无卡死）
+4. **回关自动私信**（如果验证时段关注了真实账号）：关注成功后有私信动作（若账号有启用自动私信）
+5. **btnClass 诊断**：state_diag 里 profile 按钮类名（预期 TUXButton = UIControl 体系可点动）
 
