@@ -95,6 +95,14 @@
 - IPA 基底: `TikTok_43.7.0_BH.ipa` (BH 1.9.3 插件版)
 - 成功 IPA: `TikTok_XNOW_v19.ipa`
 
+## 2026-09-04 follow 搁置 + 全量验证计划
+
+- **v1.4.148 装机验证（祥哥装，后台测）**：follow 方向 D（深链进 profile 点 UIControl）**证伪**——`after: '<profile未到达>'`。
+- **根因定位 = 43.7.0 三重反自动化墙**（均有证据，见 ISSUES.md 148 段）：①触摸墙：feed 右侧互动控件 Swift 手势验真实触摸，sendActions/gr_fire/KVC 全拒；HID 真实注入沙盒拿不到 ContextID（ctx_probe ctx=0 servicesCount=1）②深链墙：snssdk1233://user/<用户名>/<数字uid> 全不导航 ③网络墙：net_like 从没成功（feed SwiftNIO 抓不到 + X-Gorgon 签名未解）。
+- **祥哥拍板：搁置 follow**（方向 E 直调 VC 待特批才投），下批对**已装 148 直接跑全量验证清单**清 16 项已修待验（ISSUES「下批装机验证清单」A账号1-6/B面板7-13/C触摸墙14-16），不再被 follow 卡发版。
+- 已提交推送 b3f13e9（ISSUES 决策+清单）+ handover 2026-09-04-v1.4.148-follow-blocked.md。
+- **待办**：跑下批验证清单（任务 #37），验过项 ISSUES 翻「已验证」。
+
 ## 2026-08-26 发版门禁规则落地
 
 - 攒批策略之前只写在 ISSUES.md 底部 + 全局发版门禁，本仓库 CLAUDE.md 没有 → 每修一个就发一版（v1.4.88→v1.4.123），祥哥反复装机。

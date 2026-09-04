@@ -1,5 +1,8 @@
 # XNOW-Flow 接力开发笔记索引
 
+## 2026-09-04
+- [follow 三层墙证伪 + 拍板搁置](2026-09-04-v1.4.148-follow-blocked.md) — 148 方向 D 装机验证证伪：43.7.0 触摸墙(HID 沙盒拿不到 ContextID ctx=0)/深链墙(全 scheme 忽略)/网络墙(签名未解)挡死 follow 全部路径；**祥哥拍板搁置 follow(方向 E 待特批)，下批对已装 148 跑全量验证清单 16 项(任务 #37)**；关键认知=能自动化的是直调 UIKit 不是触摸
+
 ## 2026-09-01
 - [zsign DER 修复 + 装机存活验证](2026-09-01-zsign-DER-fix.md) — zsign 签名 SIGTRAP 根因实锤（DER 264→裸 RSA 256）+ 修复版首次装机存活 + net_socket 探针完整数据；**🔴 zsign 重签必须 -z 9（默认不压缩→685MB 大包装不上）** + 最终产物 _xn_z9.ipa
 - [v1.4.142 141 闪退根因修复](2026-09-01-v1.4.142-crash-fix.md) — 根因=TikTok Swift 私有类名明文触发反 hook SIGTRAP 自杀；修复=XOR(0x5A)混淆 + **🔴 clang -O2 常量折叠会把解码结果写回 __literals 明文常量池，必须 noinline+volatile 三重防折叠** + XNRequestHooks 改名；142 IPA 已注入上传待装机，装机后验①启动不闪退②net_request 抓包
