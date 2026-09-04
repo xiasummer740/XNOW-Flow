@@ -425,3 +425,12 @@
   5. like 逃过 = feedLikeButton 是 UIControl（sendActions 不吃 HID）；**导航 bug 掩盖 follow**：143c 滞留 profile tab 找不到按钮秒失败，144 修好导航后暴露纯手势点不动
 - **修复方向（待祥哥拍板）**：A 修 HID ContextID 获取（IOHIDEventSystemClient 匹配不到 digitizer 服务的根因深挖，根治 follow/头像导航等全部纯手势按钮；iOS 16 可能系统级限制，不确定性高）；B tapView 手势 invoke 补 iOS14+ UIAction `_handlers` 触发（现只遍历 `_targets`，手势若用 UIAction 则漏，小改可试，但 handler 真实性校验可能仍拦）；C 网络层 follow —— 143c 签名止损，不可行
 
+#### 146 诊断实锤（2026-09-04 A8DE7E93 装机 gr_fire/ctx_probe 3 探针）
+- **gr_fire targetsCount=4 非真空 → 145「_handlers UIAction」前提证伪**（146 handlersCount=0，FollowPromptView 不走 UIAction 路径）；但 target 全 Swift/TikTok element 类：`TapGesHandler`(TikTokEventTracing)、`AWEPlayInteractionUserAvatarElement`、`TTKFeedInteractionTouchEventHelper`，**`_action` ivar KVC 读 nil → 手动 performSelector 从未执行** = follow 点不动真正代码缺陷（老代码 v1.4.95 起遍历 `_targets` 手动取 action，对 Swift 手势空转至今）
+- **ctx_probe servicesCount:1**——CopyServices 返回 1 个 digitizer 服务 → 非沙盒拿不到服务的猜想**证伪**：服务在，是 ContextID 属性没读到（key/读法问题），方向 A 非死路
+- 手势无 delegate（146 补报字段确认）
+
+#### [已修待验] 147 修复（2026-09-04 代码已改待装机）：`_sendActionWithGestureRecognizer:` 触发
+- **改法**（XNTouchSimulator.m tapView 手势触发段）：遍历 `_targets` 时优先对 target 元素调 iOS 私有方法 `_sendActionWithGestureRecognizer:`（系统标准分发路径，自持 action 类型怎么发——正确处理 Swift/TikTok element target）；手动 KVC 解析降级兜底；gr_fire 加 `sentBySystem` 上报（装机后区分主/兜底路径命中）
+- **装机验证**：follow 真成功（红心验收关键字）+ 回归六命令全过
+

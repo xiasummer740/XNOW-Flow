@@ -101,10 +101,12 @@ static uint32_t s_hidCtx = 0;
     // v1.4.132: setMatching 是异步的——服务经 client 内部队列注册，立即 CopyServices 常为空
     //   （131 实测 tap_ctx_zero）。轮询等服务挂入（最多 ~1.5s），再遍历取 ContextID。
     uint32_t ctx = 0;
+    CFIndex lastCount = -1;
     for (int attempt = 0; attempt < 30 && !ctx; attempt++) {
         CFArrayRef services = s_fnSysClientCopyServices(s_hidClient);
         if (services) {
-            for (CFIndex i = 0; i < CFArrayGetCount(services) && !ctx; i++) {
+            lastCount = CFArrayGetCount(services);
+            for (CFIndex i = 0; i < lastCount && !ctx; i++) {
                 XNIOHIDServiceRef sc = (XNIOHIDServiceRef)CFArrayGetValueAtIndex(services, i);
                 CFTypeRef prop = s_fnServiceCopyProperty(sc, CFSTR("ContextID"));
                 if (prop) {
@@ -118,7 +120,8 @@ static uint32_t s_hidCtx = 0;
     }
     s_hidCtx = ctx;
     // ctx_probe: 上报服务数量 + 是否取到 ctx，定位是「异步时序」还是「沙盒拿不到 digitizer 服务」
-    [self _hidDiag:@"ctx_probe" data:@{@"ctx": @(ctx)}];
+    //   v1.4.146: 加 servicesCount——CopyServices 返回 0 个服务 = 沙盒拿不到（方向 A 修 HID 不可行）
+    [self _hidDiag:@"ctx_probe" data:@{@"ctx": @(ctx), @"servicesCount": @((long)lastCount)}];
     return ctx;
 }
 
@@ -294,9 +297,23 @@ static uint32_t s_hidCtx = 0;
                 id actionVal = [t valueForKey:@"_action"];
                 if ([actionVal isKindOfClass:[NSString class]]) {
                     [acts addObject:[NSString stringWithFormat:@"%@->%@", NSStringFromClass([target class]), actionVal]];
+                } else if (actionVal) {
+                    // v1.4.146: iOS 手势 action 是 SEL→NSValue 包装（非 NSString），此前被漏——补记，
+                    //   用于区分 FollowPromptView 的 _targets 是「真空」还是「有 SEL action 被过滤」。
+                    SEL sel = (SEL)(uintptr_t)[actionVal pointerValue];
+                    [acts addObject:[NSString stringWithFormat:@"%@->SEL:%s",
+                                     NSStringFromClass([target class]),
+                                     sel ? sel_getName(sel) : "nil"]];
                 }
             }
             if (acts.count) d[@"actions"] = acts;
+            d[@"targetsCount"] = @(targets.count);
+            // v1.4.146: delegate/enabled 诊断——手势 target-action 空时，响应可能走 delegate 或已禁用
+            @try {
+                id gd = gr.delegate;
+                if (gd) d[@"delegate"] = NSStringFromClass([gd class]);
+            } @catch (NSException *e) {}
+            @try { d[@"enabled"] = @(gr.isEnabled); } @catch (NSException *e) {}
             // v1.4.145 iOS14+ UIAction 诊断：addAction:forState: 的手势存 _handlers（含 _action/_handler），
             //   现仅此可确认 FollowPromptView 等盲区按钮是否 UIAction 接线（_targets 空即疑似）
             @try {
@@ -448,14 +465,50 @@ static uint32_t s_hidCtx = 0;
                 }
                 [gr setValue:@(UIGestureRecognizerStateEnded) forKey:@"_state"];  // KVC 写私有 ivar，让 handler 的 state 检查通过
                 NSArray *targets = [gr valueForKey:@"_targets"];
+                // v1.4.146/147: 触发轨迹上报——NSLog 不进 server.log，改走 state_diag 通道上报。
+                //   146 实测突破：_targets=4 非真空，但 target 全 Swift/TikTok element 类
+                //   （TapGesHandler / AWEPlayInteractionUserAvatarElement / TTKFeedInteractionTouchEventHelper），
+                //   _action ivar 读 nil → 手动 KVC performSelector 从未执行（老代码空转根因）。
+                //   147 修复：优先对 target 元素调 iOS 私有 _sendActionWithGestureRecognizer:
+                //   （手势标准分发路径，内部处理 SEL/UIAction 任意 action），手动 KVC 降级兜底。
+                NSMutableDictionary *fireLog = [NSMutableDictionary dictionary];
+                fireLog[@"msg"] = @"gr_fire";
+                fireLog[@"gr"] = NSStringFromClass(gr.class);
+                fireLog[@"targetsCount"] = @(targets.count);
+                SEL sendSel = NSSelectorFromString(@"_sendActionWithGestureRecognizer:");
+                int tIdx = 0;
                 for (id t in targets) {
-                    id target = [t valueForKey:@"_target"];
-                    id actionVal = [t valueForKey:@"_action"];
-                    SEL sel = [actionVal isKindOfClass:[NSString class]] ? NSSelectorFromString(actionVal)
-                                                                        : (SEL)(uintptr_t)[actionVal pointerValue];
-                    if (sel && target && [target respondsToSelector:sel]) {
-                        [target performSelector:sel withObject:gr];
+                    NSMutableDictionary *tlog = [NSMutableDictionary dictionary];
+                    // 主路径：系统分发（对 _UIGestureRecognizerTarget 实例，它自持 action 怎么发）
+                    BOOL sentBySystem = NO;
+                    if (t && [t respondsToSelector:sendSel]) {
+                        @try {
+                            [t performSelector:sendSel withObject:gr];
+                            sentBySystem = YES;
+                        } @catch (NSException *e) {
+                            tlog[@"sysErr"] = e.reason ?: @"";
+                        }
                     }
+                    tlog[@"sentBySystem"] = @(sentBySystem);
+                    // 兜底：手动 KVC（老路径，对非标准 target 结构仍有效）
+                    if (!sentBySystem) {
+                        id target = [t valueForKey:@"_target"];
+                        id actionVal = [t valueForKey:@"_action"];
+                        SEL sel = [actionVal isKindOfClass:[NSString class]] ? NSSelectorFromString(actionVal)
+                                                                            : (SEL)(uintptr_t)[actionVal pointerValue];
+                        BOOL resp = sel && target && [target respondsToSelector:sel];
+                        tlog[@"target"] = target ? NSStringFromClass([target class]) : @"nil";
+                        tlog[@"sel"] = sel ? [NSString stringWithUTF8String:sel_getName(sel)] : @"nil";
+                        tlog[@"respond"] = @(resp);
+                        if (resp) {
+                            [target performSelector:sel withObject:gr];
+                        }
+                    }
+                    [fireLog setObject:tlog forKey:[NSString stringWithFormat:@"t%d", tIdx++]];
+                }
+                NSString *devId = [XNOWER sharedInstance].deviceId;
+                if (devId.length > 0) {
+                    [XNURLProtocol sendMessage:@{@"type": @"state_diag", @"data": fireLog} deviceId:devId];
                 }
                 // v1.4.145 iOS14+ UIAction handler（_handlers）触发：addAction:forState: 注册的
                 // 手势 target 存 _handlers 而非 _targets——只遍历 _targets 会漏（FollowPromptView
