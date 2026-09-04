@@ -435,24 +435,26 @@
 - **祥哥 2026-09-04 拍板方向 D：profile UIControl 路径**——feed FollowPromptView = AWE 自研纯手势 element 合成触发不可达死角；like 已证 UIControl 可 sendActions 点动 → 不再死磕 feed 手势，改深链进作者主页走 profile 按钮（UIControl 体系）
 - **装机验证**：follow 真成功 + 回归六命令全过
 
-## v1.4.148 攒批（follow 方向 D：profile UIControl，2026-09-04）
+## v1.4.148 攒批（follow 方向 D：profile UIControl，2026-09-04）→ **已装机验证 = 方向 D 前提证伪**
 
-> **已备待发**：`TikTok_XNOW_v1.4.148_BH.ipa` 已编译打包上传（374.3 MB，基础 IPA=v1.4.147 连续注入）。待祥哥装机验证 follow。
+> `TikTok_XNOW_v1.4.148_BH.ipa` 已装机（祥哥 9-04 安装）。后台/远端验证完成，方向 D 前提（深链进作者主页）**证伪**。
 
-### [已备待发] follow 方向 D 实现（CommandEngine.m，2026-09-04）
-- **改法**：`_performFollowVerified` 两轮 feed 尝试失败后 → `_followViaProfileFromLabel:` 兜底——
-  ① 从 feed label "Follow xxx" 提取 username（剥 @ 前缀）
-  ② `_performOpenProfile:` 深链 `snssdk1233://user/<username>` 进作者主页（collect_fans 同链路验证过）
-  ③ 轮询 `_isOnProfilePageOnMain && !_isMyProfileOnMain` 等 profile_other 加载（最多 5s）
-  ④ 找 follow 按钮（accId kAccFollow="follow" → label "Follow" → "关注"）→ 向上找 UIControl 祖先 → sendActions + `_safeTapAtPoint:`（like 已验证 UIControl 可点）
-  ⑤ **已关注防护**：profile 按钮已是 Following/已关注 → 直接判成功（防 feed 已点成功但验收超时误判后再点变取消）
-  ⑥ dispatch_after 2s 验收：label 变 Following/已关注 或按钮消失 → `_reportFollowVerify:before:after:` 上报 → 成功后 `_autoReplyAfterFollowWithLabel:` 回关私信
-- **btnClass/clicked/profile_click 上报 state_diag**——装机后看 btnClass 是 TUXButton（UIControl）还是别的，区分命中路径
+### [已验证=方向 D 失败] 148 装机验证结果（9-04 后台实测）
+1. **follow 真成功 → ❌ 失败**：`STEP: follow_via_profile` → `after: '<profile未到达>'`（隔离 + 回归各复验一次，行为一致）
+2. 不误关注已关注账号 → N/A（从没进到过 profile，该防护逻辑未触发）
+3. **回归六命令**：open_tab profile→home ✅ / go_home ✅ / like ✅（⚠️ 可能污染：回归未先取消赞，红心可能本就亮）/ open_search ✅（gr_fire respond:False，实际走的直调 VC）/ **follow ❌** / backup ✅
+4. 回关自动私信 → N/A
+5. btnClass 诊断 → N/A（profile 未到达，无 profile 按钮可上报）
 
-### 148 装机验证清单（逐项实测记 真成功/假成功/崩溃）
-1. **follow 真成功（核心）**：feed 上发 follow → 观察链路：feed 两轮点不动 → 深链进作者主页 → profile Follow 按钮点动 → 验收 label 变 Following/已关注 → result success「已关注（按钮状态验证通过）」。若 failed，看上报 after 是 `<profile未到达>`（深链/页面判定问题）还是 `<profile无follow按钮>`（按钮没找到）还是按钮状态（点了没生效）
-2. **不误关注已关注账号**：对已关注作者发 follow → 应直接判已关注成功（不取消不重复点）
-3. **回归六命令**：open_tab profile→home / go_home / like / open_search / backup_account 全过（follow 改 profile 深链后确认回 feed 正常、无卡死）
-4. **回关自动私信**（如果验证时段关注了真实账号）：关注成功后有私信动作（若账号有启用自动私信）
-5. **btnClass 诊断**：state_diag 里 profile 按钮类名（预期 TUXButton = UIControl 体系可点动）
+### 🔬 三重反自动化墙——follow 输入路径根因定位（9-04 隔离测试，逐项有证据）
+**结论：TikTok 43.7.0 三层墙挡死 follow 全部输入路径，方向 D（及此前 A/B/C）均非实现 bug，是平台反自动化。**
+1. **触摸墙**：feed 右侧互动控件（Follow 按钮/头像）走 Swift 手势层验真实触摸。sendActions/gr_fire/`_sendActionWithGestureRecognizer:`/KVC 合成触摸**全被拒**（145-148 state_diag 逐层证实：targets=4 但 _action nil、respond/sentBySystem 全 False、label 恒 "Follow meowtakeover"）。HID 真实注入在 **App Store 沙盒拿不到 ContextID**（ctx_probe `ctx=0, servicesCount=1`，服务可见但 ContextID 属性取不到）→ `_hidTapAtPoint:` 永远 NO → 全回退被拒的 KVC
+2. **深链墙**：`snssdk1233://user/<username>` 和 `<数字uid>` 均不导航（9-04 隔离实测：open_user 后 ui_scan 仍 feed；与 ISSUES 132「4 scheme 全被忽略」一致）
+3. **网络墙**：net_like（方向 C）**从未成功**（server.log 历史 9 次）：feed 走 SwiftNIO 自研栈抓不到 aweme_id（lastFeedVideo 恒空）；带真实 Cookie+后端签名头直连 digg 仍返回空/"Url does not match"（X-Gorgon/X-Bogus 签名未解决）
+
+### 剩余可行路径（方向 E，未实施）
+**直调 VC 构造 profile**（绕开三层墙，与 open_tab/go_home 用 setSelectedIndex 直调运行时同类）——找 43.7.0 profile VC 类 + 用 username 直接构造/推进 + profile 内 follow 若是原生 UIControl 则 sendActions 可点（方向 D 前提至今未证实——从未到过 profile）。**不确定性高**：需 runtime RE，且任意作者的 sec_uid 不可见（feed 数据抓不到），须确认 profile VC 支持 username 初始化。
+
+### ⏸️ 决策待祥哥（2026-09-04）
+follow 已耗 4 方向 + 60+ 版仍被平台反自动化挡死。是投 方向 E（RE 一轮试直调 VC）、还是降级/搁置 follow 先发攒批，需祥哥拍板（见对话）。
 
