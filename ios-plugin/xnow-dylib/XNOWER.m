@@ -861,6 +861,46 @@ __attribute__((destructor)) static void XNOWERUnload() {
     }
 }
 
+/// A4（2026-09-05）：backup 成功后主动上报当前账号 → 后端账号池同步（B41 前置）。
+/// 148 起走 HTTP poll + XNURLProtocol 通道，wsClientDidConnect/startHeartbeat（WsClient 语义）
+/// 从不触发 → backup 账号从不进后端账号池（accounts count=0）。这里在 backup 成功后补一次上报。
+- (void)reportBackedUpAccount {
+    if (self.deviceId.length == 0) return;
+
+    // 优先 AccountManager.currentAccount（/user/ 网络捕获，字段正是后端 _upsert_account 期望格式）
+    NSDictionary *acct = [AccountManager sharedManager].currentAccount;
+    if (!acct || acct.count == 0) {
+        // fallback：AccountPool 活跃账号（defaults 兜底备份场景，字段做后端兼容映射）
+        NSDictionary *active = [AccountPool sharedPool].activeAccount;
+        if (active.count > 0) {
+            NSString *num = active[@"aweme_number"];
+            acct = @{
+                @"aweme_id": active[@"aweme_id"] ?: @"",
+                @"nickname": active[@"nickname"] ?: @"",
+                @"unique_id": num.length ? [@"@" stringByAppendingString:num] : @"",
+                @"followers": active[@"followers"] ?: @(0),
+                @"following_count": active[@"following_count"] ?: @(0),
+                @"avatar_url": active[@"avatar_url"] ?: @"",
+            };
+        }
+    }
+
+    NSMutableDictionary *status = [@{
+        @"device_id": self.deviceId,
+        @"status": @"online",
+    } mutableCopy];
+    if (acct.count > 0) status[@"current_account"] = acct;
+
+    // 带 X-Device-Secret header 直连 POST /ws/{device_id}（pollCommands 同款可达通道，非 piggyback）
+    [XNURLProtocol sendMessage:@{@"type": @"status", @"data": status}
+                      deviceId:self.deviceId
+                    completion:^(BOOL ok, NSError *error) {
+        NSLog(@"[XNOWER] A4 backup 账号上报后端%@%@",
+              ok ? @"✅" : [NSString stringWithFormat:@"❌ %@", error.localizedDescription],
+              acct.count > 0 ? [NSString stringWithFormat:@" (%@)", acct[@"aweme_id"] ?: @""] : @"（无账号数据）");
+    }];
+}
+
 // ======== 浮动控制面板 ========
 
 - (void)showFloatingPanel {

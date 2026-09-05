@@ -46,4 +46,9 @@ extern NSString *const kXnowConfigKeyDebugOverlay;
 /// 追加日志到浮窗日志窗口（供 CommandEngine 等模块记录操作日志）
 - (void)addLog:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2);
 
+/// A4（2026-09-05）：backup_account 成功后主动上报当前账号 → 后端账号池同步（B41 前置）
+/// 走 XNURLProtocol sendMessage（带 X-Device-Secret 直连 POST /ws/{device_id}），
+/// 后端 _handle_device_message status 分支 → _upsert_account（aweme_id 非空才入库）
+- (void)reportBackedUpAccount;
+
 @end

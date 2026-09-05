@@ -508,6 +508,8 @@ static NSArray *XN_NurtureComments(void) {
                     AccountSwitcher *sw = [AccountSwitcher sharedSwitcher];
                     if (sw.lastMatchedProfileKeys.count > 0) r[@"profile_keys"] = sw.lastMatchedProfileKeys;
                     if (sw.lastMatchedCountry.length > 0) r[@"country"] = sw.lastMatchedCountry;
+                    // A4（2026-09-05）：备份成功 → 主动上报账号 status → 后端账号池同步（B41 前置，device HTTP poll 模式从不自动上报）
+                    [[XNOWER sharedInstance] reportBackedUpAccount];
                 }
                 result = r;
                 hasResult = YES;
@@ -746,7 +748,15 @@ static NSArray *XN_NurtureComments(void) {
                 NSString *tab = params[@"tab"] ?: @"home";
                 // v1.4.106: _tapTab 返回诊断 dict，随 result 回传后端（server.log 可见，定位 setSelectedIndex:0 失效根因）
                 NSDictionary *diag = [self _tapTab:tab];
-                result = @{@"status": @"success", @"tab": tab, @"diag": diag ?: @{}};
+                // v1.4.149：非 home tab 触摸兜底路径（acc_id_tap/坐标，43.7.0 触摸墙实测 tap 无效）
+                // → _tapTab 标 reached=NO，这里诚实返回 failed，不再无条件假 success（open_tab 假成功盲区修复）
+                if ([diag[@"reached"] isEqual:@NO]) {
+                    result = @{@"status": @"failed", @"tab": tab,
+                               @"message": [NSString stringWithFormat:@"未能切到 %@ tab（43.7.0 触摸墙，运行时直切类名未匹配）", tab],
+                               @"diag": diag ?: @{}};
+                } else {
+                    result = @{@"status": @"success", @"tab": tab, @"diag": diag ?: @{}};
+                }
                 hasResult = YES;
                 break;
             }
@@ -3917,7 +3927,19 @@ static NSArray *XN_NurtureComments(void) {
                 self->_currentPage = tab;
                 return;
             }
-            diag = @{@"method": @"class_no_match", @"tab": tab, @"before": @(beforeSel)};
+            // v1.4.149: 类名匹配失败 → dump tab bar 实际 VC 类名（含 nav 内层），取证下版精准 classString
+            // 背景: profile 用 TTKProfileHomeViewController 恒匹配不上 → 之前掉触摸假成功；这里记下真实类名供下版直调
+            NSMutableArray *realVcClasses = [NSMutableArray array];
+            for (UIViewController *childVc in tabC.viewControllers) {
+                if ([childVc isKindOfClass:[UINavigationController class]]) {
+                    UIViewController *topVc = ((UINavigationController *)childVc).topViewController;
+                    [realVcClasses addObject:topVc ? NSStringFromClass(topVc.class) : @"(nil)"];
+                } else {
+                    [realVcClasses addObject:NSStringFromClass(childVc.class)];
+                }
+            }
+            NSLog(@"[XNOWER] tapTab:%@ class_no_match target=%@ realTabVCs=%@", tab, targetClass ?: @"(nil)", realVcClasses);
+            diag = @{@"method": @"class_no_match", @"tab": tab, @"before": @(beforeSel), @"realTabVCs": realVcClasses};
         } else {
             diag = @{@"method": @"no_tabC", @"tab": tab};
         }
@@ -3936,8 +3958,14 @@ static NSArray *XN_NurtureComments(void) {
                 CGPoint center = [tabView.superview convertPoint:tabView.center toView:nil];
                 [self _safeTapAtPoint:center];
                 NSLog(@"[XNOWER] tapTab:%@ 命中 %@ center=(%.0f,%.0f)", tab, NSStringFromClass(tabView.class), center.x, center.y);
-                diag = @{@"method": @"acc_id_tap", @"tab": tab};
-                self->_currentPage = tab;
+                // v1.4.149：acc_id_tap = 合成触摸路径。home 已 feed、tap 无效无害可当成功；
+                // 非 home 无同步落位验证 + 43.7.0 触摸墙实测 tap 无效 → 标 reached=NO 诚实返回 failed，不假成功
+                if ([tab isEqualToString:@"home"]) {
+                    diag = @{@"method": @"acc_id_tap", @"tab": tab};
+                    self->_currentPage = tab;
+                } else {
+                    diag = @{@"method": @"acc_id_tap", @"tab": tab, @"before": @(beforeSel), @"reached": @NO};
+                }
                 return;
             }
         }
@@ -3964,8 +3992,13 @@ static NSArray *XN_NurtureComments(void) {
         else ratioX = 0.12;  // home 默认
         CGFloat tabY = screen.height - 132;  // 实测 tab 中心 y≈712 (h=844): h-132=712; 适配不同屏幕比例
         [self _safeTapAtPoint:CGPointMake(screen.width * ratioX, tabY)];
-        diag = @{@"method": @"coord_fallback", @"tab": tab};
-        self->_currentPage = tab;
+        // v1.4.149：坐标兜底同 acc_id_tap——非 home 触摸无落位验证，标 reached=NO 诚实返回 failed（不假成功）
+        if ([tab isEqualToString:@"home"]) {
+            diag = @{@"method": @"coord_fallback", @"tab": tab};
+            self->_currentPage = tab;
+        } else {
+            diag = @{@"method": @"coord_fallback", @"tab": tab, @"before": @(beforeSel), @"reached": @NO};
+        }
     });
     return diag;
 }
