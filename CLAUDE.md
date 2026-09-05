@@ -8,8 +8,8 @@
 
 ## 关键脚本（2026-08-31 清理后现状）
 
-- `build-vps-dylib-<版本>.py` — VPS clang-16 交叉编译 xnower.dylib（当前：`build-vps-dylib-143c.py`）
-- `.tmp-inject-<版本>.py` — 上传 **dylib + Config.plist（两件缺一不可）** → VPS vps-inject.py 注入 → 打包 IPA（VPS 无 43.7.0 原始包，以 static 最新已注入 IPA 连续注入）
+- `build-vps-dylib-<版本>.py` — VPS clang-16 交叉编译 xnower.dylib（当前：`build-vps-dylib-149.py`；**150=149 同代码**复用 dylib 未重编译，仅版本升位）
+- `.tmp-inject-<版本>.py` — 上传 **dylib + Config.plist（两件缺一不可）** → VPS vps-inject.py 注入 → 打包 IPA（VPS 无 43.7.0 原始包，以 static 最新已注入 IPA 连续注入；当前：`.tmp-inject-150.py`，带版本自检）
 - `.tmp-poll-netdiag.py` — ssh 查 server.log 拿设备执行结果（前端"执行结果"区不回显时用）
 - `build-bh-ipa.py` — 本地打包（需 TikTok_43.7.0_BH.ipa 原始包，本地无）
 - `fix-dylib.py` — dylib 修复

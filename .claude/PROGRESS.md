@@ -1,11 +1,11 @@
 # XNOW-Flow 进度
 
-## 2026-09-05 ⏳ v1.4.149 版本显示修复（浮窗 148 → 149），待祥哥重装
+## 2026-09-05 ⏳ v1.4.150 待装机（149 版本回归修复收口 + 覆盖安装需升版本号）
 
 - **祥哥报「装好怎么显示还是148」根因 = 149 注入脚本漏传 Config.plist**：vps-inject.py 只当 dylib 同目录有 `Config.plist` 时才从输出 IPA 文件名提取版本号写 `xnower-config.plist`；漏传 → 整块跳过 → 沿用 base(148) 的 plist → 浮窗读 plist 显示 148（XNOWER.m L257 每次启动读 plist）。
-- **已修复**：补传 Config.plist + dylib → base=148 显式重注入 → VPS 输出 `BuildVersion -> 1.4.149`，本地+VPS 双端验证 149 包内 `XNOWER_BuildVersion = 1.4.149`，VPS 残留已清。IPA 仍是 374.3MB。
-- **防再犯**：`.tmp-inject-149.py` 已加 ① Config.plist 与 dylib 同目录上传 ② 注入后自检输出包 plist 版本==1.4.149；CLAUDE.md 关键脚本+注意 已同步 🔴 规则。
-- **待祥哥重装** TikTok_XNOW_v1.4.149_BH.ipa（覆盖装即可，plist 每次启动读，覆盖安装生效）→ 浮窗应显示 1.4.149 → 跑装机验证清单 ①A4 backup_account→accounts count>=1 ②open_tab profile→诚实 failed + realTabVCs ③回归复查。
+- **已修复 + 升 150**：修正版 149 已重注入（BuildVersion->1.4.149）但祥哥反馈设备已装 149、**同 CFBundleVersion(437030) 修正版覆盖安装被拦** → 按祥哥指示升一版：**代码零改动**复用 xnower-149.dylib 注入成 v1.4.150（版本号走 plist 不在 dylib，CFBundleVersion 保持 437030 不动、ShortVersion 43.7.0 不动=105 血证）。VPS+本地双端验证 `XNOWER_BuildVersion=1.4.150`，VPS 残留已清，374.3MB。
+- **防再犯**：`.tmp-inject-149.py` 已加 ① Config.plist 与 dylib 同目录上传 ② 注入后自检输出包 plist 版本==目标版本；CLAUDE.md 关键脚本+注意 🔴 规则已同步。
+- **待祥哥装** TikTok_XNOW_v1.4.150_BH.ipa → 浮窗应显示 **1.4.150** → 跑装机验证清单 ①A4 backup_account→后端 accounts count>=1 ②open_tab profile→诚实 failed + server.log 见 realTabVCs ③六命令回归复查。
 
 ## 2026-09-05 ⏳ v1.4.149 已打包待装机（A4 账号池同步 + open_tab 非 home 假成功修复）
 
