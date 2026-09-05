@@ -9,7 +9,7 @@
 ## 关键脚本（2026-08-31 清理后现状）
 
 - `build-vps-dylib-<版本>.py` — VPS clang-16 交叉编译 xnower.dylib（当前：`build-vps-dylib-143c.py`）
-- `.tmp-inject-<版本>.py` — 上传 dylib → VPS vps-inject.py 注入 → 打包 IPA（VPS 无 43.7.0 原始包，以 static 最新已注入 IPA 连续注入）
+- `.tmp-inject-<版本>.py` — 上传 **dylib + Config.plist（两件缺一不可）** → VPS vps-inject.py 注入 → 打包 IPA（VPS 无 43.7.0 原始包，以 static 最新已注入 IPA 连续注入）
 - `.tmp-poll-netdiag.py` — ssh 查 server.log 拿设备执行结果（前端"执行结果"区不回显时用）
 - `build-bh-ipa.py` — 本地打包（需 TikTok_43.7.0_BH.ipa 原始包，本地无）
 - `fix-dylib.py` — dylib 修复
@@ -21,6 +21,7 @@
 - dylib 编译走 VPS 交叉编译（clang-16 arm64-apple-ios16.5），不需要本地 Xcode 工具链
 - **zsign 重签必须 `-z 9`**（2026-09-01 实测）：zsign 默认 zip_level=0 **不压缩**，重签后包从 374MB 膨胀到 685MB，iPhone 8 Plus (USB 2.0 + iOS 16) 装到 74% 卡死；`-z 9` 回到 ~391MB 正常安装。修复版 zsign 在 `C:\Users\Administrator\Downloads\zsign-src\bin\zsign`（WSL 跑 Linux ELF）
 - **pymobiledevice3 apps install 装大 IPA（700MB+）在 Windows 卡死**（installd 无活动）——大包用爱思助手拖拽安装；爱思安装卡死时杀 i4Tools/i4Service/i4ToolsService 重启（设备 USB 不受影响）
+- **🔴 vps-inject 版本号靠 Config.plist + 输出文件名**（2026-09-05 血证：149 只传 dylib → 浮窗静默显示 base 的 148）：vps-inject.py 只当 dylib 同目录有 `Config.plist` 时才从「输出 IPA 文件名」提取版本号写入 xnower-config.plist；漏传 Config.plist = 整块跳过 = 沿用 base 包版本号。注入脚本**必须** ① 与 dylib 同目录上传 Config.plist ② 注入后自检输出包内 plist 的 XNOWER_BuildVersion == 目标版本，不符即失败
 
 ## 🚦 发版门禁（攒批装机，不单点发版）
 
