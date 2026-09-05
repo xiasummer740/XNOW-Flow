@@ -1,6 +1,7 @@
 # XNOW-Flow 接力开发笔记索引
 
 ## 2026-09-05
+- [v1.4.149 已打包待装机（A4 账号池同步 + open_tab 非 home 假成功修复）](2026-09-05-v1.4.149-a4-account-sync-opentab-fix.md) — A4 backup 后主动 POST status(current_account)（148 HTTP poll 模式 heartbeat 从不触发=根因，走 XNURLProtocol sendMessage 带 secret 直连）+ open_tab 非 home 触摸兜底诚实 failed + realTabVCs 取证真实 VC 类名（下版直切 profile 解锁账号管理页/切号/改资料）；已提交 af5eca1、IPA 已就位待祥哥装机验（装机清单见笔记）
 - [148 全量装机验证 16 项完成](2026-09-05-v1.4.148-full-verification.md) — A 组 3 过 1 新 bug（**A4 B41 账号池同步 FAIL**：设备从不 POST status 账号不上报）、B 组代码层全过、C14 save_video 假成功暴露 + open_tab 非 home tab 假成功盲区；ISSUES 行状态已翻（已验证 16/43/50/55/56/57/71）、3 新待修登记，下批候选= A4/C14/open_tab
 
 ## 2026-09-04

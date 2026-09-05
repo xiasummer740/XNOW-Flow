@@ -1,5 +1,14 @@
 # XNOW-Flow 进度
 
+## 2026-09-05 ⏳ v1.4.149 已打包待装机（A4 账号池同步 + open_tab 非 home 假成功修复）
+
+- **A4（Task #38）已修**：backup_account 成功后主动上报 status(current_account)——XNOWER.h 声明 + XNOWER.m `reportBackedUpAccount` 实现（AccountManager.currentAccount 优先、AccountPool.activeAccount 兜底映射）→ `XNURLProtocol sendMessage` 带 X-Device-Secret 直连 POST /ws/{device_id}（poll 同款可达通道）+ CommandEngine backup 成功分支触发。根因=148 起 HTTP poll 模式 heartbeat/wsClientDidConnect 从不触发（startHeartbeat 只挂 wsClientDidConnect L480）→ 账号从不自动上报。
+- **open_tab 非 home 假成功盲区（Task #39）已修**：CommandEngine.m 4 处——handler 读 `diag.reached`=NO 诚实返回 status=failed（不再无条件假 success）；acc_id_tap/坐标兜底非 home 标 reached=NO（不设假 currentPage）；class_no_match dump tab bar 实际 VC 类名（realTabVCs）取证下版直切 profile。home 路径不动。
+- **已提交** af5eca1（5 文件，无 Co-Authored-By）+ VPS 编译 xnower-149.dylib 866504 bytes + 注入 `TikTok_XNOW_v1.4.149_BH.ipa` 374.3MB（static + 本地，VPS 残留已清）。
+- **编译前回归**：open_tab home/go_home/like/open_search/backup 全健康；follow ❌ = 基线已知搁置（2026-09-04 祥哥拍板），非本批引入。
+- **装机验证清单**：①backup_account → 后端 `/api/biz/v2/accounts/` count=1（A4）②open_tab profile → 诚实 status=failed + server.log 见 realTabVCs 真实 VC 类名（open_tab）③回归六命令复查。
+- 待祥哥 i4Tools 装机 TikTok_XNOW_v1.4.149_BH.ipa 后下发验证。
+
 ## 2026-06-27 ✅ 首次成功！TikTok 启动通过
 
 ### 最终成功方案（v19）
