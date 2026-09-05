@@ -1,11 +1,13 @@
 # XNOW-Flow 进度
 
-## 2026-09-05 ⏳ v1.4.150 待装机（149 版本回归修复收口 + 覆盖安装需升版本号）
+## 2026-09-05 ✅ v1.4.150 装机验证完成（A4 账号池同步 + open_tab 盲区，2/2 + 回归）
 
-- **祥哥报「装好怎么显示还是148」根因 = 149 注入脚本漏传 Config.plist**：vps-inject.py 只当 dylib 同目录有 `Config.plist` 时才从输出 IPA 文件名提取版本号写 `xnower-config.plist`；漏传 → 整块跳过 → 沿用 base(148) 的 plist → 浮窗读 plist 显示 148（XNOWER.m L257 每次启动读 plist）。
-- **已修复 + 升 150**：修正版 149 已重注入（BuildVersion->1.4.149）但祥哥反馈设备已装 149、**同 CFBundleVersion(437030) 修正版覆盖安装被拦** → 按祥哥指示升一版：**代码零改动**复用 xnower-149.dylib 注入成 v1.4.150（版本号走 plist 不在 dylib，CFBundleVersion 保持 437030 不动、ShortVersion 43.7.0 不动=105 血证）。VPS+本地双端验证 `XNOWER_BuildVersion=1.4.150`，VPS 残留已清，374.3MB。
-- **防再犯**：`.tmp-inject-149.py` 已加 ① Config.plist 与 dylib 同目录上传 ② 注入后自检输出包 plist 版本==目标版本；CLAUDE.md 关键脚本+注意 🔴 规则已同步。
-- **待祥哥装** TikTok_XNOW_v1.4.150_BH.ipa → 浮窗应显示 **1.4.150** → 跑装机验证清单 ①A4 backup_account→后端 accounts count>=1 ②open_tab profile→诚实 failed + server.log 见 realTabVCs ③六命令回归复查。
+- **背景**：149 首版漏传 Config.plist → 浮窗显示 148（根因见下段）；修正版 149 因设备已装 149、同 CFBundleVersion 覆盖被拦 → 祥哥指示升 **v1.4.150**（150=149 同代码，复用 xnower-149.dylib 重注入，仅版本号走 plist 升位；CFBundleVersion 437030/ShortVersion 43.7.0 不动）。
+- **A4 账号池同步 ✅ 真成功**：backup_account → result success(已备份账号 #1, country:gb) → 后端 `GET /accounts/` **count=1**（Outshine/@outshine83, aweme_id 7435121367610426400, active）。reportBackedUpAccount 生效，空池解除。
+- **open_tab profile ✅ 真成功（非预期 failed）**：result success + diag setSelectedIndex before:0 after:3；后端 ui-scan 缓存实测在 profile 页（AWEUserProfileSlidingScrollView + TTKUserProfileWorkCollectionView）→ **43.7.0 profile 导航这次通了**（148 恒 class_no_match 触摸兜底假成功）。⚠️ 类名匹配 148 坏/150 好 = 不稳 → 下版 open_tab 应无论路径都加落位验证。
+- **回归 6/7**：open_tab profile/home、go_home(真验证 feed)、like(红心点亮真验收)、open_search、backup_account 全健康；follow ❌ = 基线已知搁置（2026-09-04 祥哥拍板）。无 🚨 崩溃。
+- **版本显示回归根因 + 防再犯**：注入脚本漏传 Config.plist → vps-inject 跳过版本写入沿用 base 148。已修 .tmp-inject-149/150.py（Config.plist 上传 + 注入后版本自检）+ CLAUDE.md 🔴 规则。
+- **下批候选（阻塞已松）**：C14 save_video 假成功（待修）、B41 真切换（账号池 1/2，需再备一账号）、账号管理页弹窗/修改资料（open_tab profile 已可导航，需祥哥真机点）。提交 76f8296 + 22c34c0 +（本段）。
 
 ## 2026-09-05 ⏳ v1.4.149 已打包待装机（A4 账号池同步 + open_tab 非 home 假成功修复）
 
