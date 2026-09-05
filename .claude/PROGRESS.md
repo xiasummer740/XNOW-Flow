@@ -95,6 +95,13 @@
 - IPA 基底: `TikTok_43.7.0_BH.ipa` (BH 1.9.3 插件版)
 - 成功 IPA: `TikTok_XNOW_v19.ipa`
 
+## 2026-09-05 ✅ 148 全量装机验证（16 项清单跑完，任务 #37 关闭）
+
+- **结果（后台/远端实测，逐项记录见 ISSUES.md「✅ 下批装机验证结果」L493+）**：**A 组 3 过 1 新 bug**——A1 secret header ✅（poll URL 无明文）/ A2 硬件 UDID 自动激活 ✅（auto-activate-iphone_A8DE7E93 无卡密框）/ A3 备份资料+国家 ✅（country:gb + 90+ profile_keys）/ **A4 B41 账号池同步 ❌ 新 bug**（设备 HTTP poll 模式从不 POST status → backup 后账号不上报 `{"count":0}`）。**B 组代码层全过**（B7-B13）。**C 组**：C14 save_video 假成功暴露、C16 open_search ✅ 真成功 / search_keyword ❌ 触摸墙、C15 修改资料 blocked。
+- **新待修 3 项已登记 ISSUES（下一批候选）**：A4 账号池同步（修复方向=HTTP poll 周期 POST status(current_account) / backup 成功后主动 POST）、C14 save_video 假成功（-void handler 默认 OK + lastFeedVideo 抓不到→从未真下载）、open_tab 非 home tab 假成功盲区（无落位验证，阻塞账号管理/切号/改资料真机验收）。
+- **ISSUES 行状态已翻**：→已验证 16/43/50/55/56/57/71；→部分验证 29/42/53/65/67；→待修 54（C14 假成功）+ A4/open_tab 新登记。B41(62)/账号按钮(64)/修改资料(69) 保持已修待验 + 备注阻塞。
+- 设备收尾回 feed、无崩溃、持续 poll 在线。commit + handover 2026-09-05。
+
 ## 2026-09-04 follow 搁置 + 全量验证计划
 
 - **v1.4.148 装机验证（祥哥装，后台测）**：follow 方向 D（深链进 profile 点 UIControl）**证伪**——`after: '<profile未到达>'`。
